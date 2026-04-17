@@ -1,0 +1,129 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - Auth UID
+    //   - email: string (required) - User email address
+    //   - role: string (required) - Role of the user ('admin', 'user')
+    //   - createdAt: string (optional) - ISO 8601 date string
+    //
+    // Collection: reports
+    // Document ID: {reportId} (auto-generated)
+    // Fields:
+    //   - userId: string (required) - The user who ran the report
+    //   - url: string (required) - The analyzed URL
+    //   - score: number (optional) - Overall score
+    //   - results: string (required) - JSON string of the report results
+    //   - createdAt: string (required) - ISO 8601 date string
+    //
+    // Collection: projects
+    // Document ID: {projectId} (auto-generated)
+    // Fields:
+    //   - userId: string (required) - Owner of the project
+    //   - name: string (required) - User defined project name
+    //   - url: string (required) - Target URL to crawl
+    //   - cronEnabled: boolean (optional) - Whether to analyze automatically every 24h
+    //   - createdAt: string (required) - ISO 8601 date string
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "cram.henley@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt']) &&
+        data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+        data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
+        data.role in ['admin', 'user'] &&
+        (!('createdAt' in data) || isValidDateString(data.createdAt));
+    }
+
+    function isValidReport(data) {
+      return hasOnlyAllowedFields(['userId', 'url', 'score', 'results', 'createdAt']) &&
+        data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+        data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
+        (!('score' in data) || data.score is number) &&
+        data.results is string && data.results.size() < 500000 && // 500KB cap approx
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    function isValidProject(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'url', 'cronEnabled', 'createdAt']) &&
+        data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+        data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
+        (!('cronEnabled' in data) || data.cronEnabled is bool) &&
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && request.resource.data.uid == userId && request.resource.data.role == 'user') || 
+        isAdmin()
+      );
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && request.resource.data.uid == resource.data.uid && request.resource.data.role == resource.data.role) || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidReport(request.resource.data) && isOwner(request.resource.data.userId);
+      allow update: if isAuthenticated() && isValidReport(request.resource.data) && 
+                    isOwner(resource.data.userId) && isOwner(request.resource.data.userId) &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /projects/{projectId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidProject(request.resource.data) && isOwner(request.resource.data.userId);
+      allow update: if isAuthenticated() && isValidProject(request.resource.data) && 
+                    isOwner(resource.data.userId) && isOwner(request.resource.data.userId) &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+  }
+}

@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, ShieldCheck, Zap, Globe, Scale, Loader2, AlertCircle, RefreshCw, UserCheck, Download, CodeXml, Share2, Filter, LayoutDashboard, LineChart as LineIcon, Activity, ExternalLink, Info } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LineChart, Line, CartesianGrid } from 'recharts';
 import { ThemeToggle } from '../components/theme-toggle';
+import { useTheme } from 'next-themes';
+import { Sidebar } from '../components/sidebar';
+import { CollapsibleSection } from '../components/collapsible-section';
 
 type PrioritizedTask = {
   priority: string;
@@ -125,10 +128,10 @@ const ResourceTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-[#111] border border-[#333] p-3 shadow-2xl">
+      <div className="bg-white dark:bg-[#111] border border-[#DDD] dark:border-[#333] p-3 shadow-2xl">
         <p className="text-[11px] font-bold text-[#D4AF37] mb-1 uppercase tracking-wider">{data.name}</p>
-        <p className="text-[14px] text-white font-bold">{data.count} Requests</p>
-        <p className="text-[10px] text-white/50 mt-1 italic">Anzahl der geladenen {data.name}-Ressourcen.</p>
+        <p className="text-[14px] text-[#1A1A1A] dark:text-white font-bold">{data.count} Requests</p>
+        <p className="text-[10px] text-[#888] dark:text-white/50 mt-1 italic">Anzahl der geladenen {data.name}-Ressourcen.</p>
       </div>
     );
   }
@@ -250,16 +253,41 @@ function PrioritizedTasksSection({ tasks, title, accentColor }: { tasks: Priorit
   );
 }
 
+const GscTooltip = ({ active, payload, label }: any) => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
+  if (active && payload && payload.length) {
+    const dateStr = label ? new Date(label[0]).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    
+    return (
+      <div className="bg-white dark:bg-[#111] border border-[#DDD] dark:border-[#333] p-3 shadow-2xl min-w-[150px]">
+        <p className="text-[11px] font-bold text-[#888] dark:text-[#A1A1AA] mb-2 uppercase tracking-wider">{dateStr}</p>
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="flex items-center justify-between mt-1">
+             <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                <span className="text-[12px] text-[#1A1A1A] dark:text-zinc-300 capitalize">{entry.name === 'clicks' ? 'Klicks' : 'Impressionen'}</span>
+             </div>
+             <span className="text-[14px] font-bold ml-4" style={{ color: entry.color }}>{entry.value.toLocaleString('de-DE')}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 const PerformanceTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     const definition = METRIC_DEFINITIONS[data.metric] || "";
     return (
-      <div className="bg-[#111] border border-[#333] p-3 shadow-2xl max-w-[220px]">
+      <div className="bg-white dark:bg-[#111] border border-[#DDD] dark:border-[#333] p-3 shadow-2xl max-w-[220px]">
         <p className="text-[11px] font-bold text-[#D4AF37] mb-1 uppercase tracking-wider">{data.metric}</p>
-        <p className="text-[16px] text-white font-bold mb-2">{data.value} ms</p>
+        <p className="text-[16px] text-[#1A1A1A] dark:text-white font-bold mb-2">{data.value} ms</p>
         {definition && (
-          <p className="text-[10px] text-white/70 leading-relaxed border-t border-white/10 pt-2 italic">
+          <p className="text-[10px] text-[#888] dark:text-white/70 leading-relaxed border-t border-[#EEE] dark:border-[#333] pt-2 italic">
             {definition}
           </p>
         )}
@@ -367,6 +395,11 @@ export default function WebsiteAnalyzer() {
       - Nutze das eingebundene Google Search Tool, um aktuelle Nachrichten, Trends, Sicherheitslücken oder Google-Updates zu suchen, die exakt zur Branche oder Technologie der analysierten URL passen.
       - Fasse 2-3 hochaktuelle Fakten in das Array "industryNews" zusammen.
       
+      WICHTIGE REGEL ZU CODE-VORSCHLÄGEN:
+      - Es dürfen absolut KEINE Code-Vorschläge, Code-Beispiele, HTML, CSS, JavaScript oder JSON Snippets in den Lösungsansätzen, Empfehlungen oder Actionables enthalten sein.
+      - Gib rein strategische und inhaltliche Anweisungen in Fließtext.
+      - (Ausnahme: Das Feld "suggestedSchemaMarkup" MUSS reiner JSON-LD Code sein).
+
       URL: ${scrapeData.urlObj}
       Title: ${scrapeData.title}
       Meta Description: ${scrapeData.metaDescription}
@@ -754,7 +787,8 @@ export default function WebsiteAnalyzer() {
   };
 
   return (
-    <main className="min-h-screen bg-[#F5F5F3] dark:bg-zinc-950 text-[#1A1A1A] dark:text-zinc-100 font-['Helvetica_Neue',_Helvetica,_Arial,_sans-serif] overflow-x-hidden transition-colors">
+    <main className="min-h-screen bg-[#F5F5F3] dark:bg-zinc-950 text-[#1A1A1A] dark:text-zinc-100 font-['Helvetica_Neue',_Helvetica,_Arial,_sans-serif] overflow-x-hidden transition-colors pl-0 md:pl-64">
+      <Sidebar />
       <div className="max-w-[1024px] mx-auto px-10 py-[60px] flex flex-col justify-between min-h-screen">
         
         <div>
@@ -764,9 +798,6 @@ export default function WebsiteAnalyzer() {
               <h1 className="text-[50px] md:text-[82px] leading-[0.85] tracking-[-3px] font-bold uppercase max-w-[500px]">
                 Website Analyzer Pro
               </h1>
-              <div className="self-start md:self-auto">
-                <ThemeToggle />
-              </div>
             </div>
             <div className="md:text-right flex flex-col gap-1 mt-2 md:mt-0 opacity-80 text-[#1A1A1A] dark:text-zinc-100 dark:text-zinc-400">
               <p className="text-[11px] opacity-50 uppercase tracking-[1px] font-semibold">VERSION 4.2.0 (GOLD)</p>
@@ -830,8 +861,6 @@ export default function WebsiteAnalyzer() {
           {/* Report Display */}
           {report && !isLoading && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-              
-              <QuickNav />
 
               {/* Score Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-[20px] mt-[60px] mb-[60px]">
@@ -982,12 +1011,7 @@ function ScoreCard({ title, score, desc }: { title: string, score: number, desc:
 
 function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedSEO, socialData?: any }) {
   return (
-    <section id="seo" className="bg-[#FFFFFF] dark:bg-zinc-900 p-[40px] border-l border-black/5 mt-8 flex flex-col">
-      <div className="flex items-center justify-between mb-[30px]">
-        <h3 className="text-[18px] font-bold uppercase text-[#1A1A1A] dark:text-zinc-100">Comprehensive SEO Analysis</h3>
-        <span className="text-[9px] px-2 py-1 bg-[#1A1A1A] dark:bg-zinc-800 text-[#FFFFFF] uppercase font-bold tracking-wider">SEO DEEP DIVE</span>
-      </div>
-      
+    <CollapsibleSection id="seo" title="Comprehensive SEO Analysis" icon={<Search className="w-6 h-6" />} color="#1A1A1A" badge="SEO DEEP DIVE" className="mt-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[40px] mb-[40px]">
          <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
             <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">Keywords & Inhaltsrelevanz</span>
@@ -1024,7 +1048,7 @@ function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedS
          )}
 
          {detailedSeo.technicalSeo && (
-           <div className="flex flex-col gap-6 md:col-span-2 mt-4 p-4 bg-[#F5F5F3] dark:bg-zinc-950 border-t border-[#EEE] dark:border-zinc-800">
+           <div className="flex flex-col gap-6 md:col-span-2 mt-4 p-4 bg-[#F5F5F3] dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800">
              <h4 className="text-[12px] font-bold uppercase tracking-wider text-[#1A1A1A] dark:text-zinc-100 mb-2 border-b border-[#EEE] dark:border-zinc-800 pb-2">Technisches SEO Deep-Dive</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="flex flex-col">
@@ -1049,7 +1073,7 @@ function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedS
       </div>
 
       {detailedSeo.suggestedSchemaMarkup && (
-        <div className="mt-8 pt-8 border-t border-[#1A1A1A] dark:border-zinc-700">
+        <div className="mt-8 pt-8 border-t border-[#EEE] dark:border-zinc-700">
            <div className="flex items-center justify-between mb-4">
              <h4 className="text-[14px] font-bold uppercase text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-2 tracking-wide">
                <CodeXml className="w-5 h-5 text-[#D4AF37]" />
@@ -1076,7 +1100,7 @@ function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedS
       )}
 
       {socialData && (
-        <div className="mt-8 pt-8 border-t border-[#1A1A1A] dark:border-zinc-700">
+        <div className="mt-8 pt-8 border-t border-[#EEE] dark:border-zinc-700">
            <h4 className="text-[14px] font-bold uppercase text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-3 tracking-wide mb-8">
              <Share2 className="w-5 h-5 text-[#D4AF37]" />
              Social Media Preview (OpenGraph)
@@ -1139,21 +1163,17 @@ function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedS
         title="Priorisierte SEO-Maßnahmen" 
         accentColor="#1A1A1A" 
       />
-    </section>
+    </CollapsibleSection>
   );
 }
 
 function SearchConsoleModule({ data, isLoading, onConnect, error }: { data: any, isLoading: boolean, onConnect: () => void, error: string | null }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   if (!data && !isLoading && !error) {
     return (
-      <section id="gsc" className="bg-[#FFFFFF] dark:bg-zinc-900 p-[40px] border-l border-black/5 flex flex-col shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-[18px] font-bold uppercase flex items-center gap-3 text-[#1A1A1A] dark:text-zinc-100">
-            <Activity className="w-6 h-6 text-[#4285F4]" />
-            Google Search Console Insight
-          </h3>
-          <span className="text-[9px] px-2 py-1 bg-[#4285F4] text-white uppercase font-bold tracking-wider">PREMIUM DATA</span>
-        </div>
+      <CollapsibleSection id="gsc" title="Google Search Console Insight" icon={<Activity className="w-6 h-6" />} color="#4285F4" badge="PREMIUM DATA">
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <div className="w-16 h-16 bg-[#F5F5F3] dark:bg-zinc-800 rounded-full flex items-center justify-center mb-6">
             <Activity className="w-8 h-8 text-[#4285F4] opacity-40" />
@@ -1170,20 +1190,12 @@ function SearchConsoleModule({ data, isLoading, onConnect, error }: { data: any,
             Mit Search Console verbinden
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
     );
   }
 
   return (
-    <section id="gsc" className="bg-[#FFFFFF] dark:bg-zinc-900 p-[40px] border-l border-black/5 flex flex-col shadow-sm min-h-[400px]">
-      <div className="flex items-center justify-between mb-[30px]">
-        <h3 className="text-[18px] font-bold uppercase flex items-center gap-3 text-[#1A1A1A] dark:text-zinc-100">
-          <Activity className="w-6 h-6 text-[#4285F4]" />
-          Google Search Console Insight
-        </h3>
-        <span className="text-[9px] px-2 py-1 bg-[#4285F4] text-white uppercase font-bold tracking-wider">REAL-TIME DATA</span>
-      </div>
-
+    <CollapsibleSection id="gsc" title="Google Search Console Insight" icon={<Activity className="w-6 h-6" />} color="#4285F4" badge="REAL-TIME DATA">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-[#4285F4]" />
@@ -1235,22 +1247,52 @@ function SearchConsoleModule({ data, isLoading, onConnect, error }: { data: any,
               </h4>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                   <LineChart data={data.performance}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                   <LineChart data={data.performance} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#3F3F46' : '#eee'} />
                       <XAxis 
                         dataKey="keys" 
-                        tickFormatter={(keys) => new Date(keys[0]).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                        tickFormatter={(keys) => {
+                          if (!keys || !keys[0]) return '';
+                          const d = new Date(keys[0]);
+                          return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.`;
+                        }}
                         fontSize={10}
                         axisLine={false}
                         tickLine={false}
+                        tick={{ fill: isDark ? '#A1A1AA' : '#888' }}
+                        dy={10}
                       />
-                      <YAxis fontSize={10} axisLine={false} tickLine={false} />
+                      <YAxis 
+                        fontSize={10} 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: isDark ? '#A1A1AA' : '#888' }} 
+                        tickFormatter={(val) => val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val}
+                        dx={-10}
+                      />
                       <Tooltip 
-                        labelFormatter={(label) => new Date(label[0]).toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}
-                        contentStyle={{ borderRadius: '0', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        content={<GscTooltip />} 
+                        cursor={{ stroke: isDark ? '#3F3F46' : '#eee', strokeWidth: 1, strokeDasharray: '3 3' }} 
                       />
-                      <Line type="monotone" dataKey="clicks" stroke="#4285F4" strokeWidth={3} dot={false} />
-                      <Line type="monotone" dataKey="impressions" stroke="#D4AF37" strokeWidth={2} dot={false} opacity={0.3} />
+                      <Line 
+                        name="clicks"
+                        type="monotone" 
+                        dataKey="clicks" 
+                        stroke="#4285F4" 
+                        strokeWidth={3} 
+                        dot={false} 
+                        activeDot={{ r: 6, strokeWidth: 0, fill: '#4285F4' }} 
+                      />
+                      <Line 
+                        name="impressions"
+                        type="monotone" 
+                        dataKey="impressions" 
+                        stroke="#D4AF37" 
+                        strokeWidth={2} 
+                        dot={false} 
+                        activeDot={{ r: 6, strokeWidth: 0, fill: '#D4AF37' }} 
+                        opacity={0.8}
+                      />
                    </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -1295,21 +1337,13 @@ function SearchConsoleModule({ data, isLoading, onConnect, error }: { data: any,
            </div>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
 function SecurityDeepDiveModule({ detailedSecurity }: { detailedSecurity: DetailedSecurity }) {
   return (
-    <section id="security" className="bg-[#1A1A1A] dark:bg-zinc-800 p-[40px] text-[#FFFFFF] border-l-[5px] border-[#EB5757] flex flex-col shadow-2xl">
-      <div className="flex items-center justify-between mb-[30px]">
-        <h3 className="text-[18px] font-bold uppercase flex items-center gap-3">
-          <ShieldCheck className="w-6 h-6 text-[#EB5757]" />
-          Vulnerability & Security Audit
-        </h3>
-        <span className="text-[9px] px-2 py-1 bg-[#EB5757] text-[#FFFFFF] uppercase font-bold tracking-wider">SEC DEEP DIVE</span>
-      </div>
-      
+    <CollapsibleSection id="security" title="Vulnerability & Security Audit" icon={<ShieldCheck className="w-6 h-6" />} color="#EB5757" badge="SEC DEEP DIVE">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-[30px] mb-[40px]">
          <div className="flex flex-col border-t border-white/20 pt-[15px]">
             <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">SQLi / XSS Attack Surface</span>
@@ -1337,21 +1371,13 @@ function SecurityDeepDiveModule({ detailedSecurity }: { detailedSecurity: Detail
         title="Priorisierte Sicherheits-Patches & Remediation" 
         accentColor="#EB5757" 
       />
-    </section>
+    </CollapsibleSection>
   );
 }
 
 function AccessibilityDeepDiveModule({ detailedAccessibility }: { detailedAccessibility: DetailedAccessibility }) {
   return (
-    <section id="accessibility" className="bg-[#FFFFFF] dark:bg-zinc-900 p-[40px] border-l border-black/5 border-t-[5px] border-[#27AE60] flex flex-col shadow-sm">
-      <div className="flex items-center justify-between mb-[30px]">
-        <h3 className="text-[18px] font-bold uppercase flex items-center gap-3 text-[#1A1A1A] dark:text-zinc-100">
-          <UserCheck className="w-6 h-6 text-[#27AE60]" />
-          Accessibility & A11y Audit
-        </h3>
-        <span className="text-[9px] px-2 py-1 bg-[#27AE60] text-[#FFFFFF] uppercase font-bold tracking-wider">A11Y DEEP DIVE</span>
-      </div>
-      
+    <CollapsibleSection id="accessibility" title="Accessibility & A11y Audit" icon={<UserCheck className="w-6 h-6" />} color="#27AE60" badge="A11Y DEEP DIVE">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[30px] mb-[40px]">
          <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
             <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">Visual & Contrast / Alt-Texte</span>
@@ -1368,21 +1394,16 @@ function AccessibilityDeepDiveModule({ detailedAccessibility }: { detailedAccess
         title="Priorisierte Accessibility Fixes" 
         accentColor="#27AE60" 
       />
-    </section>
+    </CollapsibleSection>
   );
 }
 
 function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformance: DetailedPerformance }) {
-  return (
-    <section id="performance" className="bg-[#FFFFFF] dark:bg-zinc-900 p-[40px] border-l border-black/5 border-t-[5px] border-[#D4AF37] flex flex-col shadow-sm">
-      <div className="flex items-center justify-between mb-[30px]">
-        <h3 className="text-[18px] font-bold uppercase flex items-center gap-3 text-[#1A1A1A] dark:text-zinc-100">
-          <Zap className="w-6 h-6 text-[#D4AF37]" />
-          Performance & Speed Audit
-        </h3>
-        <span className="text-[9px] px-2 py-1 bg-[#D4AF37] text-[#1A1A1A] dark:text-zinc-100 uppercase font-bold tracking-wider">PERF DEEP DIVE</span>
-      </div>
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
+  return (
+    <CollapsibleSection id="performance" title="Performance & Speed Audit" icon={<Zap className="w-6 h-6" />} color="#D4AF37" badge="PERF DEEP DIVE">
       <div className="flex flex-col gap-8 mb-10">
          {/* Lighthouse Dashboard */}
          {detailedPerformance.lighthouseMetrics && (
@@ -1443,15 +1464,15 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
          </div>
 
          {/* Right Column: Data Visualization using Recharts */}
-         <div className="bg-[#1A1A1A] dark:bg-zinc-800 p-[20px] pb-2 flex flex-col gap-[30px] shadow-lg">
+         <div className="bg-[#F5F5F3] dark:bg-zinc-800 p-[20px] pb-2 flex flex-col gap-[30px] shadow-sm border border-[#EEE] dark:border-zinc-700">
             {detailedPerformance.chartData?.vitals && detailedPerformance.chartData.vitals.length > 0 && (
               <div className="h-[180px] w-full">
-                <span className="text-[10px] uppercase font-bold text-[#FFFFFF] mb-[10px] block tracking-wider">Estimated Vitals (ms)</span>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A] dark:text-[#FFFFFF] mb-[10px] block tracking-wider">Estimated Vitals (ms)</span>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={detailedPerformance.chartData.vitals} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                    <XAxis type="number" fontSize={10} tick={{ fill: '#888' }} stroke="#444" />
-                    <YAxis dataKey="metric" type="category" width={50} fontSize={10} tick={{ fill: '#FFF' }} stroke="#444" />
-                    <Tooltip content={<PerformanceTooltip />} cursor={{ fill: 'transparent' }} />
+                    <XAxis type="number" fontSize={10} tick={{ fill: isDark ? '#A1A1AA' : '#888' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
+                    <YAxis dataKey="metric" type="category" width={50} fontSize={10} tick={{ fill: isDark ? '#F4F4F5' : '#1A1A1A' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
+                    <Tooltip content={<PerformanceTooltip />} cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} />
                     <Bar dataKey="value" fill="#D4AF37" radius={[0, 4, 4, 0]}>
                        {(detailedPerformance.chartData.vitals || []).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.value > 2500 ? '#EB5757' : entry.value > 1500 ? '#F2994A' : '#27AE60'} />
@@ -1463,13 +1484,13 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
             )}
 
             {detailedPerformance.chartData?.resources && detailedPerformance.chartData.resources.length > 0 && (
-              <div className="h-[180px] w-full mt-4 border-t border-white/10 pt-4">
-                <span className="text-[10px] uppercase font-bold text-[#FFFFFF] mb-[10px] block tracking-wider">Resource Request Count</span>
+              <div className="h-[180px] w-full mt-4 border-t border-[#DDD] dark:border-white/10 pt-4">
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A] dark:text-[#FFFFFF] mb-[10px] block tracking-wider">Resource Request Count</span>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={detailedPerformance.chartData.resources} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <XAxis dataKey="name" fontSize={10} tick={{ fill: '#FFF' }} stroke="#444" />
-                    <YAxis fontSize={10} tick={{ fill: '#888' }} stroke="#444" />
-                    <Tooltip content={<ResourceTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                    <XAxis dataKey="name" fontSize={10} tick={{ fill: isDark ? '#A1A1AA' : '#1A1A1A' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
+                    <YAxis fontSize={10} tick={{ fill: isDark ? '#A1A1AA' : '#888' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
+                    <Tooltip content={<ResourceTooltip />} cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} />
                     <Bar dataKey="count" fill="#D4AF37" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1483,21 +1504,13 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
         title="Priorisierte Speed-Optimierungen" 
         accentColor="#D4AF37" 
       />
-    </section>
+    </CollapsibleSection>
   );
 }
 
 function ComplianceDeepDiveModule({ detailedCompliance, legalData }: { detailedCompliance: DetailedCompliance, legalData?: any }) {
   return (
-    <section id="compliance" className="bg-[#FFFFFF] dark:bg-zinc-900 p-[40px] border-l border-black/5 border-t-[5px] border-[#1A1A1A] dark:border-zinc-50 flex flex-col shadow-sm">
-      <div className="flex items-center justify-between mb-[30px]">
-        <h3 className="text-[18px] font-bold uppercase flex items-center gap-3 text-[#1A1A1A] dark:text-zinc-100">
-          <Scale className="w-6 h-6 text-[#1A1A1A] dark:text-zinc-100" />
-          Legal & Compliance Audit
-        </h3>
-        <span className="text-[9px] px-2 py-1 bg-[#1A1A1A] dark:bg-zinc-800 text-[#FFFFFF] uppercase font-bold tracking-wider">LEGAL DEEP DIVE</span>
-      </div>
-      
+    <CollapsibleSection id="compliance" title="Legal & Compliance Audit" icon={<Scale className="w-6 h-6" />} color="#888888" badge="LEGAL DEEP DIVE">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-[30px] mb-[40px]">
          <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
             <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">Cookie-Banner Status</span>
@@ -1586,7 +1599,7 @@ function ComplianceDeepDiveModule({ detailedCompliance, legalData }: { detailedC
         title="Priorisierte Compliance-Aufgaben" 
         accentColor="#1A1A1A" 
       />
-    </section>
+    </CollapsibleSection>
   );
 }
 

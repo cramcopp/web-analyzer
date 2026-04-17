@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     let psiMetricsStr = "Keine PageSpeed Insights Daten verfügbar.";
     let lighthouseScores = null;
     try {
-      const psiTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('PSI Timeout')), 12000));
+      const psiTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('PSI Timeout')), 45000));
       const psiResult: any = await Promise.race([psiPromise, psiTimeout]);
       
       if (psiResult.ok) {
@@ -204,17 +204,29 @@ export async function POST(req: Request) {
       linkedinInsight: html.includes('snap.licdn.com/li.lms-analytics/insight.min.js')
     };
 
+    // Aggregate all script text to check for globals and events
+    const allScriptText = $('script').map((i, el) => $(el).html()).get().join(' ');
+
     // Detect common CMPs (Consent Management Platforms)
     const cmpDetected = {
-      usercentrics: html.includes('app.usercentrics.eu') || !!$('[id*="usercentrics"]').length,
-      cookiebot: html.includes('cookiebot.com'),
-      borlabs: html.includes('borlabs-cookie') || !!$('[id*="borlabs"]').length,
+      usercentrics: html.includes('app.usercentrics.eu') || !!$('[id*="usercentrics"]').length || allScriptText.includes('window.UC_UI'),
+      cookiebot: html.includes('cookiebot.com') || allScriptText.includes('Cookiebot') || allScriptText.includes('CookieConsent'),
+      borlabs: html.includes('borlabs-cookie') || !!$('[id*="borlabs"]').length || allScriptText.includes('BorlabsCookie') || allScriptText.includes('borlabsCookie'),
       consentManager: html.includes('cdn.consentmanager.mgr.consens.org') || html.includes('consentmanager.net'),
-      oneTrust: html.includes('onetrust.com')
+      oneTrust: html.includes('onetrust.com') || allScriptText.includes('OptanonWrapper') || allScriptText.includes('OnetrustActiveGroups'),
+      klaro: html.includes('klaro.js') || allScriptText.includes('klaroConfig'),
+      tcfApi: allScriptText.includes('__tcfapi(') || allScriptText.includes('__tcfapiLocator') || allScriptText.includes('__cmp('),
+      tarteaucitron: html.includes('tarteaucitron') || allScriptText.includes('tarteaucitron')
     };
 
-    // Simple heuristic for cookie banner
-    const cookieBannerFound = html.toLowerCase().includes('cookie') && (
+    // Simple heuristic for cookie banner including JS event listener patterns
+    const hasConsentJsPatterns = 
+      allScriptText.includes('addEventListener("CookiebotOnAccept"') ||
+      allScriptText.includes('addEventListener("consent"') ||
+      allScriptText.includes('onConsentChange') ||
+      allScriptText.includes('cookie-consent');
+
+    const cookieBannerFound = hasConsentJsPatterns || html.toLowerCase().includes('cookie') && (
       html.toLowerCase().includes('akzeptieren') || 
       html.toLowerCase().includes('einwilligen') || 
       html.toLowerCase().includes('accept') ||
