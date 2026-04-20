@@ -122,6 +122,46 @@ export async function POST(req: Request) {
     const totalStylesheets = $('link[rel="stylesheet"]').length;
     const lazyImages = $('img[loading="lazy"]').length;
     
+    // Calculate max DOM depth
+    let maxDomDepth = 0;
+    $('*').each((i, el) => {
+      const depth = $(el).parents().length;
+      if (depth > maxDomDepth) maxDomDepth = depth;
+    });
+
+    // Perfectionist Performance Signals
+    const preloads = {
+      fonts: $('link[rel="preload"][as="font"]').length,
+      dnsPrefetch: $('link[rel="dns-prefetch"]').length,
+      preconnect: $('link[rel="preconnect"]').length,
+    };
+    
+    let hasNextGenImages = false;
+    $('img').each((i, el) => {
+      const src = $(el).attr('src') || '';
+      if(src.toLowerCase().includes('.webp') || src.toLowerCase().includes('.avif')) {
+        hasNextGenImages = true;
+      }
+    });
+    const nextGenImagesSource = $('source[type="image/webp"], source[type="image/avif"]').length;
+    if (nextGenImagesSource > 0) hasNextGenImages = true;
+
+    // Semantic Tags Audit
+    const semanticTags = {
+      main: $('main').length,
+      article: $('article').length,
+      section: $('section').length,
+      aside: $('aside').length,
+      nav: $('nav').length,
+      header: $('header').length,
+      footer: $('footer').length,
+    };
+    
+    // Check for exposed emails (basic data leakage check)
+    const emailRegex = /[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g;
+    const emailsFound = [...new Set(html.match(emailRegex) || [])];
+    const mailtoLinks = $('a[href^="mailto:"]').length;
+    
     const viewport = $('meta[name="viewport"]').attr('content') || 'Not found';
     const robots = $('meta[name="robots"]').attr('content') || 'Not found';
     const metaKeywords = $('meta[name="keywords"]').attr('content') || 'Not found';
@@ -303,7 +343,30 @@ export async function POST(req: Request) {
     });
     const linkSummary = links.join(', ');
 
-    // Get response headers for security/speed clues
+    // NAP & Maps Check (Local SEO signals)
+    const googleMapsLinks = $('a[href*="google.com/maps"], a[href*="maps.google"], a[href*="maps.app.goo.gl"]').length;
+    const phoneLinks = $('a[href^="tel:"]').length;
+    
+    // Call-to-Action (CTA) Detection
+    const ctaTexts: string[] = [];
+    $('a[class*="btn"], a[class*="button"], button, input[type="submit"]').each((i, el) => {
+      const text = $(el).text().trim() || $(el).attr('value')?.trim();
+      if (text && ctaTexts.length < 15) {
+        ctaTexts.push(text);
+      }
+    });
+
+    // Extract precise security headers and tech stack headers
+    const securityHeaders = {
+      hsts: response.headers.get('strict-transport-security') || 'Missing',
+      csp: response.headers.get('content-security-policy') || 'Missing',
+      xContentTypeOptions: response.headers.get('x-content-type-options') || 'Missing',
+      xFrameOptions: response.headers.get('x-frame-options') || 'Missing',
+      xPoweredBy: response.headers.get('x-powered-by') || 'Hidden',
+      server: response.headers.get('server') || 'Hidden',
+    };
+
+    // Get all response headers for fallback
     const headers: Record<string, string> = {};
     response.headers.forEach((value, key) => {
       headers[key] = value;
@@ -326,6 +389,18 @@ export async function POST(req: Request) {
       imagesTotal,
       imagesWithoutAlt,
       lazyImages,
+      maxDomDepth,
+      semanticTags,
+      napSignals: {
+        googleMapsLinks,
+        phoneLinks
+      },
+      ctaTexts,
+      dataLeakage: {
+        emailsFoundCount: emailsFound?.length || 0,
+        mailtoLinksCount: mailtoLinks,
+        sampleEmails: emailsFound.slice(0, 3)
+      },
       ariaCount,
       emptyButtonsLinks,
       internalLinksCount,
@@ -334,9 +409,12 @@ export async function POST(req: Request) {
       blockingScripts,
       totalStylesheets,
       responseTimeMs,
+      preloads,
+      hasNextGenImages,
       psiMetricsStr,
       lighthouseScores,
       safeBrowsingStr,
+      securityHeaders,
       headers,
       linkSummary,
       bodyText,

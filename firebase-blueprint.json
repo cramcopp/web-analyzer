@@ -7,6 +7,7 @@
       "properties": {
         "uid": { "type": "string", "description": "Auth UID" },
         "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Display name of the user" },
         "role": { "type": "string", "enum": ["admin", "user"], "description": "Role of the user" },
         "createdAt": { "type": "string", "format": "date-time" }
       },

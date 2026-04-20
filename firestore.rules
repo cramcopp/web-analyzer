@@ -11,6 +11,7 @@ service cloud.firestore {
     // Fields:
     //   - uid: string (required) - Auth UID
     //   - email: string (required) - User email address
+    //   - displayName: string (optional) - User's display name
     //   - role: string (required) - Role of the user ('admin', 'user')
     //   - createdAt: string (optional) - ISO 8601 date string
     //
@@ -66,10 +67,11 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName']) &&
         data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
         data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
         data.role in ['admin', 'user'] &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
         (!('createdAt' in data) || isValidDateString(data.createdAt));
     }
 
