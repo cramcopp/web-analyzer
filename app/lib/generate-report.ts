@@ -139,6 +139,16 @@ export async function generateReportClientSide(scrapeData: any) {
       - Duplicate H2 Headings: ${scrapeData.contentAudit?.duplicateH2s ? 'YES' : 'NO'}
       - Identical H1 and H2 text: ${scrapeData.contentAudit?.identicalHeadings ? 'YES' : 'NO'}
 
+      Crawl Summary (Site-Wide Audit):
+      - Total internal links found: ${scrapeData.crawlSummary?.totalInternalLinks}
+      - Subpages scanned: ${scrapeData.crawlSummary?.scannedSubpagesCount}
+      - Subpage Details: ${JSON.stringify(scrapeData.crawlSummary?.scannedSubpages)}
+      
+      Instructions for Site-Wide Audit:
+      1. Analyze the Subpage Details for inconsistencies. Are there pages missing H1s? Are meta descriptions duplicated or missing?
+      2. Identify patterns. Is the title structure consistent?
+      3. Include these findings in the 'seo' and 'overallAssessment' sections.
+
       Excerpt of Body Text (max 15000 chars):
       ${scrapeData.bodyText}
       `;

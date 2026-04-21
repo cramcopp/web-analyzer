@@ -12,7 +12,8 @@ import { FloatingNav } from '../components/floating-nav';
 import { generateReportClientSide } from './lib/generate-report';
 import { useAuth } from '../components/auth-provider';
 import { db, auth } from '../firebase';
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import PricingSection from '../components/PricingSection';
 
 type PrioritizedTask = {
   priority: string;
@@ -316,13 +317,17 @@ function FloatingScannerProgress({ progress, stepIndex, steps }: { progress: num
   );
 }
 
-function LoadingDisplay() {
+function LoadingDisplay({ plan = 'free' }: { plan?: string }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [progress, setProgress] = useState(0);
 
+  const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
+
   const steps = [
-    "Initialisiere Scanner...",
+    `Initialisiere ${modelName} Intelligence...`,
+    "Analysiere mit Gemini-Power...",
     "Crawle Webseiteninhalte...",
+    "Analysiere Unterseiten...",
     "Generiere SEO-Report...",
     "Führe Security-Audit durch...",
     "Analysiere Performance-Metriken...",
@@ -393,6 +398,7 @@ function ReportResultsView({
   onConnectGSC,
   gscError,
   onExportActionPlan,
+  plan = 'free',
 }: {
   report: any;
   rawScrapeData: any;
@@ -401,11 +407,57 @@ function ReportResultsView({
   onConnectGSC: () => void;
   gscError: string | null;
   onExportActionPlan: () => void;
+  plan?: string;
+  setActiveView: (view: string) => void;
 }) {
+  const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
+  
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-      <QuickNav />
-      
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 relative">
+      {/* Sticky Upgrade Banner for Free Users */}
+      {plan === 'free' && (
+        <div className="sticky top-0 z-[60] bg-[#D4AF37] text-[#1A1A1A] py-3 px-6 flex items-center justify-between shadow-xl -mx-4 md:mx-0 mb-8 animate-in slide-in-from-top duration-500">
+           <div className="flex items-center gap-3">
+              <Zap className="w-5 h-5 animate-pulse" />
+              <span className="text-[12px] font-black uppercase tracking-widest hidden md:inline">Eingeschränkte Analyse aktiv</span>
+              <span className="text-[11px] font-bold">Du nutzt nur 10% der Deep-Analysis Power.</span>
+           </div>
+           <button 
+             onClick={() => setActiveView('pricing')}
+             className="bg-[#1A1A1A] text-white px-4 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center gap-2"
+           >
+             JETZT UPGRADEN
+             <Rocket className="w-4 h-4" />
+           </button>
+        </div>
+      )}
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <QuickNav />
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-black uppercase tracking-[2px] text-[#888]">WAP Intelligence</span>
+            <div className="flex items-center gap-2">
+               <div className={`w-2 h-2 rounded-full animate-pulse ${plan === 'free' ? 'bg-[#888]' : 'bg-[#D4AF37]'}`}></div>
+               <span className="text-[12px] font-black uppercase tracking-tight text-[#1A1A1A] dark:text-zinc-100">
+                 {modelName}
+               </span>
+            </div>
+            <span className="text-[8px] font-bold text-[#AAA] uppercase mt-0.5">powered by Gemini</span>
+          </div>
+          <div className="h-8 w-[1px] bg-[#EEE] dark:bg-zinc-800 mx-2"></div>
+          <div className={`px-4 py-2 rounded-sm border flex items-center gap-2 shadow-sm ${
+            plan === 'agency' ? 'bg-gradient-to-r from-zinc-900 to-zinc-800 border-zinc-700 text-white' :
+            plan === 'pro' ? 'bg-[#D4AF37] border-[#D4AF37] text-white' :
+            'bg-[#F5F5F3] dark:bg-zinc-950 border-[#EEE] dark:border-zinc-800 text-[#888]'
+          }`}>
+            <UserCheck className="w-4 h-4" />
+            <span className="text-[10px] font-black uppercase tracking-[2px]">
+              {plan === 'agency' ? 'Agency Master' : plan === 'pro' ? 'Pro Strategic' : 'Explorer Free'}
+            </span>
+          </div>
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-[15px] mt-[40px] mb-[40px]">
         <ScoreCard
           title="SEO & Content"
@@ -484,19 +536,32 @@ function ReportResultsView({
               </span>
               <ul className="space-y-[10px]">
                 {report.businessIntelligence.keywordGapAnalysis.map(
-                  (keyword: any, idx: number) => (
-                    <li
-                      key={idx}
-                      className="bg-white/5 p-3 flex items-start gap-3 border border-white/10 hover:border-[#D4AF37] transition-colors"
-                    >
-                      <span className="text-[#D4AF37] mt-0.5">
-                        <Search className="w-4 h-4" />
-                      </span>
-                      <span className="text-[13px] text-white/90 font-medium leading-[1.4]">
-                        {keyword}
-                      </span>
-                    </li>
-                  ),
+                  (keyword: any, idx: number) => {
+                    const isBlurred = plan === 'free' && idx > 0;
+                    return (
+                      <li
+                        key={idx}
+                        className={`bg-white/5 p-3 flex items-start gap-3 border border-white/10 hover:border-[#D4AF37] transition-all relative overflow-hidden ${isBlurred ? 'opacity-40 grayscale pointer-events-none' : ''}`}
+                      >
+                        <span className="text-[#D4AF37] mt-0.5">
+                          <Search className="w-4 h-4" />
+                        </span>
+                        <span className={`text-[13px] text-white/90 font-medium leading-[1.4] ${isBlurred ? 'blur-[4px] select-none' : ''}`}>
+                          {keyword}
+                        </span>
+                        {isBlurred && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
+                             <button 
+                               onClick={() => setActiveView('pricing')}
+                               className="text-[8px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37] px-2 py-1 hover:bg-[#D4AF37] hover:text-black transition-all"
+                             >
+                               Unlock with Pro
+                             </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  }
                 )}
               </ul>
             </div>
@@ -541,11 +606,24 @@ function ReportResultsView({
               Executive Summary
             </h2>
             <button 
-              onClick={onExportActionPlan}
-              className="flex items-center justify-center gap-2 bg-[#1A1A1A] dark:bg-zinc-800 text-white dark:text-zinc-100 hover:bg-[#D4AF37] hover:text-[#1A1A1A] px-4 py-2 text-[10px] font-black uppercase tracking-[2px] transition-all self-start shadow-lg"
+              onClick={plan === 'free' ? () => setActiveView('pricing') : onExportActionPlan}
+              className={`flex items-center justify-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[2px] transition-all self-start shadow-lg ${
+                plan === 'free' 
+                ? 'bg-zinc-800/10 text-zinc-400 border border-zinc-200 cursor-not-allowed line-through' 
+                : 'bg-[#1A1A1A] dark:bg-zinc-800 text-white dark:text-zinc-100 hover:bg-[#D4AF37] hover:text-[#1A1A1A]'
+              }`}
             >
-              <Download className="w-4 h-4" />
-              EXPORT PLAN (CSV)
+              {plan === 'free' ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-[#D4AF37]" />
+                  UNLOCK CSV (PRO)
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  EXPORT PLAN (CSV)
+                </>
+              )}
             </button>
           </div>
           <p className="text-[#1A1A1A] dark:text-zinc-300 leading-[1.8] text-[15px] font-medium italic">
@@ -554,11 +632,38 @@ function ReportResultsView({
         </div>
       </section>
 
+      {report.industryNews && report.industryNews.length > 0 && (
+        <section className="mb-12">
+          <div className="flex items-center gap-3 mb-6">
+            <Globe className="w-5 h-5 text-[#D4AF37]" />
+            <h3 className="text-[14px] font-black uppercase tracking-[2px] text-[#1A1A1A] dark:text-zinc-100">Branchen-Insights & News</h3>
+            {plan === 'free' && <span className="text-[9px] font-black uppercase px-2 py-1 bg-[#D4AF37] text-white">PRO FEATURE</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+            {report.industryNews.slice(0, plan === 'free' ? 1 : 3).map((news: string, idx: number) => (
+              <div key={idx} className="bg-[#F5F5F3] dark:bg-zinc-950 p-6 border border-[#EEE] dark:border-zinc-800 relative group">
+                <div className="absolute top-0 left-0 w-1 h-0 group-hover:h-full bg-[#D4AF37] transition-all duration-300"></div>
+                <p className="text-[13px] leading-relaxed text-[#444] dark:text-zinc-300 font-medium italic">&quot;{news}&quot;</p>
+              </div>
+            ))}
+            {plan === 'free' && (
+              <div className="bg-[#FFFFFF] dark:bg-zinc-900 p-6 border border-dashed border-[#DDD] dark:border-zinc-800 flex flex-col items-center justify-center text-center gap-3 opacity-60">
+                 <Lock className="w-6 h-6 text-[#888]" />
+                 <p className="text-[10px] font-bold text-[#888] uppercase tracking-widest">Upgrade für 3+ weitere Branchen-Updates</p>
+                 <button onClick={() => setActiveView('pricing')} className="text-[9px] font-black uppercase text-[#D4AF37] border-b border-[#D4AF37]">Jetzt freischalten</button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       <div className="flex flex-col gap-10">
         {report.seo.detailedSeo && (
           <SeoDeepDiveModule
             detailedSeo={report.seo.detailedSeo}
             socialData={rawScrapeData?.social}
+            crawlSummary={rawScrapeData?.crawlSummary}
+            plan={plan}
           />
         )}
 
@@ -567,6 +672,8 @@ function ReportResultsView({
           isLoading={isGscLoading}
           onConnect={onConnectGSC}
           error={gscError}
+          plan={plan}
+          setActiveView={setActiveView}
         />
 
         {report.security.detailedSecurity && (
@@ -595,6 +702,50 @@ function ReportResultsView({
           />
         )}
       </div>
+
+      {/* Tiered Upsell Banners */}
+      {plan === 'free' && (
+        <div className="mt-20 p-10 bg-[#1A1A1A] border-t-8 border-[#D4AF37] relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-1000">
+            <Zap className="w-64 h-64 text-white" />
+          </div>
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
+            <div className="max-w-[600px] text-center md:text-left">
+              <h3 className="text-[32px] font-black text-white uppercase tracking-tighter leading-none mb-4">
+                Das war nur der Anfang. <br />
+                <span className="text-[#D4AF37]">Entfessle die volle Power.</span>
+              </h3>
+              <p className="text-[14px] text-zinc-400 font-medium leading-relaxed">
+                Du nutzt aktuell die Basis-KI. Mit <span className="text-white font-bold">WAP Advanced</span> erhältst du 10x tiefere Analysen, Keyword-Gap-Checks und volle Crawl-Abdeckung deiner gesamten Seite.
+              </p>
+            </div>
+            <button 
+              onClick={() => setActiveView('pricing')}
+              className="px-10 py-5 bg-[#D4AF37] text-[#1A1A1A] text-[12px] font-black uppercase tracking-[2px] hover:bg-white transition-colors shadow-2xl flex items-center gap-3 shrink-0"
+            >
+              JETZT PRO FREISCHALTEN
+              <Rocket className="w-5 h-5 animate-bounce" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {plan === 'pro' && (
+        <div className="mt-20 p-8 bg-zinc-950 border border-zinc-800 relative group text-center">
+          <div className="relative z-10 flex flex-col items-center gap-4">
+            <h3 className="text-[16px] font-black text-[#D4AF37] uppercase tracking-widest">Upgrade to Agency</h3>
+            <p className="text-[12px] text-zinc-500 font-medium max-w-[500px]">
+              Erhöhe dein Limit auf 100+ Unterseiten und schalte automatische White-Label PDF Reports für deine Kunden frei.
+            </p>
+            <button 
+              onClick={() => setActiveView('pricing')}
+              className="text-[10px] font-black uppercase tracking-[2px] text-white border-b-2 border-[#D4AF37] pb-1 hover:text-[#D4AF37] transition-colors"
+            >
+              Alle Agency Vorteile ansehen
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -683,6 +834,12 @@ function ProjectDashboardView({
             <span className="text-[10px] font-black uppercase tracking-widest text-[#888] mb-8 block">
               Aktivität
             </span>
+            <div className="flex-1 text-right">
+              <span className="text-[10px] font-black uppercase tracking-[2px] text-[#888888] dark:text-zinc-500">Modus</span>
+              <p className="text-[12px] font-bold text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-widest">
+                {plan === 'agency' ? 'WAP Enterprise v3' : plan === 'pro' ? 'WAP Advanced v2' : 'WAP Standard v1'}
+              </p>
+            </div>
             <div className="text-[14px] font-bold text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-widest">
               Keine Daten verfügbar
             </div>
@@ -690,7 +847,7 @@ function ProjectDashboardView({
         </div>
       )}
 
-      {isLoading && <LoadingDisplay />}
+      {isLoading && <LoadingDisplay plan={project.userId === user?.uid ? userData?.plan : 'free'} />}
 
       {report && !isLoading && (
         <ReportResultsView
@@ -701,6 +858,8 @@ function ProjectDashboardView({
           onConnectGSC={onConnectGSC}
           gscError={gscError}
           onExportActionPlan={onExportActionPlan}
+          plan={project.userId === user?.uid ? userData?.plan : 'free'}
+          setActiveView={setActiveView}
         />
       )}
     </div>
@@ -979,7 +1138,7 @@ function ProfileView() {
 }
 
 export default function WebsiteAnalyzer() {
-  const { user, loading: authLoading, logOut } = useAuth();
+  const { user, userData, loading: authLoading, logOut } = useAuth();
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -992,8 +1151,17 @@ export default function WebsiteAnalyzer() {
   const [notification, setNotification] = useState<{message: string, url: string} | null>(null);
   const [notifications, setNotifications] = useState<{id: string, title: string, message: string, time: string, read: boolean}[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile'>('analyzer');
+  const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile' | 'pricing'>('analyzer');
   const [selectedProject, setSelectedProject] = useState<any>(null);
+
+  // Trial Logic
+  const isInTrial = userData?.trialUntil && new Date(userData.trialUntil) > new Date();
+  const effectivePlan = (userData?.plan === 'free' && isInTrial) ? 'pro' : (userData?.plan || 'free');
+  
+  // Calculate trial days remaining
+  const trialDaysLeft = userData?.trialUntil 
+    ? Math.max(0, Math.ceil((new Date(userData.trialUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   const addNotification = (title: string, message: string) => {
     const newNotif = {
@@ -1068,10 +1236,23 @@ export default function WebsiteAnalyzer() {
     setReport(null);
 
     try {
+      // Check Quota
+      if (user && userData) {
+        if (userData.scanCount >= userData.maxScans) {
+          setError(`Limit erreicht: Du hast dein Limit von ${userData.maxScans} Scans für diesen Monat erreicht. Bitte upgrade dein Abo.`);
+          setActiveView('pricing');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl }),
+        body: JSON.stringify({ 
+          url: targetUrl,
+          plan: effectivePlan
+        }),
       });
 
       const contentType = response.headers.get('content-type');
@@ -1103,14 +1284,19 @@ export default function WebsiteAnalyzer() {
       if (auth.currentUser) {
         try {
           const avgScore = Math.round((finalReport.seo.score + finalReport.security.score + finalReport.performance.score + finalReport.accessibility.score + finalReport.compliance.score) / 5);
-          await addDoc(collection(db, 'reports'), {
-            userId: auth.currentUser.uid,
-            url: targetUrl,
-            score: avgScore,
-            results: JSON.stringify(finalReport),
-            rawScrapeData: JSON.stringify(scrapeData),
-            createdAt: new Date().toISOString()
-          });
+            await addDoc(collection(db, 'reports'), {
+              userId: auth.currentUser.uid,
+              url: targetUrl,
+              score: avgScore,
+              results: JSON.stringify(finalReport),
+              rawScrapeData: JSON.stringify(scrapeData),
+              createdAt: new Date().toISOString()
+            });
+
+            // Increment Scan Count
+            await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+              scanCount: increment(1)
+            });
         } catch (dbError) {
           console.error("Could not save to history:", dbError);
         }
@@ -1201,7 +1387,7 @@ export default function WebsiteAnalyzer() {
     
     const link = document.createElement("a");
     link.href = blobUrl;
-    link.download = `AuraScan_ActionPlan_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `WAP_ActionPlan_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1222,6 +1408,7 @@ export default function WebsiteAnalyzer() {
         onSelectProject={handleSelectProject}
         onOpenSettings={() => setActiveView('settings')}
         onOpenProfile={() => setActiveView('profile')}
+        onOpenPricing={() => setActiveView('pricing')}
         onLogout={() => {
           setActiveView('analyzer');
           setReport(null);
@@ -1324,8 +1511,52 @@ export default function WebsiteAnalyzer() {
           {/* View Switching */}
           {activeView === 'analyzer' && (
             <>
+              {/* Trial Banner */}
+              {isInTrial && (
+                <div className="mb-8 p-4 bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3">
+                    <Zap className="w-5 h-5 text-[#D4AF37]" />
+                    <span className="text-[11px] font-black uppercase tracking-widest text-[#D4AF37]">
+                      Testphase aktiv: Noch {trialDaysLeft} Tage verbleibend
+                    </span>
+                  </div>
+                  <button onClick={() => setActiveView('pricing')} className="text-[10px] font-bold uppercase underline text-[#D4AF37]">Jetzt upgraden</button>
+                </div>
+              )}
+
               {/* Input Form */}
               <section className="mb-[60px] mt-10 relative">
+                
+                {/* Quota Indicator */}
+                {user && userData && (
+                  <div className="mb-8 animate-in fade-in slide-in-from-left-4 duration-700">
+                    <div className="flex flex-col gap-2 p-5 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 w-full md:w-fit min-w-[280px] shadow-sm relative overflow-hidden group">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]"></div>
+                      <div className="flex justify-between items-center gap-6">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">Monatliche Nutzung</span>
+                        <span className="px-2 py-0.5 bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-900 text-[9px] font-black uppercase tracking-widest">
+                          {effectivePlan}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-baseline gap-1.5">
+                        <span className="text-[32px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100 leading-none">
+                          {userData.scanCount || 0}
+                        </span>
+                        <span className="text-[14px] font-bold text-[#888] uppercase tracking-widest">von {userData.maxScans || 5} Scans</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#F5F5F3] dark:bg-zinc-800 mt-4 overflow-hidden rounded-full">
+                        <div 
+                          className={`h-full transition-all duration-1000 rounded-full ${ ((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
+                          style={{ width: `${Math.min(100, ((userData.scanCount || 0) / (userData.maxScans || 5)) * 100)}%` }}
+                        />
+                      </div>
+                      {((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 && (
+                        <p className="text-[9px] font-bold text-[#EB5757] uppercase tracking-tighter mt-2 animate-pulse">Limit fast erreicht!</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <span className="text-[12px] uppercase tracking-[1px] font-semibold text-[#888888] dark:text-zinc-400 mb-[10px] block">
                   Webseite oder Git-Repository URL
                 </span>
@@ -1364,7 +1595,7 @@ export default function WebsiteAnalyzer() {
               </section>
 
               {/* Loading State */}
-              {isLoading && <LoadingDisplay />}
+              {isLoading && <LoadingDisplay plan={effectivePlan} />}
 
               {/* Report Display */}
               {report && !isLoading && (
@@ -1376,6 +1607,8 @@ export default function WebsiteAnalyzer() {
                   onConnectGSC={handleConnectGSC}
                   gscError={gscError}
                   onExportActionPlan={exportActionPlanToCSV}
+                  plan={effectivePlan}
+                  setActiveView={setActiveView}
                 />
               )}
             </>
@@ -1395,12 +1628,16 @@ export default function WebsiteAnalyzer() {
               onConnectGSC={handleConnectGSC}
               gscError={gscError}
               onExportActionPlan={exportActionPlanToCSV}
+              plan={effectivePlan}
+              setActiveView={setActiveView}
             />
           )}
 
           {activeView === 'settings' && <SettingsView />}
           
           {activeView === 'profile' && <ProfileView />}
+
+          {activeView === 'pricing' && <PricingSection />}
 
         </div>
 
@@ -1485,9 +1722,79 @@ function ScoreCard({ title, score, desc, icon }: { title: string, score: number,
   );
 }
 
-function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedSEO, socialData?: any }) {
+function CrawlerAuditModule({ crawlSummary, plan = 'free' }: { crawlSummary: any, plan?: string }) {
+  if (!crawlSummary || !crawlSummary.scannedSubpages) return null;
+
+  const displayedPages = plan === 'free' ? crawlSummary.scannedSubpages.slice(0, 1) : crawlSummary.scannedSubpages;
+  const isLimited = plan === 'free' && crawlSummary.scannedSubpagesCount > 1;
+
+  return (
+    <div className="mt-10 p-6 bg-[#F9F9F9] dark:bg-zinc-900/50 border-t-2 border-[#D4AF37] relative">
+      <h4 className="text-[14px] font-black uppercase text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-3 tracking-[2px] mb-6">
+        <Globe className="w-5 h-5 text-[#D4AF37]" />
+        Site-Wide Audit (Crawling Result)
+      </h4>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {displayedPages.map((page: any, idx: number) => (
+          <div key={idx} className="bg-white dark:bg-zinc-950 p-4 border border-[#EEE] dark:border-zinc-800 shadow-sm flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black uppercase text-[#D4AF37] tracking-widest truncate max-w-[150px]">
+                {new URL(page.url).pathname}
+              </span>
+              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm ${page.status === 200 ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}>
+                {page.status}
+              </span>
+            </div>
+            <h5 className="text-[12px] font-bold text-[#1A1A1A] dark:text-zinc-100 line-clamp-1">{page.title || 'Kein Titel'}</h5>
+            <div className="flex flex-col gap-1 mt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] text-[#888] font-bold uppercase tracking-tighter">H1 Tags</span>
+                <span className={`text-[10px] font-bold ${page.h1Count === 0 || page.h1Count > 1 ? 'text-red-500' : 'text-green-600'}`}>{page.h1Count}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] text-[#888] font-bold uppercase tracking-tighter">Fehlende Alts</span>
+                <span className={`text-[10px] font-bold ${page.imagesWithoutAlt > 0 ? 'text-orange-500' : 'text-green-600'}`}>{page.imagesWithoutAlt}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {isLimited && (
+          <div className="relative bg-white/50 dark:bg-zinc-950/50 p-4 border border-dashed border-zinc-300 dark:border-zinc-800 flex flex-col items-center justify-center text-center gap-2 overflow-hidden min-h-[120px]">
+            <div className="absolute inset-0 backdrop-blur-[2px] z-0"></div>
+            <div className="relative z-10 flex flex-col items-center">
+              <ShieldCheck className="w-5 h-5 text-[#D4AF37] mb-1" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">
+                +{crawlSummary.scannedSubpagesCount - 1} Seiten gefunden
+              </span>
+              <p className="text-[8px] text-[#888] font-bold mt-1">NUR IN PRO VERFÜGBAR</p>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-6 flex items-center justify-between gap-4 text-[10px] text-[#888] font-bold uppercase tracking-widest bg-white dark:bg-zinc-950 p-3 border border-[#EEE] dark:border-zinc-800">
+        <div className="flex items-center gap-4">
+          <Info className="w-4 h-4 text-[#D4AF37]" />
+          <span>Gefundene interne Links: {crawlSummary.totalInternalLinks} | Tiefen-Audit von {crawlSummary.scannedSubpagesCount} Seiten.</span>
+        </div>
+        {plan === 'free' && (
+          <span className="text-[#D4AF37] flex items-center gap-2">
+            <ShieldCheck className="w-3 h-3" /> EINGESCHRÄNKT
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SeoDeepDiveModule({ detailedSeo, socialData, crawlSummary, plan = 'free' }: { detailedSeo: DetailedSEO, socialData?: any, crawlSummary?: any, plan?: string }) {
   return (
     <CollapsibleSection id="seo" title="Comprehensive SEO Analysis" icon={<Search className="w-6 h-6" />} color="#1A1A1A" badge="SEO DEEP DIVE" className="mt-8">
+      {crawlSummary && (
+        <CrawlerAuditModule crawlSummary={crawlSummary} plan={plan} />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[40px] mb-[40px]">
          <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
             <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">Keywords & Inhaltsrelevanz</span>
@@ -1616,6 +1923,8 @@ function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedS
         </div>
       )}
 
+      <CrawlerAuditModule crawlSummary={crawlSummary} />
+
       <PrioritizedTasksSection 
         tasks={detailedSeo.prioritizedTasks} 
         title="Priorisierte SEO-Maßnahmen" 
@@ -1625,14 +1934,29 @@ function SeoDeepDiveModule({ detailedSeo, socialData }: { detailedSeo: DetailedS
   );
 }
 
-function SearchConsoleModule({ data, isLoading, onConnect, error }: { data: any, isLoading: boolean, onConnect: () => void, error: string | null }) {
+function SearchConsoleModule({ data, isLoading, onConnect, error, plan = 'free', setActiveView }: { data: any, isLoading: boolean, onConnect: () => void, error: string | null, plan?: string, setActiveView: (view: string) => void }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
   if (!data && !isLoading && !error) {
     return (
-      <CollapsibleSection id="gsc" title="Google Search Console Insight" icon={<Activity className="w-6 h-6" />} color="#4285F4" badge="PREMIUM DATA">
-        <div className="flex flex-col items-center justify-center py-10 text-center">
+      <CollapsibleSection id="gsc" title="Google Search Console Insight" icon={<Activity className="w-6 h-6" />} color="#4285F4" badge={plan === 'free' ? "STRATEGIC LOCK" : "PREMIUM DATA"} className="relative">
+        <div className="flex flex-col items-center justify-center py-10 text-center relative">
+          {plan === 'free' && (
+            <div className="absolute inset-0 z-20 bg-white/40 dark:bg-black/40 backdrop-blur-[1.5px] flex flex-col items-center justify-center p-6 text-center">
+               <div className="bg-[#1A1A1A] p-8 shadow-2xl border border-[#D4AF37]/30 max-w-[400px]">
+                  <Lock className="w-10 h-10 text-[#D4AF37] mx-auto mb-4" />
+                  <h4 className="text-[18px] font-black text-white uppercase tracking-tighter mb-2">Deep Performance Lock</h4>
+                  <p className="text-[12px] text-zinc-400 mb-6 font-medium">Verknüpfe GSC-Daten und schalte mit <span className="text-[#D4AF37]">WAP Advanced</span> die exklusive Index-Analyse und Trend-Prognosen frei.</p>
+                  <button 
+                    onClick={() => setActiveView('pricing')}
+                    className="w-full bg-[#D4AF37] text-black py-3 text-[10px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+                  >
+                    UPGRADE TO UNLOCK
+                  </button>
+               </div>
+            </div>
+          )}
           <div className="w-16 h-16 bg-[#F5F5F3] dark:bg-zinc-800 rounded-full flex items-center justify-center mb-6">
             <Activity className="w-8 h-8 text-[#4285F4] opacity-40" />
           </div>
@@ -1641,8 +1965,9 @@ function SearchConsoleModule({ data, isLoading, onConnect, error }: { data: any,
             Verbinden Sie Ihr Google-Konto, um Performance-Daten (Klicks, Impressionen), Indexierungsstatus und Crawling-Fehler direkt in diesen Bericht zu integrieren.
           </p>
           <button 
+            disabled={plan === 'free'}
             onClick={onConnect}
-            className="bg-[#4285F4] hover:bg-[#357ae8] text-white px-8 py-3 text-[11px] font-bold uppercase tracking-[1px] transition-all flex items-center gap-3 active:scale-95"
+            className={`px-8 py-3 text-[11px] font-bold uppercase tracking-[1px] transition-all flex items-center gap-3 active:scale-95 ${plan === 'free' ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed opacity-50' : 'bg-[#4285F4] hover:bg-[#357ae8] text-white shadow-lg'}`}
           >
             <ExternalLink className="w-4 h-4" />
             Mit Search Console verbinden

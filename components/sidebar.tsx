@@ -64,11 +64,18 @@ export function Sidebar({
   onSelectProject?: (proj: any) => void;
   onOpenSettings?: () => void;
   onOpenProfile?: () => void;
+  onOpenPricing?: () => void;
   onLogout?: () => void;
 }) {
-  const { user, loading, error, signIn, signInEmail, signUpEmail, logOut } =
+  const { user, userData, loading, error, signIn, signInEmail, signUpEmail, logOut } =
     useAuth();
   const [isCollapsed, setIsCollapsed] = useState(true);
+
+  // Trial Logic
+  const isInTrial = userData?.trialUntil && new Date(userData.trialUntil) > new Date();
+  const trialDaysLeft = userData?.trialUntil 
+    ? Math.max(0, Math.ceil((new Date(userData.trialUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   // Auth view states
   const [authMode, setAuthMode] = useState<"google" | "email" | "signup">(
@@ -781,7 +788,13 @@ export function Sidebar({
                         <Settings className="w-4 h-4 text-[#888] group-hover:text-[#D4AF37]" />{" "}
                         Einstellungen
                       </button>
-                      <button className="flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold uppercase tracking-tight text-[#1A1A1A] dark:text-zinc-100 hover:bg-[#F5F5F3] dark:hover:bg-zinc-800 transition-colors text-left group">
+                      <button 
+                        onClick={() => {
+                          onItemClick(onOpenPricing);
+                          setIsAccountMenuOpen(false);
+                        }}
+                        className="flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold uppercase tracking-tight text-[#1A1A1A] dark:text-zinc-100 hover:bg-[#F5F5F3] dark:hover:bg-zinc-800 transition-colors text-left group"
+                      >
                         <CreditCard className="w-4 h-4 text-[#888] group-hover:text-[#D4AF37]" />{" "}
                         Abonnement
                       </button>
@@ -805,6 +818,25 @@ export function Sidebar({
                 </>
               )}
 
+              {/* Trial Countdown Indicator */}
+              {isInTrial && userData?.plan === 'free' && (
+                <div className="mx-2 mb-2 p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/10 rounded-md">
+                   <div className="flex items-center justify-between mb-1">
+                      <span className="text-[8px] font-black uppercase tracking-[2px] text-[#D4AF37]">Testphase</span>
+                      <Star className="w-2.5 h-2.5 text-[#D4AF37] animate-pulse fill-[#D4AF37]/20" />
+                   </div>
+                   <div className="h-1 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-[#D4AF37] to-[#B8860B] transition-all duration-1000" 
+                        style={{ width: `${(trialDaysLeft / 7) * 100}%` }}
+                      ></div>
+                   </div>
+                   <p className="text-[9px] font-bold text-[#888] mt-1.5 uppercase tracking-tighter">
+                      Noch {trialDaysLeft} Tage <span className="text-[#D4AF37]">Premium</span>
+                   </p>
+                </div>
+              )}
+              
               <button
                 onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
                 className={`w-full flex items-center gap-3 p-2 rounded-md transition-all group ${isAccountMenuOpen ? "bg-white dark:bg-zinc-900 shadow-sm border border-[#E5E5E5] dark:border-zinc-800" : "hover:bg-black/5 dark:hover:bg-white/5 border border-transparent"}`}
@@ -826,9 +858,20 @@ export function Sidebar({
                 </div>
 
                 <div className="flex flex-col overflow-hidden text-left flex-1">
-                  <span className="text-[12px] font-black truncate text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-tighter leading-none mb-0.5">
-                    {user.displayName || "Nutzer"}
-                  </span>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[12px] font-black truncate text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-tighter leading-none">
+                      {user.displayName || "Nutzer"}
+                    </span>
+                    {userData?.plan && (
+                      <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-[2px] leading-none tracking-widest ${
+                        userData.plan === 'agency' ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border border-zinc-700 shadow-sm' :
+                        userData.plan === 'pro' ? 'bg-[#D4AF37] text-white shadow-sm' :
+                        'bg-[#F5F5F3] dark:bg-zinc-800 text-[#888]'
+                      }`}>
+                        {userData.plan}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-[#888] truncate font-medium">
                     {user.email}
                   </span>

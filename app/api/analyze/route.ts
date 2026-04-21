@@ -5,11 +5,19 @@ import * as cheerio from 'cheerio';
 
 export async function POST(req: Request) {
   try {
-    const { url } = await req.json();
+    const { url, plan = 'free' } = await req.json();
 
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
+
+    // Determine crawl limit based on plan
+    const PLAN_LIMITS: Record<string, number> = {
+      'free': 0,
+      'pro': 20,
+      'agency': 100
+    };
+    const subpageLimit = PLAN_LIMITS[plan as string] || 0;
 
     const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
     const domain = urlObj.hostname;
@@ -38,7 +46,7 @@ export async function POST(req: Request) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          client: { clientId: "aurascan", clientVersion: "1.0.0" },
+          client: { clientId: "wap", clientVersion: "1.0.0" },
           threatInfo: {
             threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
             platformTypes: ["ANY_PLATFORM"],
@@ -286,6 +294,58 @@ export async function POST(req: Request) {
     // Existing Schema Detection
     const existingJsonLdCount = $('script[type="application/ld+json"]').length;
 
+    // --- CRAWLER LOGIC START ---
+    const internalLinks: string[] = [];
+    const seenLinks = new Set<string>();
+    const baseDomain = urlObj.hostname;
+    
+    $('a').each((i, el) => {
+      let href = $(el).attr('href') || '';
+      if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('tel:') || href.startsWith('mailto:')) return;
+      
+      try {
+        const absoluteUrl = new URL(href, urlObj.toString());
+        if (absoluteUrl.hostname === baseDomain) {
+          const cleanUrl = absoluteUrl.origin + absoluteUrl.pathname;
+          if (!seenLinks.has(cleanUrl) && cleanUrl !== urlObj.origin + urlObj.pathname) {
+            seenLinks.add(cleanUrl);
+            internalLinks.push(cleanUrl);
+          }
+        }
+      } catch (e) { /* Invalid URL */ }
+    });
+
+    // Prioritize links (avoid typical "boring" pages if many exist, but for now just take top 10)
+    const subpagesToScan = internalLinks.slice(0, 10);
+    
+    // Minimal scan for subpages to avoid massive token bloat and timeouts
+    const scanSubpage = async (subUrl: string) => {
+      try {
+        const subRes = await fetch(subUrl, { 
+          headers: htmlRequestConfig.headers,
+          signal: AbortSignal.timeout(5000) // 5s timeout per subpage
+        });
+        if (!subRes.ok) return null;
+        const subHtml = await subRes.text();
+        const $s = cheerio.load(subHtml);
+        
+        return {
+          url: subUrl,
+          title: $s('title').text().trim(),
+          metaDescription: $s('meta[name="description"]').attr('content') || '',
+          h1Count: $s('h1').length,
+          imagesWithoutAlt: $s('img:not([alt]), img[alt=""]').length,
+          status: subRes.status
+        };
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const subpageResults = await Promise.all(subpagesToScan.map(url => scanSubpage(url)));
+    const successfulSubpages = subpageResults.filter(r => r !== null);
+    // --- CRAWLER LOGIC END ---
+
     // Remove heavy tags for body text extraction
     $('script, style, noscript, iframe, svg, video, audio').remove();
     
@@ -327,7 +387,7 @@ export async function POST(req: Request) {
     const fleschScore = Math.max(0, Math.min(100, Math.round(206.835 - (1.015 * avgSentenceLength) - (84.6 * avgSyllablesPerWord))));
     
     // Detailed Link Analysis
-    let internalLinksCount = 0;
+    let internalLinksCount = internalLinks.length;
     let externalLinksCount = 0;
     const links: string[] = [];
     
@@ -337,8 +397,6 @@ export async function POST(req: Request) {
       if (href) {
         if (href.startsWith('http') && !href.includes(domain)) {
           externalLinksCount++;
-        } else {
-          internalLinksCount++;
         }
         if (links.length < 80) links.push(`${text} (${href})`);
       }
@@ -448,7 +506,12 @@ export async function POST(req: Request) {
         ogImage,
         ogDescription
       },
-      existingSchemaCount: existingJsonLdCount
+      existingSchemaCount: existingJsonLdCount,
+      crawlSummary: {
+        totalInternalLinks: internalLinks.length,
+        scannedSubpagesCount: successfulSubpages.length,
+        scannedSubpages: successfulSubpages
+      }
     });
 
   } catch (error: any) {

@@ -6,6 +6,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 export async function POST(req: Request) {
   try {
     const scrapeData = await req.json();
+    const { plan = 'free' } = scrapeData;
 
     if (!scrapeData || !scrapeData.urlObj) {
       return NextResponse.json({ error: 'Missing scrape data' }, { status: 400 });
@@ -129,12 +130,27 @@ export async function POST(req: Request) {
       - Duplicate H2 Headings: ${scrapeData.contentAudit?.duplicateH2s ? 'YES' : 'NO'}
       - Identical H1 and H2 text: ${scrapeData.contentAudit?.identicalHeadings ? 'YES' : 'NO'}
 
+      Crawl Summary (Site-Wide Audit):
+      - Total internal links found: ${scrapeData.crawlSummary?.totalInternalLinks}
+      - Subpages scanned: ${scrapeData.crawlSummary?.scannedSubpagesCount}
+      - Subpage Details: ${JSON.stringify(scrapeData.crawlSummary?.scannedSubpages)}
+      
+      Instructions for Site-Wide Audit:
+      1. Analyze the Subpage Details for inconsistencies. Are there pages missing H1s? Are meta descriptions duplicated or missing?
+      2. Identify patterns. Is the title structure consistent?
+      3. Include these findings in the 'seo' and 'overallAssessment' sections.
+
       Excerpt of Body Text (max 15000 chars):
       ${scrapeData.bodyText}
       `;
 
+    // Select model based on plan
+    const modelId = (plan === 'pro' || plan === 'agency') 
+      ? "gemini-3.1-pro-preview" 
+      : "gemini-3.1-flash-lite";
+
     const aiResponse = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite",
+      model: modelId,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],

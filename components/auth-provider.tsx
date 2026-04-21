@@ -7,10 +7,11 @@ import {
   updateProfile, verifyBeforeUpdateEmail, updatePassword, deleteUser 
 } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
+  userData: any | null;
   loading: boolean;
   error: string | null;
   signIn: () => Promise<void>;
@@ -39,6 +40,7 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +57,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               uid: currentUser.uid,
               email: currentUser.email,
               displayName: currentUser.displayName,
-              role: 'user', // Default role
+              role: 'user', 
+              plan: 'free', 
+              subpageLimit: 0, 
+              scanCount: 0,
+              maxScans: 5,
+              resetDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
               createdAt: new Date().toISOString()
             });
           }
@@ -67,6 +74,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return unsubscribe;
   }, []);
+
+  // Real-time Firestore user data sync
+  useEffect(() => {
+    if (!user) {
+      setUserData(null);
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (doc.exists()) {
+        setUserData(doc.data());
+      }
+    });
+
+    return () => unsub();
+  }, [user]);
 
   const signIn = async () => {
     try {
@@ -171,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ 
-      user, loading, error, signIn, signInEmail, signUpEmail, logOut, updateUser, deleteAccount, clearError 
+      user, userData, loading, error, signIn, signInEmail, signUpEmail, logOut, updateUser, deleteAccount, clearError 
     }}>
       {children}
     </AuthContext.Provider>

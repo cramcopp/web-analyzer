@@ -51,7 +51,7 @@ export async function GET(req: Request) {
             window.close();
           </script>
           <div style="text-align: center;">
-            <h1 style="color: #D4AF37;">AuraScan</h1>
+            <h1 style="color: #D4AF37;">Website Analyzer Pro (WAP)</h1>
             <p>Authentifizierung erfolgreich! Dieses Fenster wird geschlossen...</p>
           </div>
         </body>
