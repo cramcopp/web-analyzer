@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
       apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     }
-    
+
     if (!apiKey) {
       return NextResponse.json({ error: 'GEMINI_API_KEY is not configured on the server.' }, { status: 500 });
     }
@@ -145,9 +145,9 @@ export async function POST(req: Request) {
       `;
 
     // Select model based on plan
-    const modelId = (plan === 'pro' || plan === 'agency') 
-      ? "gemini-3-flash" 
-      : "gemini-3.1-flash-lite";
+    const modelId = (plan === 'pro' || plan === 'agency')
+      ? "gemini-3-flash-preview"
+      : "gemini-3.1-flash-lite-preview";
 
     const aiResponse = await ai.models.generateContent({
       model: modelId,
@@ -273,9 +273,9 @@ export async function POST(req: Request) {
                     coreWebVitals: {
                       type: Type.OBJECT,
                       properties: {
-                        fcp: { 
-                          type: Type.OBJECT, 
-                          properties: { 
+                        fcp: {
+                          type: Type.OBJECT,
+                          properties: {
                             value: { type: Type.STRING, description: "String with dimension, e.g., '1.2 s'" },
                             numericValue: { type: Type.INTEGER, description: "Millisekunden" },
                             status: { type: Type.STRING, description: "good, needs_improvement, or poor" },
@@ -283,9 +283,9 @@ export async function POST(req: Request) {
                           },
                           required: ["value", "numericValue", "status", "recommendation"]
                         },
-                        lcp: { 
-                          type: Type.OBJECT, 
-                          properties: { 
+                        lcp: {
+                          type: Type.OBJECT,
+                          properties: {
                             value: { type: Type.STRING, description: "String with dimension, e.g., '2.5 s'" },
                             numericValue: { type: Type.INTEGER, description: "Millisekunden" },
                             status: { type: Type.STRING, description: "good, needs_improvement, or poor" },
@@ -293,9 +293,9 @@ export async function POST(req: Request) {
                           },
                           required: ["value", "numericValue", "status", "recommendation"]
                         },
-                        cls: { 
-                          type: Type.OBJECT, 
-                          properties: { 
+                        cls: {
+                          type: Type.OBJECT,
+                          properties: {
                             value: { type: Type.STRING, description: "String representation, e.g., '0.04'" },
                             numericValue: { type: Type.NUMBER, description: "Dezimalwert" },
                             status: { type: Type.STRING, description: "good, needs_improvement, or poor" },

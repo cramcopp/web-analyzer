@@ -154,7 +154,7 @@ export async function generateReportClientSide(scrapeData: any) {
       `;
 
   const aiResponse = await ai.models.generateContent({
-    model: "gemini-3-flash",
+    model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
@@ -282,9 +282,9 @@ export async function generateReportClientSide(scrapeData: any) {
                   coreWebVitals: {
                     type: Type.OBJECT,
                     properties: {
-                      fcp: { 
-                        type: Type.OBJECT, 
-                        properties: { 
+                      fcp: {
+                        type: Type.OBJECT,
+                        properties: {
                           value: { type: Type.STRING, description: "String with dimension, e.g., '1.2 s'" },
                           numericValue: { type: Type.INTEGER, description: "Millisekunden" },
                           status: { type: Type.STRING, description: "good, needs_improvement, or poor" },
@@ -292,9 +292,9 @@ export async function generateReportClientSide(scrapeData: any) {
                         },
                         required: ["value", "numericValue", "status", "recommendation"]
                       },
-                      lcp: { 
-                        type: Type.OBJECT, 
-                        properties: { 
+                      lcp: {
+                        type: Type.OBJECT,
+                        properties: {
                           value: { type: Type.STRING, description: "String with dimension, e.g., '2.5 s'" },
                           numericValue: { type: Type.INTEGER, description: "Millisekunden" },
                           status: { type: Type.STRING, description: "good, needs_improvement, or poor" },
@@ -302,9 +302,9 @@ export async function generateReportClientSide(scrapeData: any) {
                         },
                         required: ["value", "numericValue", "status", "recommendation"]
                       },
-                      cls: { 
-                        type: Type.OBJECT, 
-                        properties: { 
+                      cls: {
+                        type: Type.OBJECT,
+                        properties: {
                           value: { type: Type.STRING, description: "String representation, e.g., '0.04'" },
                           numericValue: { type: Type.NUMBER, description: "Dezimalwert" },
                           status: { type: Type.STRING, description: "good, needs_improvement, or poor" },
