@@ -1151,7 +1151,7 @@ function ProfileView() {
     }
   };
 
-  const isPasswordProvider = user.providerData.some(p => p.providerId === 'password');
+   const isPasswordProvider = user?.providerData?.some((p: any) => p.providerId === 'password') || false;
 
   return (
     <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
