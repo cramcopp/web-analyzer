@@ -1,94 +1,87 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '../../../lib/auth-server';
-import { db } from '../../../firebase';
+import { getSessionUser } from '@/lib/auth-server';
+import { db } from '@/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, query, collection, where, getDocs, limit, or } from 'firebase/firestore';
 
 export const runtime = 'edge';
 
-/**
- * Invite/Add member
- */
-export async function POST(req: Request) {
+export async function GET(req: Request) {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const teamId = searchParams.get('teamId');
+  if (!teamId) return NextResponse.json({ error: 'Missing teamId' }, { status: 400 });
 
   try {
-    const { email } = await req.json();
+    const docRef = doc(db, 'teams', teamId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     
-    // 1. Find team where user is owner or admin
-    const teamsQ = query(collection(db, 'teams'), or(
-      where('ownerId', '==', user.uid),
-      where('admins', 'array-contains', user.uid)
-    ), limit(1));
-    const snap = await getDocs(teamsQ);
-    if (snap.empty) return NextResponse.json({ error: 'Kein Team gefunden oder keine Berechtigung' }, { status: 403 });
+    const team = docSnap.data();
+    // Batch fetch member profiles
+    const memberUids = team.members || [];
+    if (memberUids.length === 0) return NextResponse.json([]);
     
-    const teamDoc = snap.docs[0];
-    const teamData = teamDoc.data();
-
-    // 2. Find target user by email
-    const usersQ = query(collection(db, 'users'), where('email', '==', email.toLowerCase()), limit(1));
-    const userSnap = await getDocs(usersQ);
-    if (userSnap.empty) return NextResponse.json({ error: 'Nutzer nicht gefunden' }, { status: 404 });
-    
-    const targetUser = userSnap.docs[0].data();
-    
-    if (targetUser.uid === teamData.ownerId || teamData.members.includes(targetUser.uid)) {
-      return NextResponse.json({ error: 'Nutzer ist bereits im Team' }, { status: 400 });
+    // Wir können maximal 10 UIDs auf einmal in einem 'in' query abfragen
+    const members: any[] = [];
+    for (let i = 0; i < memberUids.length; i += 10) {
+      const chunk = memberUids.slice(i, i + 10);
+      const q = query(collection(db, 'users'), where('uid', 'in', chunk));
+      const snap = await getDocs(q);
+      snap.forEach(d => members.push(d.data()));
     }
 
-    // 3. Update team
-    await updateDoc(doc(db, 'teams', teamDoc.id), {
-      members: arrayUnion(targetUser.uid)
-    });
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json(members);
   } catch (error: any) {
-    console.error('Add Member Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-/**
- * Remove/Leave member
- */
-export async function DELETE(req: Request) {
+export async function POST(req: Request) {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { uid } = await req.json();
-    
-    const teamsQ = query(collection(db, 'teams'), or(
-      where('ownerId', '==', user.uid),
-      where('members', 'array-contains', user.uid)
-    ), limit(1));
-    const snap = await getDocs(teamsQ);
-    if (snap.empty) return NextResponse.json({ error: 'Kein Team gefunden' }, { status: 403 });
-    
-    const teamDoc = snap.docs[0];
-    const teamData = teamDoc.data();
+    const { teamId, email, action } = await req.json();
+    const teamRef = doc(db, 'teams', teamId);
 
-    // Check permission: owner can remove anyone, member can only remove self
-    if (user.uid !== teamData.ownerId && user.uid !== uid) {
-       // Check if user is admin
-       if (!teamData.admins.includes(user.uid)) {
-         return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
-       }
+    if (action === 'remove') {
+      const { uid } = await req.json(); // Fallback if UID provided directly
+      await updateDoc(teamRef, { members: arrayRemove(uid) });
+      return NextResponse.json({ success: true });
     }
 
-    if (uid === teamData.ownerId) {
-      return NextResponse.json({ error: 'Besitzer kann nicht entfernt werden' }, { status: 400 });
+    // Invite by email: find user UID first
+    const userQuery = query(collection(db, 'users'), where('email', '==', email), limit(1));
+    const userSnap = await getDocs(userQuery);
+    
+    if (userSnap.empty) {
+      return NextResponse.json({ error: 'Nutzer mit dieser E-Mail nicht gefunden' }, { status: 404 });
     }
 
-    await updateDoc(doc(db, 'teams', teamDoc.id), {
+    const invitedUser = userSnap.docs[0].data();
+    await updateDoc(teamRef, { members: arrayUnion(invitedUser.uid) });
+    
+    return NextResponse.json({ success: true, user: invitedUser });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  try {
+    const { teamId, uid } = await req.json();
+    const teamRef = doc(db, 'teams', teamId);
+    await updateDoc(teamRef, { 
       members: arrayRemove(uid),
       admins: arrayRemove(uid)
     });
-
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Remove Member Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

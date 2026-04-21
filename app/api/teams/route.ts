@@ -1,66 +1,46 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '../../../lib/auth-server';
-import { db } from '../../../firebase';
+import { getSessionUser } from '@/lib/auth-server';
+import { db } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, or, limit, doc, getDoc } from 'firebase/firestore';
 
 export const runtime = 'edge';
 
 export async function GET() {
   const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const q = query(collection(db, 'teams'), or(
-      where('ownerId', '==', user.uid),
-      where('members', 'array-contains', user.uid)
-    ), limit(1));
-    
+    const q = query(
+      collection(db, 'teams'),
+      or(where('ownerId', '==', user.uid), where('members', 'array-contains', user.uid))
+    );
     const snap = await getDocs(q);
-    if (snap.empty) {
-      return NextResponse.json(null);
-    }
+    const teams = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    const teamDoc = snap.docs[0];
-    const teamData = { id: teamDoc.id, ...teamDoc.data() } as any;
-
-    // Fetch Member Details
-    const memberUids = [teamData.ownerId, ...(teamData.members || [])];
-    const members: any[] = [];
-    
-    // Firestore 'in' query is limited to 10-30 items, but for now we'll handle it simply
-    const usersQ = query(collection(db, 'users'), where('uid', 'in', memberUids.slice(0, 10)));
-    const usersSnap = await getDocs(usersQ);
-    usersSnap.forEach(doc => members.push(doc.data()));
-
-    return NextResponse.json({ team: teamData, members });
+    // Wir nehmen das erste Team für diesen Nutzer
+    return NextResponse.json(teams[0] || null);
   } catch (error: any) {
-    console.error('Fetch Team Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const teamData = await req.json();
+    const data = await req.json();
     const docRef = await addDoc(collection(db, 'teams'), {
-      ...teamData,
+      name: data.name,
       ownerId: user.uid,
-      members: [],
-      admins: [],
+      members: [user.uid],
+      admins: [user.uid],
       createdAt: new Date().toISOString()
     });
     
-    return NextResponse.json({ id: docRef.id, success: true });
+    const newTeam = { id: docRef.id, name: data.name, ownerId: user.uid, members: [user.uid], admins: [user.uid] };
+    return NextResponse.json(newTeam);
   } catch (error: any) {
-    console.error('Create Team Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

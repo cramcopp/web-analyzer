@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '../../../lib/auth-server';
-import { db } from '../../../firebase';
+import { getSessionUser } from '@/lib/auth-server';
+import { db } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, doc, updateDoc, increment } from 'firebase/firestore';
 
 export const runtime = 'edge';
@@ -67,4 +67,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-

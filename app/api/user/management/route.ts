@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { updateUserProfile, deleteUserAccount } from '../../../lib/auth-server';
+import { updateUserProfile, deleteUserAccount } from '@/lib/auth-server';
 
 export const runtime = 'edge';
 

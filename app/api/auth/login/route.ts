@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { auth } from '../../../firebase';
+import { auth } from '@/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export const runtime = 'edge';
