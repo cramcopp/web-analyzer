@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-export const runtime = 'edge';
 import { adminDb } from '@/lib/firebase-admin';
 import Stripe from 'stripe';
 
