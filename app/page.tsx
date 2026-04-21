@@ -11,9 +11,8 @@ import { CollapsibleSection } from '../components/collapsible-section';
 import { FloatingNav } from '../components/floating-nav';
 import { generateReportClientSide } from './lib/generate-report';
 import { useAuth } from '../components/auth-provider';
-import { db, auth } from '../firebase';
-import { collection, addDoc, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import PricingSection from '../components/PricingSection';
+import { TeamWorkspace } from '../components/team-workspace';
 
 type PrioritizedTask = {
   priority: string;
@@ -409,7 +408,7 @@ function ReportResultsView({
   gscError: string | null;
   onExportActionPlan: () => void;
   plan?: string;
-  setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing') => void;
+  setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing' | 'team') => void;
 }) {
   const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
   
@@ -775,7 +774,7 @@ function ProjectDashboardView({
   onConnectGSC: () => void;
   gscError: string | null;
   onExportActionPlan: () => void;
-  setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing') => void;
+  setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing' | 'team') => void;
   plan?: string;
 }) {
   return (
@@ -1642,7 +1641,17 @@ export default function WebsiteAnalyzer() {
           
           {activeView === 'profile' && <ProfileView />}
 
-          {activeView === 'pricing' && <PricingSection />}
+          {activeView === 'pricing' && (
+            <PricingSection 
+              user={user} 
+              userData={userData} 
+              onSuccess={() => setActiveView('analyzer')} 
+            />
+          )}
+
+          {activeView === 'team' && (
+            <TeamWorkspace user={user} userData={userData} />
+          )}
 
         </div>
 

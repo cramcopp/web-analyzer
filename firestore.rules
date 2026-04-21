@@ -51,6 +51,15 @@ service cloud.firestore {
         (request.auth.token.email == "cram.henley@gmail.com" && request.auth.token.email_verified == true));
     }
 
+    function hasAgencyPlan() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.plan == 'agency';
+    }
+
+    function isTeamMember(teamId) {
+      let team = get(/databases/$(database)/documents/teams/$(teamId)).data;
+      return isAuthenticated() && (team.ownerId == request.auth.uid || request.auth.uid in team.members);
+    }
+
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
@@ -67,7 +76,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'plan', 'subscriptionId', 'trialUntil', 'internalSecret']) &&
         data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
         data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
         data.role in ['admin', 'user'] &&
@@ -85,11 +94,19 @@ service cloud.firestore {
     }
 
     function isValidProject(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'url', 'cronEnabled', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'teamId', 'name', 'url', 'cronEnabled', 'createdAt']) &&
         data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
         data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
         data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
         (!('cronEnabled' in data) || data.cronEnabled is bool) &&
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    function isValidTeam(data) {
+      return hasOnlyAllowedFields(['ownerId', 'name', 'members', 'createdAt']) &&
+        data.ownerId == request.auth.uid &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+        data.members is list &&
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
@@ -123,12 +140,29 @@ service cloud.firestore {
     }
 
     match /projects/{projectId} {
-      allow read: if isAuthenticated() && isOwner(resource.data.userId);
-      allow create: if isAuthenticated() && isValidProject(request.resource.data) && isOwner(request.resource.data.userId);
-      allow update: if isAuthenticated() && isValidProject(request.resource.data) && 
-                    isOwner(resource.data.userId) && isOwner(request.resource.data.userId) &&
-                    request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.userId) || 
+        (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
+      );
+      allow create: if isAuthenticated() && isValidProject(request.resource.data) && (
+        isOwner(request.resource.data.userId) || 
+        (request.resource.data.teamId != null && isTeamMember(request.resource.data.teamId) && hasAgencyPlan())
+      );
+      allow update: if isAuthenticated() && isValidProject(request.resource.data) && (
+        isOwner(resource.data.userId) || 
+        (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
+      );
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.userId) || 
+        (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
+      );
+    }
+
+    match /teams/{teamId} {
+      allow read: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.members);
+      allow create: if isAuthenticated() && hasAgencyPlan() && isValidTeam(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.ownerId == request.auth.uid && hasAgencyPlan() && isValidTeam(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
     }
   }
 }

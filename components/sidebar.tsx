@@ -42,6 +42,9 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDocs,
+  or,
+  and,
 } from "firebase/firestore";
 
 const isValidUrl = (urlString: string) => {
@@ -65,6 +68,7 @@ export function Sidebar({
   onLoadReport?: (id: string) => void;
   onSelectProject?: (proj: any) => void;
   onOpenSettings?: () => void;
+  onOpenTeam?: () => void;
   onOpenProfile?: () => void;
   onOpenPricing?: () => void;
   onLogout?: () => void;
@@ -92,6 +96,7 @@ export function Sidebar({
   // Real DB States
   const [history, setHistory] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [teamId, setTeamId] = useState<string | null>(null);
 
   // States for History Section
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
@@ -134,6 +139,7 @@ export function Sidebar({
     try {
       await addDoc(collection(db, "projects"), {
         userId: user.uid,
+        teamId: teamId,
         name: newProjectName.trim(),
         url: newProjectUrl.trim(),
         cronEnabled: false,
@@ -257,7 +263,10 @@ export function Sidebar({
     // Subscribe to Projects
     const projectsQ = query(
       collection(db, "projects"),
-      where("userId", "==", user.uid),
+      or(
+        where("userId", "==", user.uid),
+        ...(teamId ? [where("teamId", "==", teamId)] : [])
+      )
     );
 
     const unsubProjects = onSnapshot(
@@ -279,9 +288,24 @@ export function Sidebar({
       },
     );
 
+    // Subscribe to Team to get teamId
+    const teamsQ = query(collection(db, "teams"), where("ownerId", "==", user.uid), limit(1));
+    const unsubTeams = onSnapshot(teamsQ, (snap) => {
+      if (!snap.empty) {
+        setTeamId(snap.docs[0].id);
+      } else {
+        // Also check if member (simple approach)
+        const memberTeamsQ = query(collection(db, "teams"), where("members", "array-contains", user.uid), limit(1));
+        getDocs(memberTeamsQ).then(mSnap => {
+          if (!mSnap.empty) setTeamId(mSnap.docs[0].id);
+        });
+      }
+    });
+
     return () => {
       unsubReports();
       unsubProjects();
+      unsubTeams();
     };
   }, [user]);
 
@@ -790,6 +814,18 @@ export function Sidebar({
                         <Settings className="w-4 h-4 text-[#888] group-hover:text-[#D4AF37]" />{" "}
                         Einstellungen
                       </button>
+                      {userData?.plan === 'agency' && (
+                        <button
+                          onClick={() => {
+                            onItemClick(onOpenTeam);
+                            setIsAccountMenuOpen(false);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold uppercase tracking-tight text-[#1A1A1A] dark:text-zinc-100 hover:bg-[#F5F5F3] dark:hover:bg-zinc-800 transition-colors text-left group"
+                        >
+                          <Users className="w-4 h-4 text-[#888] group-hover:text-[#D4AF37]" />{" "}
+                          Team Workspace
+                        </button>
+                      )}
                       <button 
                         onClick={() => {
                           onItemClick(onOpenPricing);
