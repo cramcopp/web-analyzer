@@ -61,6 +61,7 @@ export function Sidebar({
   onLoadReport,
   onSelectProject,
   onOpenSettings,
+  onOpenTeam,
   onOpenProfile,
   onOpenPricing,
   onLogout,
