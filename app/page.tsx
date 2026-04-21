@@ -409,7 +409,7 @@ function ReportResultsView({
   gscError: string | null;
   onExportActionPlan: () => void;
   plan?: string;
-  setActiveView: (view: string) => void;
+  setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing') => void;
 }) {
   const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
   
@@ -775,7 +775,7 @@ function ProjectDashboardView({
   onConnectGSC: () => void;
   gscError: string | null;
   onExportActionPlan: () => void;
-  setActiveView: (view: string) => void;
+  setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing') => void;
   plan?: string;
 }) {
   return (
@@ -1939,7 +1939,7 @@ function SeoDeepDiveModule({ detailedSeo, socialData, crawlSummary, plan = 'free
   );
 }
 
-function SearchConsoleModule({ data, isLoading, onConnect, error, plan = 'free', setActiveView }: { data: any, isLoading: boolean, onConnect: () => void, error: string | null, plan?: string, setActiveView: (view: string) => void }) {
+function SearchConsoleModule({ data, isLoading, onConnect, error, plan = 'free', setActiveView }: { data: any, isLoading: boolean, onConnect: () => void, error: string | null, plan?: string, setActiveView: (view: 'analyzer' | 'project' | 'settings' | 'profile' | 'pricing') => void }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
