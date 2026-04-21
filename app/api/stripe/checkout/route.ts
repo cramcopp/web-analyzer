@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
+export const runtime = 'edge';
 
 // Plan and Interval to Price ID mapping
 const PRICE_MATRIX: Record<string, Record<string, string>> = {

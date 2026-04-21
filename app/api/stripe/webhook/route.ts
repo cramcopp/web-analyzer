@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { adminDb } from '@/lib/firebase-admin';
+import { updateStripeSubscription } from '@/lib/firestore-edge';
 import Stripe from 'stripe';
+
+export const runtime = 'edge';
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -32,11 +34,11 @@ export async function POST(req: Request) {
         if (uid && plan) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           
-          await adminDb.collection('users').doc(uid).set({
+          await updateStripeSubscription(uid, {
             plan: plan,
-            subscriptionId: session.subscription,
+            subscriptionId: session.subscription as string,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-          }, { merge: true });
+          });
         }
         break;
       }
@@ -46,11 +48,11 @@ export async function POST(req: Request) {
         const uid = subscription.metadata.uid;
 
         if (uid) {
-          await adminDb.collection('users').doc(uid).set({
+          await updateStripeSubscription(uid, {
             plan: 'free',
             subscriptionId: null,
             trialUntil: null,
-          }, { merge: true });
+          });
         }
         break;
       }
@@ -61,10 +63,11 @@ export async function POST(req: Request) {
         const plan = subscription.metadata.plan;
 
         if (uid && plan) {
-          await adminDb.collection('users').doc(uid).set({
+          await updateStripeSubscription(uid, {
             plan: plan,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-          }, { merge: true });
+            subscriptionId: subscription.id
+          });
         }
         break;
       }
