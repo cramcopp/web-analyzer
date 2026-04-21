@@ -357,8 +357,8 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
                         <div className="flex flex-col">
                           <span className="text-[13px] font-bold text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-2">
                             {member.displayName || member.email.split('@')[0]}
-                            {isOwner && <Crown className="w-3.5 h-3.5 text-[#D4AF37]" title="Inhaber" />}
-                            {!isOwner && isAdmin && <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" title="Team-Admin" />}
+                            {isOwner && <Crown className="w-3.5 h-3.5 text-[#D4AF37]" />}
+                            {!isOwner && isAdmin && <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />}
                             {member.uid === user.uid && <span className="text-[9px] text-[#D4AF37] opacity-60 font-black tracking-widest">( DU )</span>}
                           </span>
                           <p className="text-[10px] text-[#888] font-medium">{member.email}</p>
