@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, ShieldCheck, Zap, Globe, Scale, Loader2, AlertCircle, RefreshCw, UserCheck, Download, CodeXml, Share2, Filter, LayoutDashboard, LineChart as LineIcon, Activity, ExternalLink, Info, CheckCircle, X, Bell, AlertTriangle, ListChecks, ChevronUp, ChevronDown, Timer, Layout, MoveHorizontal, Lightbulb, BarChart3, MousePointer2, Eye, Rocket } from 'lucide-react';
+import { Search, ShieldCheck, Zap, Globe, Scale, Loader2, AlertCircle, RefreshCw, UserCheck, Download, CodeXml, Share2, Filter, LayoutDashboard, LineChart as LineIcon, Activity, ExternalLink, Info, CheckCircle, X, Bell, AlertTriangle, ListChecks, ChevronUp, ChevronDown, Timer, Layout, MoveHorizontal, Lightbulb, BarChart3, MousePointer2, Eye, Rocket, Lock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LineChart, Line, CartesianGrid } from 'recharts';
 import { ThemeToggle } from '../components/theme-toggle';
 import { useTheme } from 'next-themes';
