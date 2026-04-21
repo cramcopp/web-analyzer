@@ -1643,13 +1643,7 @@ export default function WebsiteAnalyzer() {
           
           {activeView === 'profile' && <ProfileView />}
 
-          {activeView === 'pricing' && (
-            <PricingSection 
-              user={user} 
-              userData={userData} 
-              onSuccess={() => setActiveView('analyzer')} 
-            />
-          )}
+          {activeView === 'pricing' && <PricingSection />}
 
           {activeView === 'team' && (
             <TeamWorkspace user={user} userData={userData} />
