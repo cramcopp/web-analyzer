@@ -88,6 +88,14 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
     return () => unsubOwner();
   }, [user]);
 
+  const chunkArray = (arr: any[], size: number) => {
+    const result = [];
+    for (let i = 0; i < arr.length; i += size) {
+      result.push(arr.slice(i, i + size));
+    }
+    return result;
+  };
+
   // Fetch member details when team changes
   useEffect(() => {
     if (!team) {
@@ -111,14 +119,6 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
 
     fetchMembers();
   }, [team]);
-
-  const chunkArray = (arr: any[], size: number) => {
-    const result = [];
-    for (let i = 0; i < arr.length; i += size) {
-      result.push(arr.slice(i, i + size));
-    }
-    return result;
-  };
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim() || !user || !isAgency) return;

@@ -154,7 +154,7 @@ export async function generateReportClientSide(scrapeData: any) {
       `;
 
   const aiResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: "gemini-3-flash",
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],

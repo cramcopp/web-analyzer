@@ -146,7 +146,7 @@ export async function POST(req: Request) {
 
     // Select model based on plan
     const modelId = (plan === 'pro' || plan === 'agency') 
-      ? "gemini-3.1-pro-preview" 
+      ? "gemini-3-flash" 
       : "gemini-3.1-flash-lite";
 
     const aiResponse = await ai.models.generateContent({

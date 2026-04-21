@@ -1619,12 +1619,20 @@ export default function WebsiteAnalyzer() {
         </div>
 
         {/* Footer */}
-        <footer className="mt-20 pt-6 border-t border-[#1A1A1A] dark:border-zinc-700 flex flex-col sm:flex-row gap-8 sm:gap-[60px] opacity-70">
-          <div className="flex-1">
-            <p className="text-[11px] uppercase tracking-[1px] font-semibold">Letzter Scan: {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-          </div>
-          <div className="flex-1">
-            <p className="text-[11px] uppercase tracking-[1px] font-semibold">Modus: Deep Analysis (AI-Enhanced)</p>
+        <footer className="mt-20 pt-6 border-t border-[#1A1A1A] dark:border-zinc-700 flex flex-col gap-6 opacity-70">
+          <div className="flex flex-col sm:flex-row gap-8 sm:gap-[60px] justify-between">
+            <div className="flex-1">
+              <p className="text-[11px] uppercase tracking-[1px] font-semibold mb-2">Letzter Scan: {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              <div className="flex gap-4">
+                 <a href="/impressum" className="text-[10px] uppercase font-bold hover:text-[#D4AF37] transition-colors">Impressum</a>
+                 <a href="/datenschutz" className="text-[10px] uppercase font-bold hover:text-[#D4AF37] transition-colors">Datenschutzerklärung</a>
+                 <a href="/agb" className="text-[10px] uppercase font-bold hover:text-[#D4AF37] transition-colors">AGB</a>
+              </div>
+            </div>
+            <div className="flex-1 sm:text-right">
+              <p className="text-[11px] uppercase tracking-[1px] font-semibold mb-2">Modus: Deep Analysis (AI-Enhanced)</p>
+              <p className="text-[8px] uppercase tracking-[1px] opacity-40">By using this service, you consent to our Cookie policy. Click to akzeptieren.</p>
+            </div>
           </div>
         </footer>
       </div>
