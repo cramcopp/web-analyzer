@@ -11,6 +11,8 @@ import { CollapsibleSection } from '../components/collapsible-section';
 import { FloatingNav } from '../components/floating-nav';
 import { generateReportClientSide } from './lib/generate-report';
 import { useAuth } from '../components/auth-provider';
+import { db, auth } from '../firebase';
+import { collection, addDoc, doc, getDoc, updateDoc, increment, query, where, getDocs, limit } from 'firebase/firestore';
 import PricingSection from '../components/PricingSection';
 import { TeamWorkspace } from '../components/team-workspace';
 
