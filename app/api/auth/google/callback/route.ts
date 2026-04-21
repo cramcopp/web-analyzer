@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
-
-export const runtime = 'edge';
-import { google } from 'googleapis';
 import { cookies } from 'next/headers';
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL}/api/auth/google/callback`
-);
+export const runtime = 'edge';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -19,10 +12,28 @@ export async function GET(req: Request) {
   }
 
   try {
-    const { tokens } = await oauth2Client.getToken(code);
+    // Exchange Auth Code for Tokens using native fetch
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID || '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL}/api/auth/google/callback`,
+        grant_type: 'authorization_code',
+      }),
+    });
+    
+    if (!tokenResponse.ok) {
+       const errorData = await tokenResponse.json();
+       console.error('Token Exchange Error:', errorData);
+       throw new Error(`Failed to exchange code for tokens: ${errorData.error_description || errorData.error}`);
+    }
+    
+    const tokens = await tokenResponse.json();
     
     // Store tokens in a secure, httpOnly cookie
-    // In a production app, you'd store this in a database linked to a user session
     const cookieStore = await cookies();
     cookieStore.set('gsc_tokens', JSON.stringify(tokens), {
       httpOnly: true,
@@ -34,12 +45,15 @@ export async function GET(req: Request) {
     // Return a simple HTML page that communicates success to the opener and closes
     const html = `
       <html>
-        <body>
+        <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff;">
           <script>
             window.opener.postMessage({ type: 'GSC_AUTH_SUCCESS' }, window.location.origin);
             window.close();
           </script>
-          <p>Authentifizierung erfolgreich! Dieses Fenster wird geschlossen...</p>
+          <div style="text-align: center;">
+            <h1 style="color: #D4AF37;">AuraScan</h1>
+            <p>Authentifizierung erfolgreich! Dieses Fenster wird geschlossen...</p>
+          </div>
         </body>
       </html>
     `;
@@ -47,8 +61,8 @@ export async function GET(req: Request) {
     return new Response(html, {
       headers: { 'Content-Type': 'text/html' },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Google OAuth Callback Error:', error);
-    return NextResponse.json({ error: 'Authentication failed' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Authentication failed' }, { status: 500 });
   }
 }
