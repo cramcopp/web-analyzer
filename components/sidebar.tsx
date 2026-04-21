@@ -29,6 +29,7 @@ import {
   ChevronUp,
   LifeBuoy,
   Star,
+  Bell,
 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { db } from "../firebase";
@@ -66,6 +67,10 @@ export function Sidebar({
   onOpenProfile,
   onOpenPricing,
   onLogout,
+  notifications,
+  setNotifications,
+  isNotifOpen,
+  setIsNotifOpen,
 }: {
   onLoadReport?: (id: string) => void;
   onSelectProject?: (proj: any) => void;
@@ -74,6 +79,10 @@ export function Sidebar({
   onOpenProfile?: () => void;
   onOpenPricing?: () => void;
   onLogout?: () => void;
+  notifications: any[];
+  setNotifications: (notifs: any[]) => void;
+  isNotifOpen: boolean;
+  setIsNotifOpen: (open: boolean) => void;
 }) {
   const { user, userData, loading, error, signIn, signInEmail, signUpEmail, logOut } =
     useAuth();
@@ -362,7 +371,17 @@ export function Sidebar({
           )}
         </div>
 
-        <div className="pt-4">
+        <div className="flex flex-col gap-6 items-center mt-auto pb-4 border-b border-[#E5E5E5] dark:border-zinc-800 w-full mb-4">
+          <button
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            className="p-2.5 bg-black/5 dark:bg-white/5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors relative"
+            title="Benachrichtigungen"
+          >
+            <Bell className="w-5 h-5 text-[#1A1A1A] dark:text-zinc-100" />
+            {notifications.some(n => !n.read) && (
+              <span className="absolute top-0 right-0 w-3 h-3 bg-[#EB5757] border-2 border-[#F5F5F3] dark:border-zinc-950 rounded-full" />
+            )}
+          </button>
           <ThemeToggle />
         </div>
       </aside>
@@ -405,17 +424,35 @@ export function Sidebar({
             <>
               {/* Trial Teaser for Free Users */}
               {userData?.plan === 'free' && (
-                <div className="mx-4 mb-2 p-3 bg-[#27AE60]/10 border border-[#27AE60]/20 rounded-sm flex flex-col gap-2">
+                <div className="mx-4 mb-2 p-3 bg-[#27AE60]/10 border border-[#27AE60]/20 rounded-sm flex flex-col gap-2 relative group overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-[#27AE60]"></div>
                   <span className="text-[9px] font-black uppercase text-[#27AE60] tracking-widest flex items-center gap-1.5">
                     <Zap className="w-3 h-3 animate-pulse" /> 7 Tage gratis testen
                   </span>
+                  
+                  {/* QUOTA INDICATOR INTEGRATED HERE */}
+                  <div className="mt-1 flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center">
+                       <span className="text-[14px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100 leading-none">
+                         {userData.scanCount || 0} / {userData.maxScans || 5}
+                       </span>
+                       <span className="text-[8px] font-bold text-[#888] uppercase tracking-widest">Scans</span>
+                    </div>
+                    <div className="w-full h-1 bg-black/5 dark:bg-white/5 overflow-hidden rounded-full">
+                      <div 
+                        className={`h-full transition-all duration-1000 rounded-full ${ ((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#27AE60]' }`} 
+                        style={{ width: `${Math.min(100, ((userData.scanCount || 0) / (userData.maxScans || 5)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
                   <button 
                     onClick={() => {
                       onItemClick(onOpenPricing);
                     }}
-                    className="text-[8px] font-bold uppercase underline text-[#1A1A1A] dark:text-zinc-100 hover:text-[#D4AF37] text-left"
+                    className="mt-1 text-[8px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 hover:text-[#D4AF37] text-left transition-colors"
                   >
-                    Vollzugriff freischalten
+                    Vollzugriff freischalten →
                   </button>
                 </div>
               )}
@@ -942,8 +979,67 @@ export function Sidebar({
           )}
         </div>
 
-        <div className="p-4 border-t border-[#E5E5E5] dark:border-zinc-800 flex justify-between items-center shrink-0">
+        <div className="p-4 border-t border-[#E5E5E5] dark:border-zinc-800 flex justify-between items-center shrink-0 relative">
           <ThemeToggle />
+          
+          <div className="relative">
+            <button 
+              onClick={() => setIsNotifOpen(!isNotifOpen)}
+              className="p-2.5 bg-black/5 dark:bg-white/5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors relative"
+              title="Benachrichtigungen"
+            >
+              <Bell className="w-5 h-5 text-[#1A1A1A] dark:text-zinc-100" />
+              {notifications.some(n => !n.read) && (
+                <span className="absolute top-0 right-0 w-3 h-3 bg-[#EB5757] border-2 border-[#F5F5F3] dark:border-zinc-950 rounded-full" />
+              )}
+            </button>
+
+            {isNotifOpen && (
+              <>
+                <div className="fixed inset-0 z-[105]" onClick={() => setIsNotifOpen(false)} />
+                <div className="absolute bottom-full right-0 mb-4 w-72 bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 shadow-2xl z-[110] overflow-hidden origin-bottom-right animate-in fade-in zoom-in-95 duration-200 text-left">
+                  <div className="p-4 border-b border-[#E5E5E5] dark:border-zinc-800 flex justify-between items-center bg-[#F9F9F9] dark:bg-zinc-950/50">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Benachrichtigungen</span>
+                    <button 
+                      onClick={() => setNotifications(notifications.map(n => ({...n, read: true})))}
+                      className="text-[9px] font-bold uppercase text-[#D4AF37] hover:underline"
+                    >
+                      Alle gelesen
+                    </button>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
+                    {notifications.length > 0 ? (
+                      notifications.map(n => (
+                        <div 
+                          key={n.id} 
+                          className={`p-4 border-b border-[#F0F0F0] dark:border-zinc-800 last:border-0 transition-colors ${!n.read ? 'bg-[#D4AF37]/5' : ''} hover:bg-[#F9F9F9] dark:hover:bg-zinc-800/30 font-sans`}
+                        >
+                          <div className="flex justify-between items-start gap-2 mb-1">
+                            <span className="text-[11px] font-black uppercase tracking-tight leading-none text-[#1A1A1A] dark:text-zinc-100">{n.title}</span>
+                            <span className="text-[9px] text-[#888] font-bold whitespace-nowrap">{n.time}</span>
+                          </div>
+                          <p className="text-[11px] text-[#555] dark:text-zinc-400 leading-[1.4] line-clamp-2">{n.message}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-10 text-center flex flex-col items-center">
+                        <Bell className="w-10 h-10 text-[#DDD] dark:text-zinc-800 mb-4 opacity-50" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#AAA]">Keine Nachrichten</p>
+                      </div>
+                    )}
+                  </div>
+                  {notifications.length > 0 && (
+                    <button 
+                      onClick={() => setNotifications([])}
+                      className="w-full py-3 bg-[#F5F5F3] dark:bg-zinc-950 text-[9px] font-black uppercase tracking-widest text-[#888] hover:text-[#EB5757] transition-colors border-t border-[#E5E5E5] dark:border-zinc-800"
+                    >
+                      Verlauf löschen
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </aside>
     </>

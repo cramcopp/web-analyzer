@@ -1434,6 +1434,10 @@ export default function WebsiteAnalyzer() {
         onOpenSettings={() => setActiveView('settings')}
         onOpenProfile={() => setActiveView('profile')}
         onOpenPricing={() => setActiveView('pricing')}
+        isNotifOpen={isNotifOpen}
+        setIsNotifOpen={setIsNotifOpen}
+        notifications={notifications}
+        setNotifications={setNotifications}
         onLogout={() => {
           setActiveView('analyzer');
           setReport(null);
@@ -1472,73 +1476,14 @@ export default function WebsiteAnalyzer() {
               </h1>
             </div>
             <div className="md:text-right flex flex-col gap-1 mt-2 md:mt-0 opacity-80 text-[#1A1A1A] dark:text-zinc-100 items-end">
-              <div className="relative mb-2">
-                <button 
-                  onClick={() => setIsNotifOpen(!isNotifOpen)}
-                  className="p-2.5 bg-black/5 dark:bg-white/5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors relative"
-                  title="Benachrichtigungen"
-                >
-                  <Bell className="w-5 h-5" />
-                  {notifications.some(n => !n.read) && (
-                    <span className="absolute top-0 right-0 w-3 h-3 bg-[#EB5757] border-2 border-[#F5F5F3] dark:border-zinc-950 rounded-full" />
-                  )}
-                </button>
-                
-                <div className="hidden md:flex items-center gap-4 mt-1">
-                   <button 
-                     onClick={() => setActiveView('pricing')}
-                     className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 group"
-                   >
-                     <Star className="w-3 h-3 group-hover:rotate-12 transition-transform" />
-                     7 TAGE GRATIS TESTEN
-                   </button>
-                </div>
-                
-                {isNotifOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[105]" onClick={() => setIsNotifOpen(false)} />
-                    <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 shadow-2xl z-[110] overflow-hidden origin-top-right animate-in fade-in zoom-in-95 duration-200 text-left">
-                      <div className="p-4 border-b border-[#E5E5E5] dark:border-zinc-800 flex justify-between items-center bg-[#F9F9F9] dark:bg-zinc-950/50">
-                        <span className="text-[10px] font-black uppercase tracking-widest">Benachrichtigungen</span>
-                        <button 
-                          onClick={() => setNotifications(prev => prev.map(n => ({...n, read: true})))}
-                          className="text-[9px] font-bold uppercase text-[#D4AF37] hover:underline"
-                        >
-                          Alle gelesen
-                        </button>
-                      </div>
-                      <div className="max-h-[350px] overflow-y-auto scrollbar-thin">
-                        {notifications.length > 0 ? (
-                          notifications.map(n => (
-                            <div 
-                              key={n.id} 
-                              className={`p-4 border-b border-[#F0F0F0] dark:border-zinc-800 last:border-0 transition-colors ${!n.read ? 'bg-[#D4AF37]/5' : ''} hover:bg-[#F9F9F9] dark:hover:bg-zinc-800/30 font-sans`}
-                            >
-                              <div className="flex justify-between items-start gap-2 mb-1">
-                                <span className="text-[11px] font-black uppercase tracking-tight leading-none text-[#1A1A1A] dark:text-zinc-100">{n.title}</span>
-                                <span className="text-[9px] text-[#888] font-bold whitespace-nowrap">{n.time}</span>
-                              </div>
-                              <p className="text-[11px] text-[#555] dark:text-zinc-400 leading-[1.4] line-clamp-2">{n.message}</p>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="p-10 text-center flex flex-col items-center">
-                            <Bell className="w-10 h-10 text-[#DDD] dark:text-zinc-800 mb-4 opacity-50" />
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#AAA]">Keine Nachrichten</p>
-                          </div>
-                        )}
-                      </div>
-                      {notifications.length > 0 && (
-                        <button 
-                          onClick={() => setNotifications([])}
-                          className="w-full py-3 bg-[#F5F5F3] dark:bg-zinc-950 text-[9px] font-black uppercase tracking-widest text-[#888] hover:text-[#EB5757] transition-colors border-t border-[#E5E5E5] dark:border-zinc-800"
-                        >
-                          Verlauf löschen
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
+              <div className="hidden md:flex items-center gap-4 mt-1">
+                 <button 
+                   onClick={() => setActiveView('pricing')}
+                   className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 group"
+                 >
+                   <Star className="w-3 h-3 group-hover:rotate-12 transition-transform" />
+                   7 TAGE GRATIS TESTEN
+                 </button>
               </div>
             </div>
           </header>
@@ -1562,35 +1507,7 @@ export default function WebsiteAnalyzer() {
               {/* Input Form */}
               <section className="mb-[60px] mt-10 relative">
                 
-                {/* Quota Indicator */}
-                {user && userData && (
-                  <div className="mb-8 animate-in fade-in slide-in-from-left-4 duration-700">
-                    <div className="flex flex-col gap-2 p-5 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 w-full md:w-fit min-w-[280px] shadow-sm relative overflow-hidden group">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]"></div>
-                      <div className="flex justify-between items-center gap-6">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">Monatliche Nutzung</span>
-                        <span className="px-2 py-0.5 bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-900 text-[9px] font-black uppercase tracking-widest">
-                          {effectivePlan}
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-baseline gap-1.5">
-                        <span className="text-[32px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100 leading-none">
-                          {userData.scanCount || 0}
-                        </span>
-                        <span className="text-[14px] font-bold text-[#888] uppercase tracking-widest">von {userData.maxScans || 5} Scans</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-[#F5F5F3] dark:bg-zinc-800 mt-4 overflow-hidden rounded-full">
-                        <div 
-                          className={`h-full transition-all duration-1000 rounded-full ${ ((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
-                          style={{ width: `${Math.min(100, ((userData.scanCount || 0) / (userData.maxScans || 5)) * 100)}%` }}
-                        />
-                      </div>
-                      {((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 && (
-                        <p className="text-[9px] font-bold text-[#EB5757] uppercase tracking-tighter mt-2 animate-pulse">Limit fast erreicht!</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+
 
                 <span className="text-[12px] uppercase tracking-[1px] font-semibold text-[#888888] dark:text-zinc-400 mb-[10px] block">
                   Webseite oder Git-Repository URL
@@ -1628,24 +1545,7 @@ export default function WebsiteAnalyzer() {
                   Gib einfach eine URL ein, und überlasse der KI die Analyse.
                 </p>
 
-                <div className="mt-12 p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-[#27AE60]"></div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-[#27AE60]/10 flex items-center justify-center text-[#27AE60] shrink-0">
-                      <Zap className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                      <h4 className="text-[14px] font-black uppercase tracking-tight text-[#1A1A1A] dark:text-white">Teste WAP Premium 7 Tage kostenlos</h4>
-                      <p className="text-[12px] text-[#888] font-medium italic">Voller Zugriff auf Deep-Analysis, GSC Sync & White-Label Reports.</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setActiveView('pricing')}
-                    className="px-6 py-3 bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-colors shrink-0"
-                  >
-                    PLAN WÄHLEN
-                  </button>
-                </div>
+
               </section>
 
               {/* Loading State */}
