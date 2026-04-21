@@ -60,6 +60,10 @@ service cloud.firestore {
       return isAuthenticated() && (team.ownerId == request.auth.uid || request.auth.uid in team.members);
     }
 
+    function isTeamAdmin(teamData) {
+       return isAuthenticated() && (teamData.ownerId == request.auth.uid || request.auth.uid in teamData.admins);
+    }
+
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
@@ -103,10 +107,11 @@ service cloud.firestore {
     }
 
     function isValidTeam(data) {
-      return hasOnlyAllowedFields(['ownerId', 'name', 'members', 'createdAt']) &&
-        data.ownerId == request.auth.uid &&
+      return hasOnlyAllowedFields(['ownerId', 'name', 'members', 'admins', 'createdAt']) &&
+        data.ownerId == request.resource.data.ownerId && // Identity preserved
         data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
         data.members is list &&
+        data.admins is list &&
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
@@ -160,13 +165,17 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       allow read: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.members);
-      allow create: if isAuthenticated() && hasAgencyPlan() && isValidTeam(request.resource.data);
+      allow create: if isAuthenticated() && hasAgencyPlan() && isValidTeam(request.resource.data) && request.resource.data.ownerId == request.auth.uid;
       allow update: if isAuthenticated() && (
-        (resource.data.ownerId == request.auth.uid && hasAgencyPlan() && isValidTeam(request.resource.data)) ||
+        (isTeamAdmin(resource.data) && hasAgencyPlan() && isValidTeam(request.resource.data) && (
+           request.resource.data.ownerId == resource.data.ownerId && 
+           (request.auth.uid == resource.data.ownerId || request.resource.data.admins == resource.data.admins)
+        )) ||
         (request.auth.uid in resource.data.members && 
          request.resource.data.members.size() == resource.data.members.size() - 1 && 
          !(request.auth.uid in request.resource.data.members) &&
          request.resource.data.ownerId == resource.data.ownerId &&
+         request.resource.data.admins == resource.data.admins &&
          request.resource.data.name == resource.data.name)
       );
       allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
