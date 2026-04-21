@@ -1157,7 +1157,7 @@ export default function WebsiteAnalyzer() {
   const [notification, setNotification] = useState<{message: string, url: string} | null>(null);
   const [notifications, setNotifications] = useState<{id: string, title: string, message: string, time: string, read: boolean}[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile' | 'pricing'>('analyzer');
+  const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile' | 'pricing' | 'team'>('analyzer');
   const [selectedProject, setSelectedProject] = useState<any>(null);
 
   // Trial Logic
