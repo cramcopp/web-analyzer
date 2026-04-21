@@ -7,6 +7,7 @@ import {
   LogIn,
   Menu,
   User,
+  Users,
   Plus,
   Search,
   HelpCircle,
