@@ -451,7 +451,7 @@ export function Sidebar({
               <div className="mx-4 mb-2 p-3 bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 rounded-sm flex flex-col gap-2 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]"></div>
                 
-                {userData?.plan === 'free' && (
+                {(!userData?.plan || userData.plan === 'free') && (
                   <span className="text-[9px] font-black uppercase text-[#27AE60] tracking-widest flex items-center gap-1.5 mb-1">
                     <Zap className="w-3 h-3 animate-pulse" /> 7 Tage gratis testen
                   </span>
@@ -472,7 +472,7 @@ export function Sidebar({
                   </div>
                 </div>
 
-                {userData?.plan === 'free' && (
+                {(!userData?.plan || userData.plan === 'free') && (
                   <button 
                     onClick={() => {
                       onItemClick(onOpenPricing);
@@ -940,7 +940,7 @@ export function Sidebar({
               )}
 
               {/* Trial Countdown Indicator */}
-              {isInTrial && userData?.plan === 'free' && (
+              {isInTrial && (!userData?.plan || userData.plan === 'free') && (
                 <div className="mx-2 mb-2 p-2 bg-[#D4AF37]/5 border border-[#D4AF37]/10 rounded-md">
                    <div className="flex items-center justify-between mb-1">
                       <span className="text-[8px] font-black uppercase tracking-[2px] text-[#D4AF37]">Testphase</span>

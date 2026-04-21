@@ -1476,7 +1476,7 @@ export default function WebsiteAnalyzer() {
               </h1>
             </div>
             <div className="md:text-right flex flex-col gap-3 mt-2 md:mt-0 items-end">
-              {userData?.plan === 'free' && (
+              {(!userData?.plan || userData.plan === 'free') && (
                 <div className="hidden md:flex items-center gap-4">
                    <button 
                      onClick={() => setActiveView('pricing')}
