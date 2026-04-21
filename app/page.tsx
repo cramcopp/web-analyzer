@@ -1475,16 +1475,35 @@ export default function WebsiteAnalyzer() {
                 {activeView === 'analyzer' ? 'Website Analyzer Pro' : 'WAP'}
               </h1>
             </div>
-            <div className="md:text-right flex flex-col gap-1 mt-2 md:mt-0 opacity-80 text-[#1A1A1A] dark:text-zinc-100 items-end">
-              <div className="hidden md:flex items-center gap-4 mt-1">
-                 <button 
-                   onClick={() => setActiveView('pricing')}
-                   className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 group"
-                 >
-                   <Star className="w-3 h-3 group-hover:rotate-12 transition-transform" />
-                   7 TAGE GRATIS TESTEN
-                 </button>
-              </div>
+            <div className="md:text-right flex flex-col gap-3 mt-2 md:mt-0 items-end">
+              {userData?.plan === 'free' && (
+                <div className="hidden md:flex items-center gap-4">
+                   <button 
+                     onClick={() => setActiveView('pricing')}
+                     className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 group"
+                   >
+                     <Star className="w-3 h-3 group-hover:rotate-12 transition-transform" />
+                     7 TAGE GRATIS TESTEN
+                   </button>
+                </div>
+              )}
+
+              {user && userData && (
+                <div className="flex flex-col items-end opacity-80 mt-1">
+                   <div className="flex items-baseline gap-2">
+                     <span className="text-[11px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100">
+                       {userData.scanCount || 0} / {userData.maxScans || 5}
+                     </span>
+                     <span className="text-[9px] font-bold text-[#888] uppercase tracking-widest">Analysen übrig</span>
+                   </div>
+                   <div className="w-32 h-1 bg-black/5 dark:bg-white/10 mt-1.5 overflow-hidden rounded-full">
+                     <div 
+                       className={`h-full transition-all duration-1000 ${ ((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
+                       style={{ width: `${Math.min(100, ((userData.scanCount || 0) / (userData.maxScans || 5)) * 100)}%` }}
+                     />
+                   </div>
+                </div>
+              )}
             </div>
           </header>
 
