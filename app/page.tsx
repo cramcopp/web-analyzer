@@ -11,8 +11,6 @@ import { CollapsibleSection } from '../components/collapsible-section';
 import { FloatingNav } from '../components/floating-nav';
 import { generateReportClientSide } from './lib/generate-report';
 import { useAuth } from '../components/auth-provider';
-import { db, auth } from '../firebase';
-import { collection, addDoc, doc, getDoc, updateDoc, increment, query, where, getDocs, limit } from 'firebase/firestore';
 import PricingSection from '../components/PricingSection';
 import { TeamWorkspace } from '../components/team-workspace';
 
@@ -418,25 +416,21 @@ function ReportResultsView({
   const [isCompLoading, setIsCompLoading] = useState(false);
   const [historicalScores, setHistoricalScores] = useState<any[]>([]);
 
+  const { user } = useAuth();
+
   useEffect(() => {
     // Fetch historical scores
     const fetchHistory = async () => {
-      if (!auth.currentUser || !rawScrapeData?.urlObj) return;
+      if (!user || !rawScrapeData?.urlObj) return;
       try {
-        const q = query(
-          collection(db, 'reports'), 
-          where("userId", "==", auth.currentUser.uid), 
-          where("url", "==", rawScrapeData.urlObj)
-        );
-        const docs = await getDocs(q);
-        const hist = docs.docs.map(d => {
-          const data = d.data();
-          return {
-            date: new Date(data.createdAt || Date.now()).toLocaleDateString(),
-            score: data.score
-          };
-        }).sort((a, b) => {
-           // Parse dates manually for sorting: "DD.MM.YYYY" or standard locale
+        const resp = await fetch(`/api/reports?url=${encodeURIComponent(rawScrapeData.urlObj)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        
+        const hist = data.map((d: any) => ({
+          date: new Date(d.createdAt || Date.now()).toLocaleDateString(),
+          score: d.score
+        })).sort((a: any, b: any) => {
            const parseDate = (d: string) => {
               const parts = d.split('.');
               if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
@@ -445,11 +439,11 @@ function ReportResultsView({
            return parseDate(a.date) - parseDate(b.date);
         });
         
-        // Deduplicate days to just show the latest scan per day
         const deduped: Record<string, any> = {};
-        hist.forEach(h => { deduped[h.date] = h; });
+        hist.forEach((h: any) => { deduped[h.date] = h; });
         setHistoricalScores(Object.values(deduped));
       } catch(e) {}
+
     };
 
     // Fetch competitors
@@ -1336,39 +1330,40 @@ export default function WebsiteAnalyzer() {
     setIsLoading(true);
     setError(null);
     try {
-      const docRef = doc(db, 'reports', id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.results) {
-          try {
-            const parsedReport = typeof data.results === 'string' ? JSON.parse(data.results) : data.results;
-            setReport(parsedReport);
-          } catch (pe) {
-            console.error("Failed to parse results:", pe);
-          }
-        }
-        if (data.rawScrapeData) {
-          try {
-            const parsedScrape = typeof data.rawScrapeData === 'string' ? JSON.parse(data.rawScrapeData) : data.rawScrapeData;
-            setRawScrapeData(parsedScrape);
-          } catch (pe) {
-            console.error("Failed to parse scrape data:", pe);
-          }
-        }
-        setLastAnalyzedUrl(data.url);
-        setUrl(data.url);
-        setActiveView('analyzer');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
+      const resp = await fetch(`/api/reports/${id}`);
+      if (!resp.ok) {
         throw new Error('Report nicht gefunden.');
       }
+      
+      const data = await resp.json();
+      
+      if (data.results) {
+        try {
+          const parsedReport = typeof data.results === 'string' ? JSON.parse(data.results) : data.results;
+          setReport(parsedReport);
+        } catch (pe) {
+          console.error("Failed to parse results:", pe);
+        }
+      }
+      if (data.rawScrapeData) {
+        try {
+          const parsedScrape = typeof data.rawScrapeData === 'string' ? JSON.parse(data.rawScrapeData) : data.rawScrapeData;
+          setRawScrapeData(parsedScrape);
+        } catch (pe) {
+          console.error("Failed to parse scrape data:", pe);
+        }
+      }
+      setLastAnalyzedUrl(data.url);
+      setUrl(data.url);
+      setActiveView('analyzer');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e: any) {
       setError(e.message || 'Fehler beim Laden des Reports.');
     } finally {
       setIsLoading(false);
     }
   };
+
 
   const handleSelectProject = (proj: any) => {
     setSelectedProject(proj);
@@ -1438,27 +1433,25 @@ export default function WebsiteAnalyzer() {
       setTimeout(() => setNotification(null), 5000);
       addNotification('Analyse abgeschlossen', `Die Analyse für ${targetUrl} wurde erfolgreich beendet.`);
 
-      // Save to Firebase History
-      if (auth.currentUser) {
+      // Save to Firebase History via Server API
+      if (user) {
         try {
           const avgScore = Math.round((finalReport.seo.score + finalReport.security.score + finalReport.performance.score + finalReport.accessibility.score + finalReport.compliance.score) / 5);
-            await addDoc(collection(db, 'reports'), {
-              userId: auth.currentUser.uid,
+          await fetch('/api/reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
               url: targetUrl,
               score: avgScore,
               results: JSON.stringify(finalReport),
-              rawScrapeData: JSON.stringify(scrapeData),
-              createdAt: new Date().toISOString()
-            });
-
-            // Increment Scan Count
-            await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-              scanCount: increment(1)
-            });
+              rawScrapeData: JSON.stringify(scrapeData)
+            })
+          });
         } catch (dbError) {
           console.error("Could not save to history:", dbError);
         }
       }
+
       
     } catch (err: any) {
       setError(err.message);

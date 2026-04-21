@@ -11,25 +11,9 @@ import {
   Loader2,
   CheckCircle,
   Crown,
-  ShieldAlert,
   UserPlus,
   UserMinus
 } from "lucide-react";
-import { db } from "../firebase";
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  onSnapshot,
-  arrayUnion,
-  arrayRemove,
-  limit,
-  deleteDoc
-} from "firebase/firestore";
 
 interface TeamMember {
   uid: string;
@@ -42,8 +26,7 @@ interface Team {
   id: string;
   name: string;
   ownerId: string;
-  members: string[]; // This includes admins but not the owner usually in our logic, wait.
-  // Actually, let's keep members as EVERYONE except owner, and admins as a subset of members.
+  members: string[]; 
   admins: string[];
 }
 
@@ -59,78 +42,43 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
 
   const isAgency = userData?.plan === 'agency';
 
-  useEffect(() => {
+  const fetchTeamData = async () => {
     if (!user) return;
-
-    // Fetch team where user is owner or member
-    const qOwner = query(collection(db, "teams"), where("ownerId", "==", user.uid), limit(1));
-    const unsubOwner = onSnapshot(qOwner, (snap) => {
-      if (!snap.empty) {
-        const teamDoc = snap.docs[0];
-        setTeam({ id: teamDoc.id, ...teamDoc.data() } as Team);
-        setLoading(false);
-      } else {
-        // Check if user is member of another team
-        const qMember = query(collection(db, "teams"), where("members", "array-contains", user.uid), limit(1));
-        const unsubMember = onSnapshot(qMember, (mSnap) => {
-          if (!mSnap.empty) {
-            const mTeamDoc = mSnap.docs[0];
-            setTeam({ id: mTeamDoc.id, ...mTeamDoc.data() } as Team);
-          } else {
-            setTeam(null);
-          }
-          setLoading(false);
-        });
-        return () => unsubMember();
+    try {
+      const res = await fetch('/api/teams');
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          setTeam(data.team);
+          setMembers(data.members);
+        } else {
+          setTeam(null);
+          setMembers([]);
+        }
       }
-    });
-
-    return () => unsubOwner();
-  }, [user]);
-
-  const chunkArray = (arr: any[], size: number) => {
-    const result = [];
-    for (let i = 0; i < arr.length; i += size) {
-      result.push(arr.slice(i, i + size));
+    } catch (e) {
+      console.error("Error fetching team data:", e);
+    } finally {
+      setLoading(false);
     }
-    return result;
   };
 
-  // Fetch member details when team changes
   useEffect(() => {
-    if (!team) {
-      setMembers([]);
-      return;
-    }
-
-    const fetchMembers = async () => {
-      const uids = [team.ownerId, ...team.members];
-      const memberDetails: TeamMember[] = [];
-      
-      for (const chunk of chunkArray(uids, 10)) {
-        const q = query(collection(db, "users"), where("uid", "in", chunk));
-        const snap = await getDocs(q);
-        snap.forEach(doc => {
-          memberDetails.push(doc.data() as TeamMember);
-        });
-      }
-      setMembers(memberDetails);
-    };
-
-    fetchMembers();
-  }, [team]);
+    fetchTeamData();
+  }, [user]);
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim() || !user || !isAgency) return;
     try {
-      await addDoc(collection(db, "teams"), {
-        name: newTeamName.trim(),
-        ownerId: user.uid,
-        members: [],
-        admins: [],
-        createdAt: new Date().toISOString()
+      const res = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTeamName.trim() })
       });
-      setIsCreating(false);
+      if (res.ok) {
+        setIsCreating(false);
+        await fetchTeamData();
+      }
     } catch (e) {
       console.error("Error creating team:", e);
     }
@@ -141,11 +89,15 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
     if (!confirm("Bist du sicher, dass du das Team verlassen möchtest? Du verlierst den Zugriff auf alle Team-Projekte.")) return;
     
     try {
-      await updateDoc(doc(db, "teams", team.id), {
-        members: arrayRemove(user.uid),
-        admins: arrayRemove(user.uid)
+      const res = await fetch('/api/teams/members', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid })
       });
-      setTeam(null);
+      if (res.ok) {
+        setTeam(null);
+        setMembers([]);
+      }
     } catch (e) {
       console.error("Error leaving team:", e);
       alert("Fehler beim Verlassen des Teams.");
@@ -157,8 +109,11 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
     if (!confirm("Willst du das Team wirklich LÖSCHEN? Alle Mitglieder verlieren den Zugriff und diese Aktion kann NICHT rückgängig gemacht werden.")) return;
 
     try {
-      await deleteDoc(doc(db, "teams", team.id));
-      setTeam(null);
+      const res = await fetch(`/api/teams/${team.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setTeam(null);
+        setMembers([]);
+      }
     } catch (e) {
       console.error("Error deleting team:", e);
       alert("Fehler beim Löschen des Teams.");
@@ -167,35 +122,24 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
 
   const handleInvite = async () => {
     if (!inviteEmail.trim() || !team || !isAgency) return;
-    const isUserAdmin = team.ownerId === user.uid || team.admins.includes(user.uid);
-    if (!isUserAdmin) {
-      setInviteStatus({ type: 'error', msg: "Nur Admins können einladen." });
-      return;
-    }
-
+    
     setIsInviting(true);
     setInviteStatus(null);
 
     try {
-      const q = query(collection(db, "users"), where("email", "==", inviteEmail.trim().toLowerCase()), limit(1));
-      const snap = await getDocs(q);
+      const res = await fetch('/api/teams/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim() })
+      });
 
-      if (snap.empty) {
-        setInviteStatus({ type: 'error', msg: "Nutzer nicht gefunden. Er muss sich zuerst registriert haben." });
+      const data = await res.json();
+      if (!res.ok) {
+        setInviteStatus({ type: 'error', msg: data.error || "Einladungs-Fehler." });
       } else {
-        const invitedUser = snap.docs[0].data();
-        
-        if (invitedUser.plan !== 'agency') {
-          setInviteStatus({ type: 'error', msg: "Nutzer benötigt ebenfalls einen Agency-Plan!" });
-        } else if (team.members.includes(invitedUser.uid) || invitedUser.uid === team.ownerId) {
-          setInviteStatus({ type: 'error', msg: "Dieser Nutzer ist bereits im Team." });
-        } else {
-          await updateDoc(doc(db, "teams", team.id), {
-            members: arrayUnion(invitedUser.uid)
-          });
-          setInviteStatus({ type: 'success', msg: `${invitedUser.displayName || inviteEmail} wurde eingeladen!` });
-          setInviteEmail("");
-        }
+        setInviteStatus({ type: 'success', msg: `${inviteEmail} wurde eingeladen!` });
+        setInviteEmail("");
+        await fetchTeamData();
       }
     } catch (e) {
       console.error("Invite error:", e);
@@ -207,32 +151,34 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
 
   const handleRemoveMember = async (memberUid: string) => {
     if (!team) return;
-    const isUserAdmin = team.ownerId === user.uid || team.admins.includes(user.uid);
-    if (!isUserAdmin) return;
-    if (memberUid === team.ownerId) {
-      alert("Der Inhaber kann nicht entfernt werden.");
-      return;
-    }
+    if (!confirm("Mitglied wirklich aus dem Team entfernen?")) return;
 
     try {
-      await updateDoc(doc(db, "teams", team.id), {
-        members: arrayRemove(memberUid),
-        admins: arrayRemove(memberUid)
+      const res = await fetch('/api/teams/members', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: memberUid })
       });
+      if (res.ok) {
+        await fetchTeamData();
+      }
     } catch (e) {
       console.error("Remove member error:", e);
     }
   };
 
   const handleToggleAdmin = async (targetUid: string) => {
-    if (!team || team.ownerId !== user.uid) return; // Only owner can manage admins
-    if (targetUid === team.ownerId) return;
-
+    if (!team || team.ownerId !== user.uid) return;
     const isAdmin = team.admins.includes(targetUid);
     try {
-      await updateDoc(doc(db, "teams", team.id), {
-        admins: isAdmin ? arrayRemove(targetUid) : arrayUnion(targetUid)
+      const res = await fetch('/api/teams/admins', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: targetUid, isAdmin: !isAdmin })
       });
+      if (res.ok) {
+        await fetchTeamData();
+      }
     } catch (e) {
       console.error("Toggle admin error:", e);
     }

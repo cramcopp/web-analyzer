@@ -32,13 +32,43 @@ export async function GET(req: Request) {
     }
     
     const tokens = await tokenResponse.json();
-    
+    const idToken = tokens.id_token;
+
+    // Exchange Google ID Token for Firebase ID Token
+    const firebaseResp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${process.env.FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postBody: `id_token=${idToken}&providerId=google.com`,
+        requestUri: `${process.env.APP_URL}/api/auth/google/callback`,
+        returnIdpCredential: true,
+        returnSecureToken: true
+      })
+    });
+
+    if (!firebaseResp.ok) {
+      const err = await firebaseResp.json();
+      throw new Error(`Firebase exchange failed: ${err.error?.message}`);
+    }
+
+    const firebaseData = await firebaseResp.json();
+
     // Store tokens in a secure, httpOnly cookie
     const cookieStore = await cookies();
+    
+    // Primary app session
+    cookieStore.set('wap_session', firebaseData.idToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+
+    // Secondary tokens for Search Console usage
     cookieStore.set('gsc_tokens', JSON.stringify(tokens), {
       httpOnly: true,
       secure: true,
-      sameSite: 'none', // Critical for iframe context
+      sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7 // 1 week
     });
 
@@ -51,8 +81,8 @@ export async function GET(req: Request) {
             window.close();
           </script>
           <div style="text-align: center;">
-            <h1 style="color: #D4AF37;">Website Analyzer Pro (WAP)</h1>
-            <p>Authentifizierung erfolgreich! Dieses Fenster wird geschlossen...</p>
+            <h1 style="color: #D4AF37;">Website Analyzer Pro</h1>
+            <p>Authentifizierung erfolgreich! Fenster schließt...</p>
           </div>
         </body>
       </html>
@@ -61,6 +91,7 @@ export async function GET(req: Request) {
     return new Response(html, {
       headers: { 'Content-Type': 'text/html' },
     });
+
   } catch (error: any) {
     console.error('Google OAuth Callback Error:', error);
     return NextResponse.json({ error: error.message || 'Authentication failed' }, { status: 500 });

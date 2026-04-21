@@ -41,17 +41,26 @@ export async function POST(req: Request) {
     }
 
     // Prepare Custom Search query
+    // We add a broad search pattern if the global toggle is off, 
+    // although the API often respects the query regardless of the toggle for JSON API users.
     const queryStr = `${niche}`;
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(queryStr)}&num=5`;
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(queryStr)}&num=10`;
 
     const searchRes = await fetch(searchUrl, {
-      // Small timeout for the Google API call
       signal: AbortSignal.timeout(5000)
     });
 
     if (!searchRes.ok) {
-       const text = await searchRes.text();
-       console.error("Custom Search Error:", text);
+       const errBody = await searchRes.json().catch(() => ({}));
+       console.error("Custom Search Error:", errBody);
+       
+       // Handle case where specific search features are disabled
+       if (errBody.error?.status === 'PERMISSION_DENIED') {
+          return NextResponse.json({ 
+             competitors: [], 
+             warning: 'Google Search API Access Denied. Please ensure Custom Search API is enabled in Cloud Console and the CX ID is correct.' 
+          });
+       }
        return NextResponse.json({ error: 'Search API Error' }, { status: searchRes.status });
     }
 

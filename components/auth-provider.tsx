@@ -1,16 +1,9 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  User, signInWithPopup, GoogleAuthProvider, signOut, 
-  signInWithEmailAndPassword, createUserWithEmailAndPassword, 
-  updateProfile, verifyBeforeUpdateEmail, updatePassword, deleteUser 
-} from 'firebase/auth';
-import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
-  user: User | null;
+  user: any | null;
   userData: any | null;
   loading: boolean;
   error: string | null;
@@ -40,81 +33,88 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [userData, setUserData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Automatically sync user profile to firestore
-        try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            await setDoc(userRef, {
-              uid: currentUser.uid,
-              email: currentUser.email,
-              displayName: currentUser.displayName,
-              role: 'user', 
-              plan: 'free', 
-              subpageLimit: 0, 
-              scanCount: 0,
-              maxScans: 5,
-              resetDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
-              createdAt: new Date().toISOString()
-            });
+  const checkSession = async () => {
+    try {
+      const res = await fetch('/api/user/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        
+        if (data.userData) {
+          setUserData(data.userData);
+        } else {
+          // Sync/Create profile if it doesn't exist
+          const syncRes = await fetch('/api/user/sync', { method: 'POST' });
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            setUserData(syncData.user);
           }
-        } catch (e) {
-          console.error('Error syncing user profile:', e);
         }
+      } else {
+        setUser(null);
+        setUserData(null);
       }
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
-
-  // Real-time Firestore user data sync
-  useEffect(() => {
-    if (!user) {
+    } catch (e) {
+      setUser(null);
       setUserData(null);
-      return;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const unsub = onSnapshot(doc(db, 'users', user.uid), (doc) => {
-      if (doc.exists()) {
-        setUserData(doc.data());
-      }
-    });
 
-    return () => unsub();
-  }, [user]);
+  useEffect(() => {
+    checkSession();
+  }, []);
 
   const signIn = async () => {
     try {
       setError(null);
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+      // For Google Login, we now use a redirect flow or a new window handled by our API
+      const res = await fetch('/api/auth/google/url');
+      const { url } = await res.json();
+      
+      // Use a popup or redirect. For consistency with old UX, we can use a popup.
+      const popup = window.open(url, 'GoogleAuth', 'width=500,height=600');
+      
+      // Listen for the success message from our callback route
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data.type === 'GSC_AUTH_SUCCESS') {
+          await checkSession();
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+      
+      window.addEventListener('message', handleMessage);
     } catch (e: any) {
       console.error("Sign in failed", e);
-      if (e.code === 'auth/popup-closed-by-user') {
-        setError('Das Anmeldefenster wurde geschlossen, bevor die Anmeldung abgeschlossen werden konnte. Bitte versuche es erneut.');
-      } else {
-        setError(e.message || 'Anmeldung fehlgeschlagen.');
-      }
+      setError(e.message || 'Anmeldung fehlgeschlagen.');
     }
   };
 
   const signInEmail = async (email: string, pass: string) => {
     try {
       setError(null);
-      await signInWithEmailAndPassword(auth, email, pass);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass })
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Anmeldung fehlgeschlagen');
+      }
+
+      await checkSession();
     } catch (e: any) {
-      console.error("Email sign in failed", e);
-      setError(e.message || 'Anmeldung fehlgeschlagen.');
+      setError(e.message);
       throw e;
     }
   };
@@ -122,70 +122,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUpEmail = async (email: string, pass: string, name: string) => {
     try {
       setError(null);
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      await updateProfile(cred.user, { displayName: name });
-      // The onAuthStateChanged hook will sync to firestore
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, displayName: name })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Registrierung fehlgeschlagen');
+      }
+
+      await checkSession();
     } catch (e: any) {
-      console.error("Email sign up failed", e);
-      setError(e.message || 'Registrierung fehlgeschlagen.');
+      setError(e.message);
       throw e;
     }
   };
 
   const updateUser = async (data: { displayName?: string; email?: string; password?: string }) => {
-    if (!user) return;
     try {
       setError(null);
-      if (data.displayName) {
-        await updateProfile(user, { displayName: data.displayName });
-        await setDoc(doc(db, 'users', user.uid), { displayName: data.displayName }, { merge: true });
+      const res = await fetch('/api/user/management', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Update fehlgeschlagen');
       }
-      if (data.email) {
-        await verifyBeforeUpdateEmail(user, data.email);
-        // Note: Firestore email won't update until they verify, 
-        // but we can update it now or wait. 
-        // usually verifyBeforeUpdateEmail handles the auth side.
-        // We'll update the Firestore record for consistency, 
-        // though it might be slightly out of sync until verified.
-        await setDoc(doc(db, 'users', user.uid), { email: data.email }, { merge: true });
-      }
-      if (data.password) {
-        await updatePassword(user, data.password);
-      }
-      // Re-trigger user state update manually if needed, or rely on updateProfile effects
-      setUser({ ...auth.currentUser } as User);
+      await checkSession();
     } catch (e: any) {
-      console.error("Update user failed", e);
-      if (e.code === 'auth/requires-recent-login') {
-        setError('Diese Aktion erfordert eine aktuelle Anmeldung. Bitte melde dich erneut an und versuche es noch einmal.');
-      } else {
-        setError(e.message || 'Aktualisierung fehlgeschlagen.');
-      }
+      setError(e.message);
       throw e;
     }
   };
 
   const deleteAccount = async () => {
-    if (!user) return;
     try {
       setError(null);
-      const uid = user.uid;
-      await deleteDoc(doc(db, 'users', uid));
-      await deleteUser(user);
-    } catch (e: any) {
-      console.error("Delete account failed", e);
-      if (e.code === 'auth/requires-recent-login') {
-        setError('Das Löschen des Accounts erfordert eine aktuelle Anmeldung. Bitte melde dich erneut an und versuche es noch einmal.');
-      } else {
-        setError(e.message || 'Löschen fehlgeschlagen.');
+      const res = await fetch('/api/user/management', { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Löschen fehlgeschlagen');
       }
+      setUser(null);
+    } catch (e: any) {
+      setError(e.message);
       throw e;
     }
   };
 
+
   const logOut = async () => {
     try {
-      await signOut(auth);
+      await fetch('/api/auth/logout', { method: 'POST' });
+      setUser(null);
+      setUserData(null);
     } catch (e: any) {
       console.error("Sign out failed", e);
     }

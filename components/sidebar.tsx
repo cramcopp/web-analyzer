@@ -32,22 +32,7 @@ import {
   Bell,
 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
-import { db } from "../firebase";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  limit,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  getDocs,
-  or,
-  and,
-} from "firebase/firestore";
+
 
 const isValidUrl = (urlString: string) => {
   if (!urlString) return true; // Empty URL is allowed as a placeholder
@@ -148,22 +133,31 @@ export function Sidebar({
     }
 
     try {
-      await addDoc(collection(db, "projects"), {
-        userId: user.uid,
-        teamId: teamId,
-        name: newProjectName.trim(),
-        url: newProjectUrl.trim(),
-        cronEnabled: false,
-        createdAt: new Date().toISOString(),
+      const resp = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newProjectName.trim(),
+          url: newProjectUrl.trim(),
+          teamId: teamId
+        })
       });
+      
+      if (!resp.ok) throw new Error("Failed to create project");
+
       setNewProjectName("");
       setNewProjectUrl("");
       setIsCreatingProject(false);
       setValidationError(null);
       showSuccess("Projekt erstellt");
+      
+      // Re-fetch projects
+      const projRes = await fetch('/api/projects');
+      if (projRes.ok) setProjects(await projRes.json());
     } catch (e) {
       console.error("Failed to create project", e);
     }
+
   };
 
   const handleUpdateProject = async (id: string) => {
@@ -177,26 +171,44 @@ export function Sidebar({
     }
 
     try {
-      await updateDoc(doc(db, "projects", id), {
-        name: editName.trim(),
-        url: editUrl.trim(),
+      const resp = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim(),
+          url: editUrl.trim(),
+        })
       });
+      
+      if (!resp.ok) throw new Error("Failed to update project");
+
       setEditingProjectId(null);
       setValidationError(null);
       showSuccess("Projekt erfolgreich aktualisiert");
+      
+      // Re-fetch project list
+      const projRes = await fetch('/api/projects');
+      if (projRes.ok) setProjects(await projRes.json());
     } catch (e) {
       console.error("Failed to update project", e);
     }
+
   };
 
   const handleDeleteProject = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "projects", id));
+      const resp = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error("Failed to delete project");
+      
       setConfirmDeleteId(null);
       showSuccess("Projekt gelöscht");
+      
+      const projRes = await fetch('/api/projects');
+      if (projRes.ok) setProjects(await projRes.json());
     } catch (e) {
       console.error("Failed to delete project", e);
     }
+
   };
 
   const startEditing = (proj: any) => {
@@ -229,95 +241,66 @@ export function Sidebar({
 
   // Fetch data
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setHistory([]);
+      setProjects([]);
+      setTeamId(null);
+      return;
+    }
 
-    // Subscribe to Reports
-    const reportsQ = query(
-      collection(db, "reports"),
-      where("userId", "==", user.uid),
-    );
+    const fetchData = async () => {
+      try {
+        // 1. Fetch Reports
+        const reportsRes = await fetch('/api/reports');
+        if (reportsRes.ok) {
+          const reportData = await reportsRes.json();
+          const formatted = reportData.map((docData: any) => {
+            const dateObj = new Date(docData.createdAt);
+            const today = new Date();
+            const isToday =
+              dateObj.getDate() === today.getDate() &&
+              dateObj.getMonth() === today.getMonth() &&
+              dateObj.getFullYear() === today.getFullYear();
+            const dateStr = isToday
+              ? `Heute, ${dateObj.getHours().toString().padStart(2, "0")}:${dateObj.getMinutes().toString().padStart(2, "0")}`
+              : dateObj.toLocaleDateString("de-DE");
 
-    const unsubReports = onSnapshot(
-      reportsQ,
-      (snap) => {
-        const data = snap.docs.map((doc) => {
-          const docData = doc.data();
+            return {
+              id: docData.id,
+              url: docData.url,
+              score: docData.score || 0,
+              date: dateStr,
+              rawDate: dateObj,
+            };
+          });
+          formatted.sort((a: any, b: any) => b.rawDate.getTime() - a.rawDate.getTime());
+          setHistory(formatted);
+        }
 
-          // Format Date
-          const dateObj = new Date(docData.createdAt);
-          const today = new Date();
-          const isToday =
-            dateObj.getDate() === today.getDate() &&
-            dateObj.getMonth() === today.getMonth() &&
-            dateObj.getFullYear() === today.getFullYear();
-          const dateStr = isToday
-            ? `Heute, ${dateObj.getHours().toString().padStart(2, "0")}:${dateObj.getMinutes().toString().padStart(2, "0")}`
-            : dateObj.toLocaleDateString("de-DE");
+        // 2. Fetch Projects
+        const projectsRes = await fetch('/api/projects');
+        if (projectsRes.ok) {
+          const projs = await projectsRes.json();
+          const sorted = projs.map((p: any) => ({
+            ...p,
+            rawDate: new Date(p.createdAt)
+          })).sort((a: any, b: any) => b.rawDate.getTime() - a.rawDate.getTime());
+          setProjects(sorted.slice(0, 5));
+        }
 
-          return {
-            id: doc.id,
-            url: docData.url,
-            score: docData.score || 0,
-            date: dateStr,
-            rawDate: dateObj,
-          };
-        });
-        // Sort client-side to avoid needing a Firestore composite index
-        data.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
-        setHistory(data);
-      },
-      (err) => {
-        console.error("GSC Sidebar error", err);
-      },
-    );
-
-    // Subscribe to Projects
-    const projectsQ = query(
-      collection(db, "projects"),
-      or(
-        where("userId", "==", user.uid),
-        ...(teamId ? [where("teamId", "==", teamId)] : [])
-      )
-    );
-
-    const unsubProjects = onSnapshot(
-      projectsQ,
-      (snap) => {
-        const data = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          rawDate: new Date(doc.data().createdAt),
-        }));
-        data.sort(
-          (a: any, b: any) => b.rawDate.getTime() - a.rawDate.getTime(),
-        );
-        setProjects(data.slice(0, 5)); // Keep latest 5
-      },
-      (err) => {
-        // It's okay if it fails (indexes or rules might be missing initially for projects)
-        console.log("Projects read error (ignoring):", err.message);
-      },
-    );
-
-    // Subscribe to Team to get teamId
-    const teamsQ = query(collection(db, "teams"), where("ownerId", "==", user.uid), limit(1));
-    const unsubTeams = onSnapshot(teamsQ, (snap) => {
-      if (!snap.empty) {
-        setTeamId(snap.docs[0].id);
-      } else {
-        // Also check if member (simple approach)
-        const memberTeamsQ = query(collection(db, "teams"), where("members", "array-contains", user.uid), limit(1));
-        getDocs(memberTeamsQ).then(mSnap => {
-          if (!mSnap.empty) setTeamId(mSnap.docs[0].id);
-        });
+        // 3. Fetch Team
+        const teamRes = await fetch('/api/teams');
+        if (teamRes.ok) {
+          const team = await teamRes.json();
+          if (team) setTeamId(team.id);
+        }
+      } catch (err) {
+        console.error("Sidebar data fetch error", err);
       }
-    });
-
-    return () => {
-      unsubReports();
-      unsubProjects();
-      unsubTeams();
     };
+
+    fetchData();
+
   }, [user]);
 
   const filteredHistory = history.filter((h) =>
