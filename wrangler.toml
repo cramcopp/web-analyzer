@@ -1,9 +1,7 @@
 name = "web-analyzer-pro"
 pages_build_output_dir = ".next"
 
-[compatibility_flags]
-production = ["nodejs_compat"]
-preview = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # Add non-sensitive vars here if needed
