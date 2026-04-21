@@ -25,13 +25,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  userData: null,
   loading: true,
   error: null,
   signIn: async () => {},
-  signInEmail: async () => {},
-  signUpEmail: async () => {},
+  signInEmail: async (email: string, pass: string) => {},
+  signUpEmail: async (email: string, pass: string, name: string) => {},
   logOut: async () => {},
-  updateUser: async () => {},
+  updateUser: async (data: { displayName?: string; email?: string; password?: string }) => {},
   deleteAccount: async () => {},
   clearError: () => {}
 });
