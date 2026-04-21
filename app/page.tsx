@@ -398,6 +398,7 @@ function ReportResultsView({
   onConnectGSC,
   gscError,
   onExportActionPlan,
+  setActiveView,
   plan = 'free',
 }: {
   report: any;
@@ -761,6 +762,7 @@ function ProjectDashboardView({
   onConnectGSC,
   gscError,
   onExportActionPlan,
+  setActiveView,
 }: {
   project: any;
   onStartScan: (url: string) => void;
