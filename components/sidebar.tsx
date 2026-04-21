@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "./auth-provider";
 import {
   LogOut,
@@ -239,14 +239,20 @@ export function Sidebar({
     }
   };
 
-  // Fetch data
+  const fetchedForRef = React.useRef<string | null>(null);
+
   useEffect(() => {
     if (!user) {
       setHistory([]);
       setProjects([]);
       setTeamId(null);
+      fetchedForRef.current = null;
       return;
     }
+    
+    // Antigravity: Prevent infinite loop/multiple fetches
+    if (fetchedForRef.current === user.uid) return;
+    fetchedForRef.current = user.uid;
 
     const fetchData = async () => {
       try {
