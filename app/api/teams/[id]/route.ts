@@ -5,12 +5,13 @@ import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 
 export const runtime = 'edge';
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const docRef = doc(db, 'teams', params.id);
+    const docRef = doc(db, 'teams', id);
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
