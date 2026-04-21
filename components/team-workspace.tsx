@@ -24,6 +24,7 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
+  deleteDoc,
   limit
 } from "firebase/firestore";
 
@@ -127,6 +128,34 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
       setIsCreating(false);
     } catch (e) {
       console.error("Error creating team:", e);
+    }
+  };
+
+  const handleLeaveTeam = async () => {
+    if (!team || !user || team.ownerId === user.uid) return;
+    if (!confirm("Bist du sicher, dass du das Team verlassen möchtest? Du verlierst den Zugriff auf alle Team-Projekte.")) return;
+    
+    try {
+      await updateDoc(doc(db, "teams", team.id), {
+        members: arrayRemove(user.uid)
+      });
+      setTeam(null);
+    } catch (e) {
+      console.error("Error leaving team:", e);
+      alert("Fehler beim Verlassen des Teams.");
+    }
+  };
+
+  const handleDeleteTeam = async () => {
+    if (!team || !user || team.ownerId !== user.uid) return;
+    if (!confirm("Willst du das Team wirklich LÖSCHEN? Alle Mitglieder verlieren den Zugriff und diese Aktion kann NICHT rückgängig gemacht werden.")) return;
+
+    try {
+      await deleteDoc(doc(db, "teams", team.id));
+      setTeam(null);
+    } catch (e) {
+      console.error("Error deleting team:", e);
+      alert("Fehler beim Löschen des Teams.");
     }
   };
 
@@ -266,10 +295,24 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
           <div className="md:col-span-2 flex flex-col gap-6">
             <div className="bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#F0F0F0] dark:border-zinc-800">
-                <h3 className="text-[14px] font-black uppercase tracking-[2px]">{team.name} Mitglieder</h3>
-                <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest px-2 py-1 bg-[#F5F5F3] dark:bg-zinc-800">
-                  {members.length} {members.length === 1 ? 'Mitglied' : 'Mitglieder'}
-                </span>
+                <div className="flex flex-col">
+                  <h3 className="text-[14px] font-black uppercase tracking-[2px]">{team.name} Mitglieder</h3>
+                  <span className="text-[9px] font-bold text-[#888] uppercase mt-1">ID: {team.id}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest px-2 py-1 bg-[#F5F5F3] dark:bg-zinc-800">
+                    {members.length} {members.length === 1 ? 'Mitglied' : 'Mitglieder'}
+                  </span>
+                  {team.ownerId === user.uid && (
+                    <button 
+                      onClick={handleDeleteTeam}
+                      className="p-2 text-[#888] hover:text-[#EB5757] transition-colors"
+                      title="Team löschen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-4">
@@ -283,12 +326,13 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
                         <span className="text-[13px] font-bold text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-2">
                           {member.displayName || member.email.split('@')[0]}
                           {member.uid === team.ownerId && <Crown className="w-3 h-3 text-[#D4AF37]" />}
+                          {member.uid === user.uid && <span className="text-[9px] text-[#D4AF37] opacity-60 font-black tracking-widest">( DU )</span>}
                         </span>
                         <p className="text-[10px] text-[#888] font-medium">{member.email}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       {member.plan === 'agency' ? (
                         <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-[#27AE60]/10 text-[#27AE60] text-[8px] font-black uppercase tracking-widest border border-[#27AE60]/20">
                           <CheckCircle className="w-2.5 h-2.5" /> Agency Active
@@ -306,6 +350,15 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
                           title="Mitglied entfernen"
                         >
                           <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {member.uid === user.uid && team.ownerId !== user.uid && (
+                        <button 
+                          onClick={handleLeaveTeam}
+                          className="text-[9px] font-black uppercase tracking-widest text-[#EB5757] hover:underline"
+                        >
+                          Team verlassen
                         </button>
                       )}
                     </div>
