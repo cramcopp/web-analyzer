@@ -1,7 +1,7 @@
-const PROJECT_ID = 'web-analyzer-493602';
-const DATABASE_ID = 'ai-studio-07ef72ae-2e23-4af2-921d-d87a095a3626';
-const API_KEY = '***REMOVED_API_KEY***';
-const INTERNAL_SECRET = '***REMOVED_INTERNAL_SECRET***';
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const DATABASE_ID = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID;
+const API_KEY = process.env.FIREBASE_API_KEY;
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET;
 
 /**
  * Updates a user document in Firestore using the REST API and a shared secret.

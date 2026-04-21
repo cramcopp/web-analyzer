@@ -1294,8 +1294,8 @@ export default function WebsiteAnalyzer() {
         throw new Error(scrapeData.error || 'Fehler beim Analysieren der Website.');
       }
 
-      // Step 2: Generate the report client-side (Required for AI Studio Proxy)
-      const finalReport = await generateReportClientSide(scrapeData);
+      // Step 2: Generate the report via Server API (Secured, no API key leak, with retries)
+      const finalReport = await generateReportClientSide(scrapeData, effectivePlan);
       
       setReport(finalReport);
       setLastAnalyzedUrl(targetUrl);
