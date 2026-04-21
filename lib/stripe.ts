@@ -5,5 +5,5 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-01-27-ac', // Using a stable version
+  apiVersion: '2026-03-25.dahlia', // Using the version required by the types
 });

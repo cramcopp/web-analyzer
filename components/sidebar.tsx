@@ -27,6 +27,7 @@ import {
   CreditCard,
   ChevronUp,
   LifeBuoy,
+  Star,
 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { db } from "../firebase";
@@ -58,6 +59,7 @@ export function Sidebar({
   onSelectProject,
   onOpenSettings,
   onOpenProfile,
+  onOpenPricing,
   onLogout,
 }: {
   onLoadReport?: (id: string) => void;
