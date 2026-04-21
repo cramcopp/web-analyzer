@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Check, 
   X, 
@@ -60,7 +60,7 @@ export default function PricingSection() {
   const { user, userData } = useAuth();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const [showComparison, setShowComparison] = useState(true);
+
 
   const handleCheckout = async (planName: string) => {
     if (!user) {
@@ -299,9 +299,8 @@ export default function PricingSection() {
                 <FeatureRow label="Ticket Support" free={true} pro={true} agency={true} />
                 <FeatureRow label="Priorisierter Support" free={false} pro={true} agency={true} />
                 <FeatureRow label="Persönlicher Success Manager" free={false} pro={false} agency={true} />
-              </div>
             </div>
-          )}
+        </div>
         </div>
 
         {/* TRUST BADGES */}
