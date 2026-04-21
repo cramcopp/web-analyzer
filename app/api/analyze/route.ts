@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+
+export const runtime = 'edge';
 import * as cheerio from 'cheerio';
 
 export async function POST(req: Request) {
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
     const htmlPromise = fetch(urlObj.toString(), htmlRequestConfig);
     const psiPromise = fetch(psiUrl);
     
-    let safeBrowsingPromise = Promise.resolve(null);
+    let safeBrowsingPromise: Promise<Response | null> = Promise.resolve(null);
     if (apiKey) {
       const sbUrl = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
       safeBrowsingPromise = fetch(sbUrl, {

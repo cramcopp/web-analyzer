@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+
+export const runtime = 'edge';
 import { google } from 'googleapis';
 import { cookies } from 'next/headers';
 

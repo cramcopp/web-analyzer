@@ -312,16 +312,6 @@ function FloatingScannerProgress({ progress, stepIndex, steps }: { progress: num
          className="h-full bg-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.8)] transition-all duration-700 ease-out" 
          style={{ width: `${progress}%` }}
        />
-       <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-black/95 backdrop-blur-md border border-[#EEE] dark:border-white/10 px-6 py-2 shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-          <div className="relative">
-             <div className="w-4 h-4 border-2 border-[#D4AF37]/20 rounded-full"></div>
-             <div className="w-4 h-4 border-2 border-[#D4AF37] rounded-full animate-spin border-t-transparent absolute top-0 left-0"></div>
-          </div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 whitespace-nowrap">
-             <span className="text-[#D4AF37] mr-2">{Math.round(progress)}%</span>
-             {steps[stepIndex]}
-          </p>
-       </div>
     </div>
   );
 }
@@ -365,30 +355,29 @@ function LoadingDisplay() {
   return (
     <>
       <FloatingScannerProgress progress={progress} stepIndex={stepIndex} steps={steps} />
-      <div className="py-24 flex flex-col items-center justify-center text-[#1A1A1A] dark:text-zinc-100 gap-8">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-[#E5E5E5] dark:border-zinc-800 rounded-full"></div>
-          <div className="w-20 h-20 border-4 border-[#1A1A1A] dark:border-white rounded-full animate-spin border-t-transparent absolute top-0 left-0"></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold">
-            {Math.round(progress)}%
-          </div>
+      <div className="py-24 flex flex-col items-center justify-center text-[#1A1A1A] dark:text-zinc-100 gap-6">
+        <div className="text-center">
+          <span className="text-[64px] font-black tracking-tighter leading-none text-[#1A1A1A] dark:text-white flex items-center justify-center">
+            {Math.round(progress)}
+            <span className="text-[24px] font-bold opacity-30 ml-2">%</span>
+          </span>
         </div>
         
         <div className="w-full max-w-[400px] flex flex-col items-center">
-          <p className="text-[18px] font-bold uppercase tracking-[1px] text-[#1A1A1A] dark:text-zinc-100 mb-4 h-[24px]">
+          <p className="text-[18px] font-bold uppercase tracking-[1px] text-[#1A1A1A] dark:text-zinc-100 mb-6 h-[24px]">
             {steps[stepIndex]}
           </p>
           
-          {/* Progress Bar Container */}
-          <div className="w-full h-1 bg-[#E5E5E5] dark:bg-zinc-800 rounded-full overflow-hidden mb-3">
+          {/* Enhanced Progress Bar Container */}
+          <div className="w-full h-1.5 bg-[#E5E5E5] dark:bg-zinc-800/50 rounded-full overflow-hidden mb-4 relative shadow-inner">
             <div 
-              className="h-full bg-[#D4AF37] transition-all duration-700 ease-out"
+              className="h-full bg-gradient-to-r from-[#D4AF37] to-[#FFD700] shadow-[0_0_10px_rgba(212,175,55,0.4)] transition-all duration-700 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
 
-          <p className="text-[11px] uppercase text-[#888888] dark:text-zinc-500 tracking-[1px]">
-            KI-Analyse läuft. Dies kann bis zu 45 Sekunden dauern.
+          <p className="text-[11px] uppercase text-[#888888] dark:text-zinc-500 tracking-[1.5px] font-bold">
+            KI-Analyse läuft <span className="animate-pulse">...</span>
           </p>
         </div>
       </div>
@@ -1239,7 +1228,7 @@ export default function WebsiteAnalyzer() {
           setUrl('');
         }}
       />
-      {!isLoading && report && activeView === 'analyzer' && <FloatingNav />}
+      {!isLoading && report && (activeView === 'analyzer' || activeView === 'project') && <FloatingNav />}
       
       {/* SCAN FINISHED NOTIFICATION */}
       {notification && (

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+
+export const runtime = 'edge';
 import { GoogleGenAI, Type } from '@google/genai';
 
 export async function POST(req: Request) {
