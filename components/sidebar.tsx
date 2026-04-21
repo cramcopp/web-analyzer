@@ -739,24 +739,31 @@ export function Sidebar({
                   >
                     <LogIn className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     <span className="text-[9px] uppercase font-bold tracking-widest text-center">
-                      Mit Google Anmelden
+                      Mit Google Einloggen
                     </span>
                   </button>
                   <div className="flex items-center gap-2 py-2">
                     <div className="h-px bg-[#DDD] dark:bg-zinc-800 flex-1" />
                     <span className="text-[9px] text-[#AAA] font-bold uppercase">
-                      oder
+                      oder E-Mail
                     </span>
                     <div className="h-px bg-[#DDD] dark:bg-zinc-800 flex-1" />
                   </div>
-                  <button
-                    onClick={() => setAuthMode("email")}
-                    className="border border-[#1A1A1A] dark:border-zinc-100 text-[#1A1A1A] dark:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 w-full py-2.5 px-4 rounded-sm transition-colors flex items-center justify-center gap-2"
-                  >
-                    <span className="text-[9px] uppercase font-bold tracking-widest text-center">
-                      Mit E-Mail Anmelden
-                    </span>
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setAuthMode("email")}
+                      className="border border-[#1A1A1A] dark:border-zinc-100 text-[#1A1A1A] dark:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 w-full py-2 px-2 rounded-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span className="text-[8px] uppercase font-bold tracking-wider">Einloggen</span>
+                    </button>
+                    <button
+                      onClick={() => setAuthMode("signup")}
+                      className="bg-black/5 dark:bg-white/5 text-[#1A1A1A] dark:text-zinc-100 hover:bg-[#D4AF37] hover:text-white dark:hover:text-zinc-900 w-full py-2 px-2 rounded-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span className="text-[8px] uppercase font-bold tracking-wider">Registrieren</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form

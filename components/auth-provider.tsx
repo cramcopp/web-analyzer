@@ -75,23 +75,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async () => {
     try {
       setError(null);
-      // For Google Login, we now use a redirect flow or a new window handled by our API
       const res = await fetch('/api/auth/google/url');
       const { url } = await res.json();
       
-      // Use a popup or redirect. For consistency with old UX, we can use a popup.
       const popup = window.open(url, 'GoogleAuth', 'width=500,height=600');
       
-      // Listen for the success message from our callback route
       const handleMessage = async (event: MessageEvent) => {
+        // We accept messages from our own origin
         if (event.origin !== window.location.origin) return;
         if (event.data.type === 'GSC_AUTH_SUCCESS') {
           await checkSession();
-          window.removeEventListener('message', handleMessage);
+          if (popup) popup.close();
         }
       };
       
       window.addEventListener('message', handleMessage);
+
+      // Fallback: Check if popup was closed manually
+      const checkPopup = setInterval(async () => {
+        if (!popup || popup.closed) {
+          clearInterval(checkPopup);
+          window.removeEventListener('message', handleMessage);
+          await checkSession();
+        }
+      }, 1000);
+
     } catch (e: any) {
       console.error("Sign in failed", e);
       setError(e.message || 'Anmeldung fehlgeschlagen.');
