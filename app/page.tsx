@@ -763,6 +763,7 @@ function ProjectDashboardView({
   gscError,
   onExportActionPlan,
   setActiveView,
+  plan = 'free',
 }: {
   project: any;
   onStartScan: (url: string) => void;
@@ -775,6 +776,7 @@ function ProjectDashboardView({
   gscError: string | null;
   onExportActionPlan: () => void;
   setActiveView: (view: string) => void;
+  plan?: string;
 }) {
   return (
     <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -850,7 +852,7 @@ function ProjectDashboardView({
         </div>
       )}
 
-      {isLoading && <LoadingDisplay plan={project.userId === user?.uid ? userData?.plan : 'free'} />}
+      {isLoading && <LoadingDisplay plan={plan} />}
 
       {report && !isLoading && (
         <ReportResultsView
@@ -861,7 +863,7 @@ function ProjectDashboardView({
           onConnectGSC={onConnectGSC}
           gscError={gscError}
           onExportActionPlan={onExportActionPlan}
-          plan={project.userId === user?.uid ? userData?.plan : 'free'}
+          plan={plan}
           setActiveView={setActiveView}
         />
       )}
