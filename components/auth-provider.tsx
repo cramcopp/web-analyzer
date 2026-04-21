@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // We accept messages from our own origin
         if (event.origin !== window.location.origin) return;
         if (event.data.type === 'GSC_AUTH_SUCCESS') {
-          await checkSession();
+          window.location.reload();
           if (popup) popup.close();
         }
       };
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error || 'Anmeldung fehlgeschlagen');
       }
 
-      await checkSession();
+      window.location.reload();
     } catch (e: any) {
       setError(e.message);
       throw e;
@@ -141,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error || 'Registrierung fehlgeschlagen');
       }
 
-      await checkSession();
+      window.location.reload();
     } catch (e: any) {
       setError(e.message);
       throw e;

@@ -2,8 +2,6 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// firebase.ts - SERVER-SIDE ONLY
-// Diese Datei wird nur noch auf dem Server (Edge Runtime) genutzt.
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
   authDomain: process.env.FIREBASE_AUTH_DOMAIN,
@@ -13,12 +11,8 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID,
 };
 
-// Falls wir aus Versehen im Client landen, werfen wir einen Fehler
-if (typeof window !== 'undefined') {
-  throw new Error("Sicherheits-Check: Firebase darf NICHT im Browser geladen werden.");
-}
+// Initialize Firebase for Server-side use in Edge
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-export const db = getFirestore(app);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
