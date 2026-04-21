@@ -403,6 +403,23 @@ export function Sidebar({
 
           {!loading && user ? (
             <>
+              {/* Trial Teaser for Free Users */}
+              {userData?.plan === 'free' && (
+                <div className="mx-4 mb-2 p-3 bg-[#27AE60]/10 border border-[#27AE60]/20 rounded-sm flex flex-col gap-2">
+                  <span className="text-[9px] font-black uppercase text-[#27AE60] tracking-widest flex items-center gap-1.5">
+                    <Zap className="w-3 h-3 animate-pulse" /> 7 Tage gratis testen
+                  </span>
+                  <button 
+                    onClick={() => {
+                      onItemClick(onOpenPricing);
+                    }}
+                    className="text-[8px] font-bold uppercase underline text-[#1A1A1A] dark:text-zinc-100 hover:text-[#D4AF37] text-left"
+                  >
+                    Vollzugriff freischalten
+                  </button>
+                </div>
+              )}
+
               {/* PROJEKTE SEKTION */}
               <div className="px-4 py-5 border-b border-[#E5E5E5] dark:border-zinc-800">
                 <div className="flex items-center justify-between mb-3 px-1">

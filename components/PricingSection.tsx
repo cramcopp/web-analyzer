@@ -60,7 +60,7 @@ export default function PricingSection() {
   const { user, userData } = useAuth();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const [showComparison, setShowComparison] = useState(false);
+  const [showComparison, setShowComparison] = useState(true);
 
   const handleCheckout = async (planName: string) => {
     if (!user) {
@@ -97,7 +97,14 @@ export default function PricingSection() {
   const isTrialEligible = userData?.plan === 'free' || !userData;
 
   return (
-    <section className="py-24 px-4 md:px-10 animate-in fade-in slide-in-from-bottom-5 duration-1000 bg-[#F5F5F3] dark:bg-zinc-950 min-h-screen">
+    <section className="py-24 px-4 md:px-10 animate-in fade-in slide-in-from-bottom-5 duration-1000 bg-[#F5F5F3] dark:bg-zinc-950 min-h-screen relative">
+      {/* 7-Day Trial Ribbon */}
+      <div className="absolute top-0 left-0 right-0 h-12 bg-[#27AE60] text-white flex items-center justify-center gap-3 z-20">
+        <Zap className="w-4 h-4 animate-pulse" />
+        <span className="text-[11px] font-black uppercase tracking-[3px]">JETZT STARTEN: 7 TAGE KOSTENLOSER VOLLZUGRIFF AUF ALLE FEATURES</span>
+        <Zap className="w-4 h-4 animate-pulse" />
+      </div>
+
       <div className="max-w-[1240px] mx-auto">
         <div className="text-center mb-24">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-black/[0.03] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 text-[#D4AF37] text-[10px] font-black uppercase tracking-[4px] rounded-full mb-8">
@@ -254,18 +261,15 @@ export default function PricingSection() {
 
         {/* COMPARISON TABLE (Seobility Style) */}
         <div className="mt-20">
-          <button 
-            onClick={() => setShowComparison(!showComparison)}
-            className="w-full flex items-center justify-between p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 text-[14px] font-black uppercase tracking-[2px] transition-colors hover:bg-[#F5F5F3] dark:hover:bg-zinc-800"
+          <div 
+            className="w-full flex items-center justify-between p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 text-[14px] font-black uppercase tracking-[2px] transition-colors"
           >
-            Alle Funktionen vergleichen
-            {showComparison ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </button>
+            Alle Funktionen im Detail
+          </div>
 
-          {showComparison && (
             <div className="bg-white dark:bg-zinc-900 border-x border-b border-[#EEE] dark:border-zinc-800 animate-in fade-in slide-in-from-top-4 duration-500 overflow-x-auto">
               <div className="min-w-[800px]">
-                <div className="grid grid-cols-4 bg-[#1A1A1A] text-white text-[10px] font-black uppercase tracking-[3px]">
+                <div className="grid grid-cols-4 bg-[#1A1A1A] dark:bg-zinc-800 text-white text-[10px] font-black uppercase tracking-[3px]">
                   <div className="p-6">Features</div>
                   <div className="p-6 text-center border-l border-white/10">WAP Basic</div>
                   <div className="p-6 text-center border-l border-white/10 bg-[#D4AF37]/20 text-[#D4AF37]">WAP Premium</div>
@@ -340,7 +344,74 @@ export default function PricingSection() {
            </div>
         </div>
       </div>
+      {/* Sticky Subscription Bar (Scroll Appearance) */}
+      <StickyAboBar 
+        billingInterval={billingInterval} 
+        onCheckout={handleCheckout} 
+        loadingPlan={loadingPlan}
+      />
     </section>
+  );
+}
+
+
+function StickyAboBar({ billingInterval, onCheckout, loadingPlan }: { billingInterval: string, onCheckout: (plan: string) => void, loadingPlan: string | null }) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 800) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[70] transition-all duration-500 max-w-[95%] md:max-w-none ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
+      <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 shadow-2xl rounded-sm p-4 flex flex-col md:flex-row items-center gap-6">
+        <div className="hidden lg:flex flex-col">
+          <span className="text-[10px] font-black uppercase text-[#D4AF37] tracking-[2px]">Einfach abschließen</span>
+          <span className="text-[12px] font-black uppercase text-[#1A1A1A] dark:text-white">Wähle dein WAP Abo</span>
+        </div>
+        
+        <div className="flex items-center gap-3 md:gap-4 overflow-x-auto md:overflow-visible w-full md:w-auto">
+          {/* Pro Sticky */}
+          <button 
+            onClick={() => onCheckout('pro')}
+            className="flex items-center gap-3 px-6 py-3 bg-[#D4AF37] text-white rounded-sm hover:-translate-y-0.5 transition-all shadow-lg whitespace-nowrap min-w-fit"
+          >
+            <div className="flex flex-col items-start leading-none text-left">
+              <span className="text-[9px] font-black uppercase opacity-80">Premium</span>
+              <span className="text-[13px] font-black">{billingInterval === 'yearly' ? '39' : '49'}€ / Mo</span>
+            </div>
+            {loadingPlan === 'pro' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-4 h-4 ml-2" />}
+          </button>
+
+          {/* Agency Sticky */}
+          <button 
+            onClick={() => onCheckout('agency')}
+            className="flex items-center gap-3 px-6 py-3 bg-[#1A1A1A] dark:bg-white text-white dark:text-black rounded-sm hover:-translate-y-0.5 transition-all shadow-lg whitespace-nowrap min-w-fit"
+          >
+             <div className="flex flex-col items-start leading-none text-left">
+              <span className="text-[9px] font-black uppercase opacity-70">Agency</span>
+              <span className="text-[13px] font-black">{billingInterval === 'yearly' ? '119' : '149'}€ / Mo</span>
+            </div>
+            {loadingPlan === 'agency' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-4 h-4 ml-2 text-[#D4AF37]" />}
+          </button>
+        </div>
+
+        <div className="hidden md:flex flex-col items-end pr-4 border-l border-[#EEE] dark:border-zinc-800 pl-4">
+           <span className="text-[9px] font-black text-[#27AE60] uppercase tracking-widest whitespace-nowrap flex items-center gap-1.5">
+             <ShieldCheck className="w-3 h-3" /> 7 Tage Trial
+           </span>
+           <span className="text-[10px] text-[#888] font-bold uppercase tracking-tighter italic">Jederzeit kündbar</span>
+        </div>
+      </div>
+    </div>
   );
 }
 

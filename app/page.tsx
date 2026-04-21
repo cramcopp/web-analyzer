@@ -418,17 +418,19 @@ function ReportResultsView({
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 relative">
       {/* Sticky Upgrade Banner for Free Users */}
       {plan === 'free' && (
-        <div className="sticky top-0 z-[60] bg-[#D4AF37] text-[#1A1A1A] py-3 px-6 flex items-center justify-between shadow-xl -mx-4 md:mx-0 mb-8 animate-in slide-in-from-top duration-500">
+        <div className="sticky top-0 z-[60] bg-[#27AE60] text-white py-3 px-6 flex items-center justify-between shadow-xl -mx-4 md:mx-0 mb-8 animate-in slide-in-from-top duration-500">
            <div className="flex items-center gap-3">
               <Zap className="w-5 h-5 animate-pulse" />
-              <span className="text-[12px] font-black uppercase tracking-widest hidden md:inline">Eingeschränkte Analyse aktiv</span>
-              <span className="text-[11px] font-bold">Du nutzt nur 10% der Deep-Analysis Power.</span>
+              <div className="flex flex-col">
+                <span className="text-[12px] font-black uppercase tracking-widest hidden md:inline">Eingeschränkte Analyse aktiv</span>
+                <span className="text-[11px] font-bold">Starte deine 7-tägige Testphase für 100% Deep-Analysis Power!</span>
+              </div>
            </div>
            <button 
              onClick={() => setActiveView('pricing')}
-             className="bg-[#1A1A1A] text-white px-4 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center gap-2"
+             className="bg-[#1A1A1A] text-white px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all flex items-center gap-2 shadow-lg"
            >
-             JETZT UPGRADEN
+             JETZT GRATIS TESTEN
              <Rocket className="w-4 h-4" />
            </button>
         </div>
@@ -798,6 +800,23 @@ function ProjectDashboardView({
             Dashboard für {project.url}. Hier kannst du alle historischen Daten
             und Analysen dieses Projekts einsehen.
           </p>
+          
+          {plan === 'free' && (
+            <div className="mt-8 p-4 bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+               <div className="flex items-center gap-3">
+                 <Star className="w-5 h-5 text-[#D4AF37] fill-[#D4AF37]" />
+                 <span className="text-[11px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">
+                   Sichere dir 7 Tage WAP Premium für dieses Projekt!
+                 </span>
+               </div>
+               <button 
+                 onClick={() => setActiveView('pricing')}
+                 className="px-4 py-2 bg-[#D4AF37] text-white text-[9px] font-black uppercase tracking-widest hover:bg-[#1A1A1A] transition-colors"
+               >
+                 TRIAL STARTEN
+               </button>
+            </div>
+          )}
         </div>
         <button
           onClick={() => onStartScan(project.url)}
@@ -1465,6 +1484,16 @@ export default function WebsiteAnalyzer() {
                   )}
                 </button>
                 
+                <div className="hidden md:flex items-center gap-4 mt-1">
+                   <button 
+                     onClick={() => setActiveView('pricing')}
+                     className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 group"
+                   >
+                     <Star className="w-3 h-3 group-hover:rotate-12 transition-transform" />
+                     7 TAGE GRATIS TESTEN
+                   </button>
+                </div>
+                
                 {isNotifOpen && (
                   <>
                     <div className="fixed inset-0 z-[105]" onClick={() => setIsNotifOpen(false)} />
@@ -1598,6 +1627,25 @@ export default function WebsiteAnalyzer() {
                   Dein All-in-One Scanner für SEO, Security, Performance & aktuelles deutsches Recht (DSGVO). 
                   Gib einfach eine URL ein, und überlasse der KI die Analyse.
                 </p>
+
+                <div className="mt-12 p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-[#27AE60]"></div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#27AE60]/10 flex items-center justify-center text-[#27AE60] shrink-0">
+                      <Zap className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-black uppercase tracking-tight text-[#1A1A1A] dark:text-white">Teste WAP Premium 7 Tage kostenlos</h4>
+                      <p className="text-[12px] text-[#888] font-medium italic">Voller Zugriff auf Deep-Analysis, GSC Sync & White-Label Reports.</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setActiveView('pricing')}
+                    className="px-6 py-3 bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-colors shrink-0"
+                  >
+                    PLAN WÄHLEN
+                  </button>
+                </div>
               </section>
 
               {/* Loading State */}
