@@ -1,3 +1,40 @@
 @import "tailwindcss";
 @custom-variant dark (&:is(.dark *));
 
+@media print {
+  @page {
+    size: auto;
+    margin: 15mm;
+  }
+  
+  /* Force light theme colors for printing */
+  :root {
+    color-scheme: light !important;
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Hide unnecessary nav and UI elements */
+  nav, header, aside, .sticky, button, .pointer-events-none, .fixed {
+    display: none !important;
+  }
+
+  /* Do not hide exactly the print report elements */
+  #business-intelligence, #summary, .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 2rem !important;
+  }
+  
+  /* Make sure everything within main content is fully visible */
+  .fade-in, .slide-in-from-bottom-4 {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

@@ -91,8 +91,10 @@ export async function POST(req: Request) {
       - Hreflang tags detected: ${JSON.stringify(scrapeData.technicalSeo?.hreflangs || [])}
       - Semantic DOM Depth: Max ${scrapeData.maxDomDepth} Levels (Über 15 ist kritisch)
       - Semantic HTML Tags Found: ${JSON.stringify(scrapeData.semanticTags)}
+      - Domain Age (Registration Date): ${scrapeData.domainAge || 'Nicht gefunden'}
       
       Security & Data Leakage:
+      - SSL Certificate Check: ${JSON.stringify(scrapeData.sslCertificate)}
       - Hardcoded Emails Found: ${scrapeData.dataLeakage?.emailsFoundCount}
       - Found Email Examples (Risk): ${JSON.stringify(scrapeData.dataLeakage?.sampleEmails)}
       - Mailto Links: ${scrapeData.dataLeakage?.mailtoLinksCount}
@@ -105,6 +107,7 @@ export async function POST(req: Request) {
       - OpenGraph Image: ${scrapeData.social?.ogImage || 'None'}
       - OpenGraph Type: ${scrapeData.social?.ogType || 'None'}
       - Existing JSON-LD Schema Blocks: ${scrapeData.existingSchemaCount}
+      - Schema.org Validation Details: ${JSON.stringify(scrapeData.schemaValidation || [])}
       
       Scripts (Total / Blocking): ${scrapeData.totalScripts} / ${scrapeData.blockingScripts}
       Stylesheets: ${scrapeData.totalStylesheets}
@@ -113,6 +116,7 @@ export async function POST(req: Request) {
       ${scrapeData.psiMetricsStr}
 
       HTTP Headers: ${JSON.stringify(scrapeData.headers)}
+      Detected Tech-Stack: ${scrapeData.techStack?.join(', ') || 'None detected'}
       First 80 Links found: ${scrapeData.linkSummary}
       
       Legal signals:
@@ -124,8 +128,8 @@ export async function POST(req: Request) {
       - Tracking Scripts detected: ${JSON.stringify(scrapeData.legal?.trackingScripts)}
       - CMP (Consent Management Platform) detected: ${JSON.stringify(scrapeData.legal?.cmpDetected)}
 
-      Content Signals:
-      - Flesch Reading Ease Score: ${scrapeData.fleschScore}
+    Content Signals:
+      - Wiener Sachtextformel Index (Skala 4-15, niedriger = verständlicher): ${scrapeData.wienerSachtextIndex}
       - Multiple H1 Headings: ${scrapeData.contentAudit?.duplicateH1s ? 'YES' : 'NO'}
       - Duplicate H2 Headings: ${scrapeData.contentAudit?.duplicateH2s ? 'YES' : 'NO'}
       - Identical H1 and H2 text: ${scrapeData.contentAudit?.identicalHeadings ? 'YES' : 'NO'}
@@ -134,6 +138,7 @@ export async function POST(req: Request) {
       - Total internal links found: ${scrapeData.crawlSummary?.totalInternalLinks}
       - Subpages scanned: ${scrapeData.crawlSummary?.scannedSubpagesCount}
       - Subpage Details: ${JSON.stringify(scrapeData.crawlSummary?.scannedSubpages)}
+      - Broken Links (404/5xx): ${JSON.stringify(scrapeData.crawlSummary?.brokenLinks || [])}
       
       Instructions for Site-Wide Audit:
       1. Analyze the Subpage Details for inconsistencies. Are there pages missing H1s? Are meta descriptions duplicated or missing?
@@ -142,6 +147,9 @@ export async function POST(req: Request) {
 
       Excerpt of Body Text (max 15000 chars):
       ${scrapeData.bodyText}
+      
+      Jina AI Rendered Fallback Content (if native text parsing failed):
+      ${scrapeData.jinaRenderedContent || 'Not used'}
       `;
 
     // Select model based on plan

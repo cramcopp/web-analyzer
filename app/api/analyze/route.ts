@@ -25,13 +25,29 @@ export async function POST(req: Request) {
 
     const startTime = Date.now();
     
-    // Parallel fetching: App HTML + Google PageSpeed Insights API + Google Safe Browsing
+    // Parallel fetching: App HTML + Google PageSpeed Insights API + Google Safe Browsing + Additional APIs
     const htmlRequestConfig = {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     };
+    
+    // RDAP Promise
+    const rdapPromise = fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
+      signal: AbortSignal.timeout(10000)
+    }).catch(() => null);
+
+    // SSL Labs Promise
+    const sslPromise = fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(domain)}&publish=off&all=done`, {
+      signal: AbortSignal.timeout(10000)
+    }).catch(() => null);
+    
+    // Jina Reader Promise
+    const jinaPromise = fetch(`https://r.jinaread.er.ai/${encodeURIComponent(urlObj.toString())}`, {
+      headers: { 'Accept': 'text/plain' },
+      signal: AbortSignal.timeout(10000)
+    }).catch(() => null);
     
     const psiApiKeyParam = apiKey ? `&key=${apiKey}` : '';
     const psiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlObj.toString())}${psiApiKeyParam}&category=PERFORMANCE&category=ACCESSIBILITY&category=BEST_PRACTICES&category=SEO&strategy=MOBILE`;
@@ -70,6 +86,7 @@ export async function POST(req: Request) {
     // Process PSI data
     let psiMetricsStr = "Keine PageSpeed Insights Daten verfügbar.";
     let lighthouseScores = null;
+    let psiMetrics: any = null;
     try {
       const psiTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('PSI Timeout')), 45000));
       const psiResult: any = await Promise.race([psiPromise, psiTimeout]);
@@ -89,6 +106,15 @@ export async function POST(req: Request) {
         }
 
         if (audits) {
+          psiMetrics = {
+            fcp: audits['first-contentful-paint']?.numericValue || null,
+            lcp: audits['largest-contentful-paint']?.numericValue || null,
+            tbt: audits['total-blocking-time']?.numericValue || null,
+            cls: audits['cumulative-layout-shift']?.numericValue || null,
+            speedIndex: audits['speed-index']?.numericValue || null,
+            tti: audits['interactive']?.numericValue || null
+          };
+
           psiMetricsStr = `
             Google PageSpeed Insights (Mobile):
             Lighthouse Performance Score: ${lighthouseScores?.performance}/100
@@ -120,6 +146,45 @@ export async function POST(req: Request) {
       }
     } catch (e) {
       console.warn("Safe Browsing API failed:", e);
+    }
+
+    // Process RDAP Domain Age
+    let domainAgeStr = "Nicht gefunden";
+    try {
+      const rdapRes = await rdapPromise;
+      if (rdapRes && rdapRes.ok) {
+        const rdapData = await rdapRes.json();
+        const regEvent = rdapData.events?.find((e: any) => e.eventAction === 'registration');
+        if (regEvent && regEvent.eventDate) {
+          domainAgeStr = regEvent.eventDate.split('T')[0];
+        }
+      }
+    } catch (e) {
+      console.warn("RDAP fetch failed:", e);
+    }
+
+    // Process SSL Labs
+    let sslCertificateData: any = { status: "Not retrieved" };
+    try {
+      const sslRes = await sslPromise;
+      if (sslRes && sslRes.ok) {
+        const sslData = await sslRes.json();
+        if (sslData.status === "READY" && sslData.endpoints && sslData.endpoints.length > 0) {
+           const endpoint = sslData.endpoints[0];
+           const cert = sslData.certs && sslData.certs.length > 0 ? sslData.certs[0] : null;
+           sslCertificateData = {
+              grade: endpoint.grade || "Unknown",
+              issuerSubject: cert ? cert.issuerSubject : "Unknown",
+              validUntil: cert ? new Date(cert.notAfter).toISOString().split('T')[0] : "Unknown",
+              hstsPolicy: endpoint.details?.hstsPolicy?.status || "Unknown",
+              hasWarnings: endpoint.hasWarnings || false
+           };
+        } else {
+           sslCertificateData = { status: sslData.status || "IN_PROGRESS_OR_DNS" };
+        }
+      }
+    } catch (e) {
+      console.warn("SSL Labs fetch failed:", e);
     }
 
     // Parse HTML with cheerio to extract relevant content and reduce tokens
@@ -169,7 +234,15 @@ export async function POST(req: Request) {
     
     // Check for exposed emails (basic data leakage check)
     const emailRegex = /[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g;
-    const emailsFound = [...new Set(html.match(emailRegex) || [])];
+    const cleanHtmlForEmails = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+    const rawEmailsFound = [...new Set(cleanHtmlForEmails.match(emailRegex) || [])];
+    const excludedDomains = ['sentry.io', 'example.com', 'schema.org'];
+    const emailsFound = rawEmailsFound.filter(email => {
+      const domain = email.split('@')[1];
+      return domain && !excludedDomains.includes(domain.toLowerCase());
+    });
     const mailtoLinks = $('a[href^="mailto:"]').length;
     
     const viewport = $('meta[name="viewport"]').attr('content') || 'Not found';
@@ -291,8 +364,31 @@ export async function POST(req: Request) {
     const ogImage = $('meta[property="og:image"]').attr('content') || '';
     const ogDescription = $('meta[property="og:description"]').attr('content') || '';
     
-    // Existing Schema Detection
-    const existingJsonLdCount = $('script[type="application/ld+json"]').length;
+    // Existing Schema Detection & Validation
+    const schemaValidation: any[] = [];
+    $('script[type="application/ld+json"]').each((i, el) => {
+      try {
+        const content = $(el).html() || '';
+        const parsed = JSON.parse(content);
+        const schemas = Array.isArray(parsed) ? parsed : [parsed];
+        
+        for (const schema of schemas) {
+           if (schema && typeof schema === 'object') {
+              const type = schema['@type'];
+              schemaValidation.push({
+                 validJson: true,
+                 type: type || 'Unknown',
+                 hasName: !!schema.name,
+                 hasDescription: !!schema.description,
+                 hasUrl: !!schema.url
+              });
+           }
+        }
+      } catch (e) {
+        schemaValidation.push({ validJson: false, error: 'Invalid JSON format' });
+      }
+    });
+    const existingJsonLdCount = schemaValidation.length;
 
     // --- CRAWLER LOGIC START ---
     const internalLinks: string[] = [];
@@ -316,7 +412,7 @@ export async function POST(req: Request) {
     });
 
     // Prioritize links (avoid typical "boring" pages if many exist, but for now just take top 10)
-    const subpagesToScan = internalLinks.slice(0, 10);
+    const subpagesToScan = internalLinks.slice(0, subpageLimit);
     
     // Minimal scan for subpages to avoid massive token bloat and timeouts
     const scanSubpage = async (subUrl: string) => {
@@ -325,11 +421,14 @@ export async function POST(req: Request) {
           headers: htmlRequestConfig.headers,
           signal: AbortSignal.timeout(5000) // 5s timeout per subpage
         });
-        if (!subRes.ok) return null;
+        if (!subRes.ok) {
+           return { error: true, url: subUrl, status: subRes.status };
+        }
         const subHtml = await subRes.text();
         const $s = cheerio.load(subHtml);
         
         return {
+          error: false,
           url: subUrl,
           title: $s('title').text().trim(),
           metaDescription: $s('meta[name="description"]').attr('content') || '',
@@ -337,13 +436,20 @@ export async function POST(req: Request) {
           imagesWithoutAlt: $s('img:not([alt]), img[alt=""]').length,
           status: subRes.status
         };
-      } catch (e) {
-        return null;
+      } catch (e: any) {
+        return { error: true, url: subUrl, status: e.name === 'TimeoutError' ? 'Timeout' : 'Error' };
       }
     };
 
-    const subpageResults = await Promise.all(subpagesToScan.map(url => scanSubpage(url)));
-    const successfulSubpages = subpageResults.filter(r => r !== null);
+    let successfulSubpages: any[] = [];
+    let brokenLinks: any[] = [];
+    if (subpagesToScan.length > 0) {
+      const subpageResults = await Promise.all(subpagesToScan.map(url => scanSubpage(url)));
+      successfulSubpages = subpageResults.filter(r => !r.error).map((r: any) => {
+         const { error, ...data } = r; return data;
+      });
+      brokenLinks = subpageResults.filter(r => r.error).map((r: any) => ({ url: r.url, status: r.status }));
+    }
     // --- CRAWLER LOGIC END ---
 
     // Remove heavy tags for body text extraction
@@ -365,7 +471,7 @@ export async function POST(req: Request) {
     const duplicateH2s = new Set(h2s).size !== h2s.length;
     const identicalHeadings = h1s.some(h => h2s.includes(h));
 
-    // Basic Readability Analysis (Flesch Reading Ease Heuristic)
+    // Basic Readability Analysis (Wiener Sachtextformel)
     const words = bodyText.split(/\s+/).filter(w => w.length > 0);
     const sentences = bodyText.split(/[.!?]+/).filter(s => s.trim().length > 0);
     
@@ -381,10 +487,12 @@ export async function POST(req: Request) {
     const totalSentences = sentences.length || 1;
     const totalSyllables = words.reduce((acc, w) => acc + countSyllables(w), 0);
 
-    // Flesch Reading Ease Formula: 206.835 - 1.015 * (totalWords / totalSentences) - 84.6 * (totalSyllables / totalWords)
     const avgSentenceLength = totalWords / totalSentences;
     const avgSyllablesPerWord = totalSyllables / (totalWords || 1);
-    const fleschScore = Math.max(0, Math.min(100, Math.round(206.835 - (1.015 * avgSentenceLength) - (84.6 * avgSyllablesPerWord))));
+    
+    // Wiener Sachtextformel: 0.2656 * (Wörter/Sätze) + 0.2744 * (Silben/Wörter * 6) - 1.693
+    const wienerScore = (0.2656 * avgSentenceLength) + (0.2744 * (avgSyllablesPerWord * 6)) - 1.693;
+    const wienerSachtextIndex = Math.round(wienerScore * 10) / 10;
     
     // Detailed Link Analysis
     let internalLinksCount = internalLinks.length;
@@ -432,6 +540,34 @@ export async function POST(req: Request) {
       headers[key] = value;
     });
 
+    let finalBodyText = bodyText;
+    let jinaRenderedContent = null;
+    
+    if (finalBodyText.length < 500) {
+       try {
+          const jinaRes = await jinaPromise;
+          if (jinaRes && jinaRes.ok) {
+             const jinaText = await jinaRes.text();
+             if (jinaText && jinaText.length > 500) {
+                 jinaRenderedContent = jinaText.slice(0, 15000); // Limit to 15k chars
+             }
+          }
+       } catch(e) {
+          console.warn("Jina Reader fetch failed:", e);
+       }
+    }
+
+    // Tech-Stack Detection Heuristics
+    const techStack: string[] = [];
+    if (html.includes('wp-content') || html.includes('wp-includes')) techStack.push('WordPress');
+    if (html.includes('cdn.shopify.com')) techStack.push('Shopify');
+    if (html.includes('static.wixstatic.com')) techStack.push('Wix');
+    if (html.includes('webflow.com') || html.includes('w-webflow')) techStack.push('Webflow');
+    if (html.includes('__NEXT_DATA__') || html.includes('_next/static')) techStack.push('Next.js');
+    if (html.includes('__NUXT__') || html.includes('data-v-')) techStack.push('Nuxt/Vue');
+    if (html.includes('ng-version') || html.includes('_nghost')) techStack.push('Angular');
+    if (html.includes('elementor')) techStack.push('Elementor');
+
     return NextResponse.json({
       urlObj: urlObj.toString(),
       title,
@@ -478,7 +614,10 @@ export async function POST(req: Request) {
       headers,
       linkSummary,
       bodyText,
-      fleschScore,
+      jinaRenderedContent,
+      wienerSachtextIndex,
+      domainAge: domainAgeStr,
+      sslCertificate: sslCertificateData,
       contentAudit: {
         duplicateH1s,
         duplicateH2s,
@@ -507,10 +646,14 @@ export async function POST(req: Request) {
         ogDescription
       },
       existingSchemaCount: existingJsonLdCount,
+      schemaValidation,
+      psiMetrics,
+      techStack,
       crawlSummary: {
         totalInternalLinks: internalLinks.length,
         scannedSubpagesCount: successfulSubpages.length,
-        scannedSubpages: successfulSubpages
+        scannedSubpages: successfulSubpages,
+        brokenLinks: brokenLinks
       }
     });
 

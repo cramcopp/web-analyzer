@@ -414,6 +414,70 @@ function ReportResultsView({
 }) {
   const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
   
+  const [competitors, setCompetitors] = useState<any[]>([]);
+  const [isCompLoading, setIsCompLoading] = useState(false);
+  const [historicalScores, setHistoricalScores] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch historical scores
+    const fetchHistory = async () => {
+      if (!auth.currentUser || !rawScrapeData?.urlObj) return;
+      try {
+        const q = query(
+          collection(db, 'reports'), 
+          where("userId", "==", auth.currentUser.uid), 
+          where("url", "==", rawScrapeData.urlObj)
+        );
+        const docs = await getDocs(q);
+        const hist = docs.docs.map(d => {
+          const data = d.data();
+          return {
+            date: new Date(data.createdAt || Date.now()).toLocaleDateString(),
+            score: data.score
+          };
+        }).sort((a, b) => {
+           // Parse dates manually for sorting: "DD.MM.YYYY" or standard locale
+           const parseDate = (d: string) => {
+              const parts = d.split('.');
+              if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+              return new Date(d).getTime();
+           };
+           return parseDate(a.date) - parseDate(b.date);
+        });
+        
+        // Deduplicate days to just show the latest scan per day
+        const deduped: Record<string, any> = {};
+        hist.forEach(h => { deduped[h.date] = h; });
+        setHistoricalScores(Object.values(deduped));
+      } catch(e) {}
+    };
+
+    // Fetch competitors
+    const fetchCompetitors = async () => {
+      if (!report.businessIntelligence?.businessNiche || plan === 'free') return;
+      setIsCompLoading(true);
+      try {
+        const domain = rawScrapeData?.urlObj ? new URL(rawScrapeData.urlObj).hostname : "";
+        const res = await fetch('/api/competitors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ niche: report.businessIntelligence.businessNiche, domain })
+        });
+        const data = await res.json();
+        if (data.competitors) {
+          setCompetitors(data.competitors);
+        }
+      } catch(e) {} finally {
+        setIsCompLoading(false);
+      }
+    };
+
+    if (report) {
+      fetchHistory();
+      fetchCompetitors();
+    }
+  }, [report, plan, rawScrapeData]);
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10 relative">
       {/* Sticky Upgrade Banner for Free Users */}
@@ -570,6 +634,40 @@ function ReportResultsView({
               </ul>
             </div>
           </div>
+
+          {plan !== 'free' && (isCompLoading || competitors.length > 0) && (
+            <div className="mt-10 border-t border-white/10 pt-10">
+              <span className="text-[11px] uppercase font-bold mb-[15px] block text-[#888888] tracking-wider">
+                Competitor Benchmarking (Live Scrape)
+              </span>
+              {isCompLoading ? (
+                 <div className="flex items-center gap-3 text-[#D4AF37] text-[12px] font-black uppercase">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analysiere lokale Konkurrenz...
+                 </div>
+              ) : (
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {competitors.map((comp, idx) => (
+                       <div key={idx} className="bg-white/5 border border-white/10 p-4 relative overflow-hidden">
+                          {comp.error ? (
+                             <div className="flex flex-col opacity-50">
+                                <span className="text-[11px] font-bold text-white/50">{comp.url}</span>
+                                <span className="text-[10px] text-red-400 mt-2">{comp.error}</span>
+                             </div>
+                          ) : (
+                             <div className="flex flex-col gap-2">
+                                <a href={comp.url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-bold text-[#D4AF37] hover:underline truncate">{comp.name}</a>
+                                <span className="text-[10px] text-[#AAA] break-all border-b border-white/10 pb-2">{comp.url}</span>
+                                <p className="text-[11px] text-white/80 leading-relaxed line-clamp-3 mt-1 italic">{comp.metaDescription}</p>
+                                <div className="mt-2 text-[10px] uppercase font-black tracking-widest text-[#888]">H1 Tags: <span className="text-white">{comp.h1Count}</span></div>
+                             </div>
+                          )}
+                       </div>
+                    ))}
+                 </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -602,6 +700,18 @@ function ReportResultsView({
               </div>
               <p className="text-[10px] uppercase font-bold text-[#888] tracking-widest">Global Health Index</p>
            </div>
+         {historicalScores.length > 1 && (
+            <div className="mt-8 border-t border-white/10 pt-6 w-full max-w-[200px]">
+               <span className="text-[9px] uppercase font-black text-[#D4AF37] tracking-[2px] block mb-2 text-left">Trend Chart</span>
+               <div className="h-[60px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                     <LineChart data={historicalScores}>
+                       <Line type="monotone" dataKey="score" stroke="#D4AF37" strokeWidth={2} dot={{ r: 2, fill: '#D4AF37' }} isAnimationActive={false} />
+                     </LineChart>
+                  </ResponsiveContainer>
+               </div>
+            </div>
+         )}
         </div>
         <div className="md:w-2/3 p-[40px] flex flex-col justify-center">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-[20px]">
@@ -609,26 +719,49 @@ function ReportResultsView({
               <RefreshCw className="w-5 h-5 text-[#D4AF37]" />
               Executive Summary
             </h2>
-            <button 
-              onClick={plan === 'free' ? () => setActiveView('pricing') : onExportActionPlan}
-              className={`flex items-center justify-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[2px] transition-all self-start shadow-lg ${
-                plan === 'free' 
-                ? 'bg-zinc-800/10 text-zinc-400 border border-zinc-200 cursor-not-allowed line-through' 
-                : 'bg-[#1A1A1A] dark:bg-zinc-800 text-white dark:text-zinc-100 hover:bg-[#D4AF37] hover:text-[#1A1A1A]'
-              }`}
-            >
-              {plan === 'free' ? (
-                <>
-                  <AlertTriangle className="w-4 h-4 text-[#D4AF37]" />
-                  UNLOCK CSV (PRO)
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  EXPORT PLAN (CSV)
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2 self-start pointer-events-auto">
+              <button 
+                onClick={plan === 'free' ? () => setActiveView('pricing') : onExportActionPlan}
+                className={`flex items-center justify-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[2px] transition-all shadow-lg ${
+                  plan === 'free' 
+                  ? 'bg-zinc-800/10 text-zinc-400 border border-zinc-200 cursor-not-allowed line-through' 
+                  : 'bg-[#1A1A1A] dark:bg-zinc-800 text-white dark:text-zinc-100 hover:bg-[#D4AF37] hover:text-[#1A1A1A]'
+                }`}
+              >
+                {plan === 'free' ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-[#D4AF37]" />
+                    UNLOCK CSV (PRO)
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    EXPORT PLAN (CSV)
+                  </>
+                )}
+              </button>
+
+              <button 
+                onClick={plan === 'agency' ? () => window.print() : () => setActiveView('pricing')}
+                className={`flex items-center justify-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[2px] transition-all shadow-lg ${
+                  plan === 'agency' 
+                  ? 'bg-[#D4AF37] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white' 
+                  : 'bg-zinc-800/10 text-zinc-400 border border-zinc-200 cursor-not-allowed line-through'
+                }`}
+              >
+                {plan === 'agency' ? (
+                   <>
+                     <Download className="w-4 h-4 hidden md:block" />
+                     PDF REPORT
+                   </>
+                ) : (
+                   <>
+                     <AlertTriangle className="w-4 h-4 text-[#D4AF37]" />
+                     UNLOCK PDF (AGENCY)
+                   </>
+                )}
+              </button>
+            </div>
           </div>
           <p className="text-[#1A1A1A] dark:text-zinc-300 leading-[1.8] text-[15px] font-medium italic">
             &quot;{report.overallAssessment}&quot;
