@@ -98,12 +98,7 @@ export default function PricingSection() {
 
   return (
     <section className="py-24 px-4 md:px-10 animate-in fade-in slide-in-from-bottom-5 duration-1000 bg-[#F5F5F3] dark:bg-zinc-950 min-h-screen relative">
-      {/* 7-Day Trial Ribbon */}
-      <div className="absolute top-0 left-0 right-0 h-12 bg-[#27AE60] text-white flex items-center justify-center gap-3 z-20">
-        <Zap className="w-4 h-4 animate-pulse" />
-        <span className="text-[11px] font-black uppercase tracking-[3px]">JETZT STARTEN: 7 TAGE KOSTENLOSER VOLLZUGRIFF AUF ALLE FEATURES</span>
-        <Zap className="w-4 h-4 animate-pulse" />
-      </div>
+
 
       <div className="max-w-[1240px] mx-auto">
         <div className="text-center mb-24">
@@ -328,18 +323,38 @@ export default function PricingSection() {
           </div>
         </div>
 
-        {/* FAQ Preview (Short) */}
-        <div className="mt-24 text-center">
-           <h3 className="text-[20px] font-black uppercase tracking-[3px] mb-12">Häufig gestellte Fragen</h3>
-           <div className="max-w-[700px] mx-auto grid grid-cols-1 gap-6 text-left">
-              <div className="p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800">
-                 <h4 className="text-[13px] font-black uppercase mb-2">Kann ich mein Abo jederzeit kündigen?</h4>
-                 <p className="text-[12px] text-[#888]">Ja! Du kannst dein Abonnement mit einem Klick in deinen Profileinstellungen zum Ende des Abrechnungszeitraums kündigen.</p>
-              </div>
-              <div className="p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800">
-                 <h4 className="text-[13px] font-black uppercase mb-2">Wie funktioniert die Testphase?</h4>
-                 <p className="text-[12px] text-[#888]">Du kannst den Premium-Plan für 7 Tage kostenlos testen. Wir bitten dich beim Start eine Zahlungsmethode zu hinterlegen, buchen aber erst nach Ablauf der 7 Tage ab.</p>
-              </div>
+        {/* FAQ Section */}
+        <div className="mt-40 max-w-[850px] mx-auto">
+           <div className="text-center mb-16">
+             <h3 className="text-[28px] md:text-[34px] font-black uppercase tracking-[4px] mb-4 text-[#1A1A1A] dark:text-white">Häufig gestellte Fragen</h3>
+             <p className="text-[14px] text-[#888] font-medium uppercase tracking-widest">Alles, was du über Website Analyzer Pro wissen musst</p>
+           </div>
+           
+           <div className="flex flex-col gap-4">
+              <AccordionItem 
+                question="Kann ich mein Abo jederzeit kündigen?" 
+                answer="Ja, absolut! Du kannst dein Abonnement jederzeit mit nur einem Klick in deinen Profileinstellungen zum Ende des aktuellen Abrechnungszeitraums kündigen. Es gibt keine Mindestlaufzeiten über den gebuchten Zeitraum hinaus."
+              />
+              <AccordionItem 
+                question="Wie funktioniert die 7-tägige Testphase?" 
+                answer="Du kannst den Premium-Plan für 7 Tage völlig kostenlos und ohne Einschränkungen testen. Wir bitten dich beim Start eine Zahlungsmethode zu hinterlegen, buchen aber erst nach Ablauf der 7 Tage ab. Kündigst du vor Ablauf der 7 Tage, zahlst du keinen Cent."
+              />
+              <AccordionItem 
+                question="Welche Zahlungsmethoden werden akzeptiert?" 
+                answer="Wir bieten maximale Flexibilität beim Bezahlen. Über unseren Partner Stripe akzeptieren wir alle gängigen Kreditkarten (Visa, Mastercard, American Express), SEPA-Lastschrift, Google Pay und Apple Pay."
+              />
+              <AccordionItem 
+                question="Sind meine Daten und die meiner Kunden sicher?" 
+                answer="Datenschutz hat bei uns höchste Priorität. Alle Analysen und Nutzerdaten werden auf verschlüsselten Servern in Frankfurt am Main (Deutschland) gespeichert. Wir sind zu 100% DSGVO-konform und geben keine Daten an Dritte weiter."
+              />
+              <AccordionItem 
+                question="Kann ich zwischen den Plänen wechseln?" 
+                answer="Ja, du kannst jederzeit zwischen den Plänen (Basic, Premium, Agency) wechseln. Bei einem Upgrade wird der Differenzbetrag für den laufenden Zeitraum anteilig berechnet, sodass du sofort von den neuen Funktionen profitierst."
+              />
+              <AccordionItem 
+                question="Gibt es einen Rabatt für jährliche Zahlung?" 
+                answer="Ja! Wenn du dich für die jährliche Abrechnung entscheidest, sparst du ca. 20% im Vergleich zur monatlichen Zahlung. Dies ist die beste Option für langfristig orientierte SEO-Strategen und Agenturen."
+              />
            </div>
         </div>
       </div>
@@ -408,6 +423,27 @@ function StickyAboBar({ billingInterval, onCheckout, loadingPlan }: { billingInt
              <ShieldCheck className="w-3 h-3" /> 7 Tage Trial
            </span>
            <span className="text-[10px] text-[#888] font-bold uppercase tracking-tighter italic">Jederzeit kündbar</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AccordionItem({ question, answer }: { question: string, answer: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <div className="border border-[#EEE] dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden transition-all duration-300">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-6 text-left flex items-center justify-between hover:bg-[#F9F9F9] dark:hover:bg-zinc-950/50 transition-colors"
+      >
+        <span className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-white">{question}</span>
+        {isOpen ? <ChevronUp className="w-5 h-5 text-[#D4AF37]" /> : <ChevronDown className="w-5 h-5 text-[#888]" />}
+      </button>
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[500px] border-t border-[#EEE] dark:border-zinc-800' : 'max-h-0'}`}>
+        <div className="p-6 text-[13px] text-[#555] dark:text-zinc-400 font-medium leading-relaxed bg-[#F9F9F9] dark:bg-zinc-950/20">
+          {answer}
         </div>
       </div>
     </div>
