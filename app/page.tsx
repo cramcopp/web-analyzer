@@ -774,6 +774,7 @@ function ProjectDashboardView({
   onConnectGSC: () => void;
   gscError: string | null;
   onExportActionPlan: () => void;
+  setActiveView: (view: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
