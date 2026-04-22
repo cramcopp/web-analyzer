@@ -42,12 +42,18 @@ export async function POST(req: Request) {
 
   try {
     const data = await req.json();
-    const newProject = await addDocument('projects', {
+    const projectData: any = {
       ...data,
       userId: user.uid,
       members: [user.uid],
       createdAt: new Date().toISOString()
-    }, token);
+    };
+    // Don't store empty url — Firestore rule requires url to be a valid string if present
+    if (!projectData.url) delete projectData.url;
+    // Don't store empty teamId
+    if (!projectData.teamId) delete projectData.teamId;
+
+    const newProject = await addDocument('projects', projectData, token);
     return NextResponse.json({ id: newProject.id, success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

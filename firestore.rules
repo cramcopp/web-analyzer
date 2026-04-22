@@ -105,10 +105,10 @@ service cloud.firestore {
     }
 
     function isValidProject(data) {
-      return hasOnlyAllowedFields(['userId', 'teamId', 'name', 'url', 'members', 'cronEnabled', 'createdAt', 'lastReportId', 'lastScore', 'lastScanAt', 'adminSecret']) &&
+      return hasOnlyAllowedFields(['userId', 'teamId', 'name', 'url', 'members', 'cronEnabled', 'createdAt', 'lastReportId', 'lastScore', 'lastScanAt', 'adminSecret', 'updatedAt']) &&
         data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
         data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
-        data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
+        (!('url' in data) || (data.url is string && data.url.size() < 2048)) &&
         (!('cronEnabled' in data) || data.cronEnabled is bool) &&
         (!('lastReportId' in data) || data.lastReportId is string) &&
         (!('lastScore' in data) || data.lastScore is number) &&
