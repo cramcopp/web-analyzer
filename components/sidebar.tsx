@@ -449,14 +449,14 @@ export function Sidebar({
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center">
                      <span className="text-[14px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100 leading-none">
-                       {userData.scanCount || 0} / {userData.maxScans || 5}
+                       {userData?.scanCount || 0} / {userData?.maxScans || 5}
                      </span>
                      <span className="text-[8px] font-bold text-[#888] uppercase tracking-widest">Scans genutzt</span>
                   </div>
                   <div className="w-full h-1 bg-black/5 dark:bg-white/5 overflow-hidden rounded-full">
                     <div 
-                      className={`h-full transition-all duration-1000 rounded-full ${ ((userData.scanCount || 0) / (userData.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
-                      style={{ width: `${Math.min(100, ((userData.scanCount || 0) / (userData.maxScans || 5)) * 100)}%` }}
+                      className={`h-full transition-all duration-1000 rounded-full ${ ((userData?.scanCount || 0) / (userData?.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
+                      style={{ width: `${Math.min(100, ((userData?.scanCount || 0) / (userData?.maxScans || 5)) * 100)}%` }}
                     />
                   </div>
                 </div>

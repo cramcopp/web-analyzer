@@ -80,11 +80,15 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'plan', 'subscriptionId', 'trialUntil', 'internalSecret']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'photoURL', 'plan', 'reports', 'scanCount', 'maxScans', 'subscriptionId', 'trialUntil', 'internalSecret']) &&
         data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
         data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
-        data.role in ['admin', 'user'] &&
+        (!('role' in data) || (data.role in ['admin', 'user'])) &&
         (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+        (!('photoURL' in data) || (data.photoURL is string)) &&
+        (!('plan' in data) || (data.plan in ['free', 'pro', 'agency'])) &&
+        (!('scanCount' in data) || data.scanCount is number) &&
+        (!('maxScans' in data) || data.maxScans is number) &&
         (!('createdAt' in data) || isValidDateString(data.createdAt));
     }
 

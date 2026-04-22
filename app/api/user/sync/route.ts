@@ -17,9 +17,11 @@ export async function POST() {
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
+        role: 'user',
         plan: 'free',
         reports: [],
         scanCount: 0,
+        maxScans: 5,
         createdAt: new Date().toISOString()
       };
       await setDocument('users', user.uid, newUser);
