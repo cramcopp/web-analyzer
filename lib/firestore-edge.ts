@@ -5,8 +5,9 @@
  */
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
+const DATABASE_ID = process.env.FIREBASE_DATABASE_ID || '(default)';
 const API_KEY = process.env.FIREBASE_API_KEY;
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents`;
 
 export interface FirestoreFilter {
   field: string;
@@ -127,7 +128,7 @@ export async function queryDocuments(
   compositeOp: 'AND' | 'OR' = 'AND',
   token?: string
 ) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery?key=${API_KEY}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents:runQuery?key=${API_KEY}`;
   
   const mapOp = (op: string) => {
     switch (op) {
