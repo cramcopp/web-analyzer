@@ -329,7 +329,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
     existingSchemaCount: schemaTypes.length,
     schemaTypes: Array.from(new Set(schemaTypes)),
     securityHeaders,
-    headers: rawHeaders,
+    headers: headers,
     crawlSummary: { totalInternalLinks: internalLinks.length, scannedSubpagesCount: successfulSubpages.length, scannedSubpages: successfulSubpages, brokenLinks }
   };
 }
