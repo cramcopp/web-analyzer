@@ -60,7 +60,7 @@ function ReportResultsView({
         <div>
            <span className="text-[10px] font-black uppercase tracking-[2.5px] text-[#D4AF37] mb-2 block">Audit abgeschlossen</span>
            <h2 className="text-[32px] md:text-[48px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Audit Bericht</h2>
-           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest">{new URL(report.seo.detailedSeo?.linkStructure ? 'https://' : 'https://example.com').hostname} • {new Date().toLocaleDateString('de-DE')}</p>
+           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest">{rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : '—'} • {new Date().toLocaleDateString('de-DE')}</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -120,7 +120,7 @@ function ReportResultsView({
         <CompetitorMap 
           competitors={report.competitorBenchmarking} 
           userScore={(report.seo.score + report.performance.score) / 2} 
-          userName={new URL(report.seo.detailedSeo?.linkStructure ? 'https://' : 'https://example.com').hostname}
+          userName={rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : 'website'}
         />
       </ErrorBoundary>
 
