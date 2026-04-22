@@ -225,12 +225,33 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
   const emptyButtonsLinks = $('button:empty, a:empty').length;
   const canonical = $('link[rel="canonical"]').attr('href') || 'Not found';
 
-  // OpenGraph & Social
-  const ogTitle = $('meta[property="og:title"]').attr('content') || $('meta[name="twitter:title"]').attr('content');
-  const ogDescription = $('meta[property="og:description"]').attr('content') || $('meta[name="twitter:description"]').attr('content');
-  const ogImage = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content');
-  const ogType = $('meta[property="og:type"]').attr('content');
-  const twitterCard = $('meta[name="twitter:card"]').attr('content');
+  // --- Enhanced OpenGraph & Social Extraction ---
+  // Many sites use 'property', some use 'name', some use Twitter-specific tags.
+  const ogTitle = $('meta[property="og:title"]').attr('content') 
+               || $('meta[name="og:title"]').attr('content')
+               || $('meta[name="twitter:title"]').attr('content')
+               || $('title').text().trim(); // Last fallback to standard title
+
+  const ogDescription = $('meta[property="og:description"]').attr('content')
+                     || $('meta[name="og:description"]').attr('content')
+                     || $('meta[name="twitter:description"]').attr('content')
+                     || $('meta[name="description"]').attr('content'); // Fallback to standard meta description
+
+  let ogImage = $('meta[property="og:image"]').attr('content')
+             || $('meta[name="og:image"]').attr('content')
+             || $('meta[name="twitter:image"]').attr('content')
+             || $('meta[name="twitter:image:src"]').attr('content')
+             || $('link[rel="image_src"]').attr('href');
+
+  // Ensure ogImage is absolute if found
+  if (ogImage && !ogImage.startsWith('http')) {
+    try {
+      ogImage = new URL(ogImage, urlObj.toString()).toString();
+    } catch (e) {}
+  }
+
+  const ogType = $('meta[property="og:type"]').attr('content') || 'website';
+  const twitterCard = $('meta[name="twitter:card"]').attr('content') || 'summary';
 
   // Subpage Scanning
   const subpagesToScan = internalLinks.slice(0, subpageLimit);
