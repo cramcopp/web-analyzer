@@ -169,10 +169,10 @@ export default function WebsiteAnalyzer() {
         });
 
         if (selectedProject && selectedProject.url === targetUrl) {
-          await fetch(`/api/projects`, {
+          await fetch(`/api/projects/${selectedProject.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: selectedProject.id, lastScore: avgScore, lastScanAt: new Date().toISOString() })
+            body: JSON.stringify({ lastScore: avgScore, lastScanAt: new Date().toISOString() })
           });
         }
       }

@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 export const runtime = 'edge';
+
+function parseCookies(cookieHeader: string | null): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+  for (const part of cookieHeader.split(';')) {
+    const [key, ...val] = part.trim().split('=');
+    if (key) cookies[key.trim()] = decodeURIComponent(val.join('='));
+  }
+  return cookies;
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -11,15 +20,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'URL is required' }, { status: 400 });
   }
 
-  const cookieStore = await cookies();
-  const tokensCookie = cookieStore.get('gsc_tokens');
+  const cookies = parseCookies(req.headers.get('cookie'));
+  const tokensCookieRaw = cookies['gsc_tokens'];
 
-  if (!tokensCookie) {
+  if (!tokensCookieRaw) {
     return NextResponse.json({ error: 'User not authenticated with Google' }, { status: 401 });
   }
 
   try {
-    const tokens = JSON.parse(tokensCookie.value);
+    const tokens = JSON.parse(tokensCookieRaw);
     const accessToken = tokens.access_token;
 
     if (!accessToken) {

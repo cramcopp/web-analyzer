@@ -90,7 +90,7 @@ function ReportResultsView({
           <ScoreCard title="Accessibility" score={report.accessibility.score} desc="A11y & Structure" icon={<UserCheck className="w-3 h-3" />} />
           <ScoreCard title="Compliance" score={report.compliance.score} desc="GDPR & Legal" icon={<Scale className="w-3 h-3" />} />
         </div>
-        <div className="bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 p-8 h-[400px] flex flex-col items-center justify-center relative overflow-hidden group">
+        <div className="bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 p-8 h-[400px] flex flex-col items-center justify-center relative overflow-hidden group" style={{ minHeight: 200 }}>
            <div className="absolute top-4 left-6">
               <span className="text-[10px] font-black uppercase tracking-[2px] text-[#888]">Audit Radar</span>
            </div>
