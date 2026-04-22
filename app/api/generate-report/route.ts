@@ -143,10 +143,10 @@ export async function POST(req: Request) {
       ${scrapeData.jinaRenderedContent || 'Not used'}
       `;
 
-    // Model fallback chain: start with best available, fall back on 429
+    // Model fallback chain — stable models only (googleSearch is incompatible with responseSchema/JSON mode)
     const modelChain = (plan === 'pro' || plan === 'agency')
-      ? ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-flash"]
-      : ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+      ? ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-latest"]
+      : ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
 
     let aiResponse: any = null;
     let lastModelError: any = null;
@@ -160,9 +160,8 @@ export async function POST(req: Request) {
           aiResponse = await ai.models.generateContent({
             model: modelId,
             contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
+            config: {
+              responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -487,8 +486,8 @@ export async function POST(req: Request) {
             }
           },
           required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance"]
-        }
-      }
+              }
+            }
           });
           success = true;
           break; // success — exit retry loop
