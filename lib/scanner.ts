@@ -303,17 +303,6 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
     } catch (e) {}
   });
 
-  // --- Enhanced Header Analysis ---
-  const rawHeaders = Object.fromEntries(response.headers.entries());
-  const securityHeaders = {
-    csp: rawHeaders['content-security-policy'] ? 'YES' : 'MISSING',
-    hsts: rawHeaders['strict-transport-security'] ? 'YES' : 'MISSING',
-    xFrame: rawHeaders['x-frame-options'] || 'MISSING',
-    xContentType: rawHeaders['x-content-type-options'] || 'MISSING',
-    referrerPolicy: rawHeaders['referrer-policy'] || 'MISSING',
-    permissionsPolicy: rawHeaders['permissions-policy'] || 'MISSING'
-  };
-
   // Final structure
   return {
     urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, generator, viewport,
