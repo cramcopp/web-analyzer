@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { performAnalysis } from '@/lib/scanner';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument } from '@/lib/firestore-edge';
+import { getDocument, queryDocuments } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 

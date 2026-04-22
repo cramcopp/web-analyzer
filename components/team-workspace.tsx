@@ -431,3 +431,5 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
     </div>
   );
 }
+
+export default TeamWorkspace;
