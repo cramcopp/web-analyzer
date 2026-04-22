@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { db } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { getDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
@@ -11,15 +10,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const docRef = doc(db, 'reports', id);
-    const docSnap = await getDoc(docRef);
+    const report = await getDocument('reports', id);
 
-    if (!docSnap.exists()) {
+    if (!report) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const report = docSnap.data();
-    
     // Ownership check (if userId exists)
     if (report.userId && report.userId !== user.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { db } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { getDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
@@ -12,13 +11,12 @@ export async function GET() {
   }
 
   try {
-    const docRef = doc(db, 'users', user.uid);
-    const docSnap = await getDoc(docRef);
+    const userData = await getDocument('users', user.uid);
     
     return NextResponse.json({
       authenticated: true,
       user: user,
-      userData: docSnap.exists() ? docSnap.data() : null
+      userData: userData
     });
   } catch (error: any) {
     console.error('Fetch Me Error:', error);

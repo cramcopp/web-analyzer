@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { db } from '@/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getDocument, setDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
@@ -10,10 +9,9 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const docRef = doc(db, 'users', user.uid);
-    const docSnap = await getDoc(docRef);
+    const existingUserData = await getDocument('users', user.uid);
 
-    if (!docSnap.exists()) {
+    if (!existingUserData) {
       const newUser = {
         uid: user.uid,
         email: user.email,
@@ -24,12 +22,13 @@ export async function POST() {
         scanCount: 0,
         createdAt: new Date().toISOString()
       };
-      await setDoc(docRef, newUser);
+      await setDocument('users', user.uid, newUser);
       return NextResponse.json({ success: true, user: newUser });
     }
 
-    return NextResponse.json({ success: true, user: docSnap.data() });
+    return NextResponse.json({ success: true, user: existingUserData });
   } catch (error: any) {
+    console.error('Sync error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

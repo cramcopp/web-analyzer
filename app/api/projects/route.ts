@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { db } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, doc, getDoc, or } from 'firebase/firestore';
+import { queryDocuments, addDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
@@ -10,14 +9,15 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const q = query(
-      collection(db, 'projects'),
-      or(where('userId', '==', user.uid), where('members', 'array-contains', user.uid))
-    );
-    const snap = await getDocs(q);
-    const projects = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // We want projects where user is owner OR a member
+    const projects = await queryDocuments('projects', [
+      { field: 'userId', op: 'EQUAL', value: user.uid },
+      { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
+    ], 'OR');
+    
     return NextResponse.json(projects);
   } catch (error: any) {
+    console.error('Projects Fetch Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -28,13 +28,13 @@ export async function POST(req: Request) {
 
   try {
     const data = await req.json();
-    const docRef = await addDoc(collection(db, 'projects'), {
+    const newProject = await addDocument('projects', {
       ...data,
       userId: user.uid,
       members: [user.uid],
       createdAt: new Date().toISOString()
     });
-    return NextResponse.json({ id: docRef.id, success: true });
+    return NextResponse.json({ id: newProject.id, success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
