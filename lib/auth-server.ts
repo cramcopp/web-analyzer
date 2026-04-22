@@ -86,3 +86,43 @@ export async function deleteUserAccount() {
   return true;
 }
 
+
+export async function signInWithEmailRest(email: string, password: string) {
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password,
+      returnSecureToken: true
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    throw new Error(err.error?.message || 'Login failed');
+  }
+
+  return await resp.json();
+}
+
+export async function signUpWithEmailRest(email: string, password: string) {
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${process.env.FIREBASE_API_KEY}`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password,
+      returnSecureToken: true
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    throw new Error(err.error?.message || 'Signup failed');
+  }
+
+  return await resp.json();
+}

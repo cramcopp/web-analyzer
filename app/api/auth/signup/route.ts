@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { auth } from '@/firebase';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { signUpWithEmailRest, updateUserProfile } from '@/lib/auth-server';
 
 export const runtime = 'edge';
 
@@ -13,15 +12,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email und Passwort erforderlich' }, { status: 400 });
     }
 
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
-    if (displayName) {
-      await updateProfile(userCredential.user, { displayName });
-    }
-    
-    const idToken = await userCredential.user.getIdToken();
+    const authData = await signUpWithEmailRest(email, password);
+    const idToken = authData.idToken;
 
-    // Set a secure, httpOnly cookie for the session
+    // Set a secure, httpOnly cookie for the session so updateUserProfile can use it
     const cookieStore = await cookies();
     cookieStore.set('wap_session', idToken, {
       httpOnly: true,
@@ -31,12 +25,20 @@ export async function POST(req: Request) {
       path: '/'
     });
 
+    if (displayName) {
+      try {
+        await updateUserProfile({ displayName });
+      } catch (updateErr) {
+        console.error('Failed to update displayName after signup:', updateErr);
+      }
+    }
+
     return NextResponse.json({ 
       success: true,
       user: {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: displayName || userCredential.user.displayName,
+        uid: authData.localId,
+        email: authData.email,
+        displayName: displayName || authData.displayName,
       }
     });
 

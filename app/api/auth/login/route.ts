@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { auth } from '@/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailRest } from '@/lib/auth-server';
 
 export const runtime = 'edge';
 
@@ -13,8 +12,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email und Passwort erforderlich' }, { status: 400 });
     }
 
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const idToken = await userCredential.user.getIdToken();
+    const authData = await signInWithEmailRest(email, password);
+    const idToken = authData.idToken;
 
     // Set a secure, httpOnly cookie for the session
     const cookieStore = await cookies();
@@ -29,19 +28,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       success: true,
       user: {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-        photoURL: userCredential.user.photoURL
+        uid: authData.localId,
+        email: authData.email,
+        displayName: authData.displayName,
+        photoURL: authData.profilePicture
       }
     });
 
   } catch (error: any) {
     console.error('Login Error:', error);
     let message = 'Anmeldung fehlgeschlagen';
-    if (error.code === 'auth/invalid-credential') message = 'Ungültige E-Mail oder Passwort';
-    if (error.code === 'auth/user-not-found') message = 'Nutzer nicht gefunden';
+    const errorCode = error.message; // REST API returns error message in text usually
+
+    if (errorCode === 'INVALID_LOGIN_CREDENTIALS' || errorCode === 'INVALID_PASSWORD') {
+      message = 'Ungültige E-Mail oder Passwort';
+    } else if (errorCode === 'EMAIL_NOT_FOUND') {
+      message = 'Nutzer nicht gefunden';
+    }
     
-    return NextResponse.json({ error: message, code: error.code }, { status: 401 });
+    return NextResponse.json({ error: message, code: errorCode }, { status: 401 });
   }
 }
