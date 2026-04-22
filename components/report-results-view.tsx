@@ -15,6 +15,7 @@ import {
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import { ReportData } from '../types/report';
+import ErrorBoundary from './error-boundary';
 
 // Dynamic Imports for Performance Optimization
 const SeoDeepDiveModule = dynamic(() => import('./seo-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
