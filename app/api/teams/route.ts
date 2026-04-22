@@ -27,7 +27,7 @@ export async function GET() {
 
     return NextResponse.json({
       team,
-      members: members.map(m => ({
+      members: members.map((m: any) => ({
         uid: m.uid,
         email: m.email,
         displayName: m.displayName
