@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { queryDocuments, addDocument } from '@/lib/firestore-edge';
+import { queryDocuments, addDocument, getDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
@@ -20,19 +20,21 @@ export async function GET() {
 
     const team = teams[0];
     
-    // Fetch member details
-    const members = await queryDocuments('users', [
-      { field: 'uid', op: 'IN', value: team.members }
-    ], 'AND', token);
+    // Fetch member details individually (avoids IN query limitations)
+    const memberUids: string[] = team.members || [];
+    const memberDocs = await Promise.all(
+      memberUids.map((uid: string) => getDocument('users', uid, token))
+    );
 
-    return NextResponse.json({
-      team,
-      members: members.map((m: any) => ({
+    const members = memberDocs
+      .filter(Boolean)
+      .map((m: any) => ({
         uid: m.uid,
         email: m.email,
         displayName: m.displayName
-      }))
-    });
+      }));
+
+    return NextResponse.json({ team, members });
   } catch (error: any) {
     console.error('Teams Fetch Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

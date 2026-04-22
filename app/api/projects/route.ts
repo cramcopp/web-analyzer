@@ -10,12 +10,24 @@ export async function GET() {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    // We want projects where user is owner OR a member
-    const projects = await queryDocuments('projects', [
-      { field: 'userId', op: 'EQUAL', value: user.uid },
-      { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-    ], 'OR', token);
-    
+    // Firestore REST API does not support OR composite filters.
+    // Run two separate queries and merge, deduplicating by ID.
+    const [ownedProjects, memberProjects] = await Promise.all([
+      queryDocuments('projects', [
+        { field: 'userId', op: 'EQUAL', value: user.uid }
+      ], 'AND', token),
+      queryDocuments('projects', [
+        { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
+      ], 'AND', token),
+    ]);
+
+    const seen = new Set<string>();
+    const projects = [...ownedProjects, ...memberProjects].filter(p => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+
     return NextResponse.json(projects);
   } catch (error: any) {
     console.error('Projects Fetch Error:', error);
