@@ -48,14 +48,17 @@ export async function POST(req: Request) {
       members: [user.uid],
       createdAt: new Date().toISOString()
     };
-    // Don't store empty url — Firestore rule requires url to be a valid string if present
     if (!projectData.url) delete projectData.url;
-    // Don't store empty teamId
     if (!projectData.teamId) delete projectData.teamId;
 
     const newProject = await addDocument('projects', projectData, token);
     return NextResponse.json({ id: newProject.id, success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Log full error for Cloudflare dashboard visibility
+    console.error('[POST /api/projects] Firestore error:', JSON.stringify({
+      message: error.message,
+      stack: error.stack,
+    }));
+    return NextResponse.json({ error: error.message, detail: error.stack }, { status: 500 });
   }
 }

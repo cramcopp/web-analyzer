@@ -143,7 +143,10 @@ export const Sidebar = memo(function Sidebar({
         })
       });
       
-      if (!resp.ok) throw new Error("Failed to create project");
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.error || "Failed to create project");
+      }
 
       setNewProjectName("");
       setNewProjectUrl("");
