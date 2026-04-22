@@ -120,7 +120,7 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
              </div>
            )}
 
-           <div className="space-y-4">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
                  <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">General Performance Assessment</span>
                   <p className="text-[13px] leading-[1.6] text-[#1A1A1A] dark:text-zinc-100 font-medium">{detailedPerformance.coreVitalsAssessment}</p>
