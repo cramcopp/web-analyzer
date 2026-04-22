@@ -155,7 +155,8 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow read: if (isAuthenticated() && (
-        isOwner(resource.data.userId) || 
+        isOwner(resource.data.userId) ||
+        request.auth.uid in resource.data.members ||
         (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
       )) || resource.data.cronEnabled == true;
       allow create: if (isAuthenticated() && isValidProject(request.resource.data) && (

@@ -10,15 +10,14 @@ export async function GET() {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    // Firestore REST API does not support OR composite filters.
-    // Run two separate queries and merge, deduplicating by ID.
+    // Run both queries independently — if members query fails security rules, owned projects still show
     const [ownedProjects, memberProjects] = await Promise.all([
       queryDocuments('projects', [
         { field: 'userId', op: 'EQUAL', value: user.uid }
-      ], 'AND', token),
+      ], 'AND', token).catch(() => [] as any[]),
       queryDocuments('projects', [
         { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-      ], 'AND', token),
+      ], 'AND', token).catch(() => [] as any[]),
     ]);
 
     const seen = new Set<string>();
