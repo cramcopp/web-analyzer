@@ -8,6 +8,12 @@ const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
 const API_KEY = process.env.FIREBASE_API_KEY;
 const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
+export interface FirestoreFilter {
+  field: string;
+  op: 'EQUAL' | 'GREATER_THAN' | 'LESS_THAN' | 'ARRAY_CONTAINS' | 'IN';
+  value: any;
+}
+
 function valueToFirestore(value: any): any {
   if (value === null) return { nullValue: null };
   if (typeof value === 'boolean') return { booleanValue: value };
