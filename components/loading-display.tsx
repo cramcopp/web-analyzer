@@ -16,8 +16,15 @@ function FloatingScannerProgress({ progress }: { progress: number }) {
 function LoadingDisplay({ plan = 'free' }: { plan?: string }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
 
   const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
+
+  const diagnosticTerms = [
+    "FETCHING_HEADERS_SSL", "DEEP_CRAWL_IN_PROGRESS", "CSS_PARSING_METRICS", "DOM_DEPTH_CALCULATION", 
+    "SCHEMA_LD_JSON_AUDIT", "WAP_INTEL_ORCHESTRATION", "SECURITY_HEADER_CHECK", "SSL_CERT_VALIDATION",
+    "GSC_DATA_AGGREGATION", "PSI_API_LATENCY_CHECK", "RESPONSIVE_VIEWPORT_AUDIT", "OG_SOCIAL_META_SCRAPE"
+  ];
 
   const steps = [
     `Initialisiere ${modelName} Intelligence...`,
