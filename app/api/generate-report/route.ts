@@ -178,6 +178,25 @@ export async function POST(req: Request) {
               },
               description: "Daten von 2-3 direkten Wettbewerbern für den Vergleichschart."
             },
+            businessIntelligence: {
+              type: Type.OBJECT,
+              description: "Business Intelligence und Nischen-Analyse der Webseite.",
+              properties: {
+                businessNiche: { type: Type.STRING, description: "Die exakt erkannte Nische/Branche der Webseite, z.B. 'Döner-Imbiss' oder 'B2B Software'." },
+                keywordGapAnalysis: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "High-Intent Keywords, die für die Nische kritisch wichtig sind, aber im Content fehlen."
+                },
+                targetAudienceProfile: { type: Type.STRING, description: "Kurzbeschreibung der Zielgruppe und deren Suchintention." },
+                uniqueSellingPropositions: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "Erkannte oder empfohlene USPs der Webseite."
+                }
+              },
+              required: ["businessNiche", "keywordGapAnalysis", "targetAudienceProfile", "uniqueSellingPropositions"]
+            },
             implementationPlan: {
               type: Type.OBJECT,
               properties: {
@@ -458,7 +477,7 @@ export async function POST(req: Request) {
               required: ["score", "insights", "recommendations", "detailedCompliance"]
             }
           },
-          required: ["businessIntelligence", "overallAssessment", "industryNews", "seo", "security", "performance", "accessibility", "compliance"]
+          required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance"]
         }
       }
     });
