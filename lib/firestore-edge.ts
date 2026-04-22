@@ -209,3 +209,7 @@ export async function deleteDocument(collection: string, id: string) {
   }
   return true;
 }
+
+export async function updateStripeSubscription(uid: string, data: any) {
+  return updateDocument('users', uid, data);
+}
