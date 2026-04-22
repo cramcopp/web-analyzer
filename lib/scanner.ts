@@ -99,14 +99,14 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
 
   // Optimized O(N) DOM depth calculation
   let maxDomDepth = 0;
-  function calculateDepth(element: cheerio.Element, currentDepth: number) {
+  function calculateDepth(element: any, currentDepth: number) {
     if (currentDepth > maxDomDepth) maxDomDepth = currentDepth;
     const children = $(element).children();
     children.each((_, child) => {
-      calculateDepth(child as cheerio.Element, currentDepth + 1);
+      calculateDepth(child as any, currentDepth + 1);
     });
   }
-  $('html').each((_, el) => calculateDepth(el as cheerio.Element, 1));
+  $('html').each((_, el) => calculateDepth(el as any, 1));
 
   // Unified Link Extraction
   const internalLinks: string[] = [];
