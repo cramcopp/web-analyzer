@@ -144,9 +144,10 @@ export async function POST(req: Request) {
       `;
 
     // Model fallback chain — confirmed stable models as of 2026-04-22 (ai.google.dev/gemini-api/docs/models)
-    // 2.5-flash: best price/performance | 2.5-flash-lite: fastest & cheapest | 2.5-pro: most capable
+    // 2.5-flash has the most generous free-tier limits — always use it first.
+    // 2.5-pro has strict free-tier limits so it's only used as a last resort.
     const modelChain = (plan === 'pro' || plan === 'agency')
-      ? ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+      ? ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"]
       : ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"];
 
     let aiResponse: any = null;
