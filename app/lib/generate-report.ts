@@ -29,6 +29,10 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const is429 = response.status === 429;
+        if (is429) {
+          throw new Error('QUOTA_EXCEEDED:' + (errorData.error || 'Quota überschritten.'));
+        }
         throw new Error(errorData.error || `API antwortete mit Status: ${response.status}`);
       }
 
@@ -36,11 +40,13 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
       return report;
     } catch (error: any) {
       lastError = error;
+      const is429 = error.message?.startsWith('QUOTA_EXCEEDED:');
       console.warn(`[GenerateReport] Versuch ${attempt + 1} fehlgeschlagen:`, error.message);
-      
+
       if (attempt < retries) {
-        // Warte vor dem Retry (z.B. 1500ms, 3000ms...)
-        await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)));
+        // Längere Wartezeit bei Quota-Fehlern (429), kurze bei anderen
+        const waitMs = is429 ? 8000 * (attempt + 1) : 1500 * (attempt + 1);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
       }
     }
   }

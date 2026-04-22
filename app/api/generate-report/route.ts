@@ -143,14 +143,23 @@ export async function POST(req: Request) {
       ${scrapeData.jinaRenderedContent || 'Not used'}
       `;
 
-    // Select model based on plan
-    const modelId = (plan === 'pro' || plan === 'agency')
-      ? "gemini-3-flash-preview"
-      : "gemini-3.1-flash-lite-preview";
+    // Model fallback chain: start with best available, fall back on 429
+    const modelChain = (plan === 'pro' || plan === 'agency')
+      ? ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-flash"]
+      : ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
 
-    const aiResponse = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
+    let aiResponse: any = null;
+    let lastModelError: any = null;
+
+    for (let modelIdx = 0; modelIdx < modelChain.length; modelIdx++) {
+      const modelId = modelChain[modelIdx];
+      let success = false;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          aiResponse = await ai.models.generateContent({
+            model: modelId,
+            contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -480,7 +489,34 @@ export async function POST(req: Request) {
           required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance"]
         }
       }
-    });
+          });
+          success = true;
+          break; // success — exit retry loop
+        } catch (err: any) {
+          lastModelError = err;
+          const is429 = err?.message?.includes('429') || err?.status === 429 || err?.message?.includes('RESOURCE_EXHAUSTED');
+          console.warn(`[GenerateReport] Model ${modelId} attempt ${attempt + 1} failed:`, err?.message);
+
+          if (is429 && attempt === 0) {
+            // Wait before retrying same model
+            await new Promise(resolve => setTimeout(resolve, 2000 * (modelIdx + 1)));
+          } else {
+            break; // non-429 error or final attempt — try next model
+          }
+        }
+      }
+
+      if (success) break; // exit model loop
+      console.warn(`[GenerateReport] Falling back from ${modelId} to next model...`);
+    }
+
+    if (!aiResponse) {
+      console.error("All models exhausted:", lastModelError);
+      return NextResponse.json(
+        { error: lastModelError?.message || 'Alle Gemini-Modelle sind momentan nicht verfügbar (Quota). Bitte versuche es in 1 Minute erneut.' },
+        { status: 429 }
+      );
+    }
 
     if (!aiResponse.text) {
       throw new Error("No text returned from Gemini");
@@ -491,6 +527,10 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("AI Generation Error:", error);
-    return NextResponse.json({ error: error.message || 'Server error occurred during AI generation.' }, { status: 500 });
+    const is429 = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
+    return NextResponse.json(
+      { error: error.message || 'Server error occurred during AI generation.' },
+      { status: is429 ? 429 : 500 }
+    );
   }
 }
