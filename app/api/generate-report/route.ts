@@ -143,10 +143,11 @@ export async function POST(req: Request) {
       ${scrapeData.jinaRenderedContent || 'Not used'}
       `;
 
-    // Model fallback chain — stable models only (googleSearch is incompatible with responseSchema/JSON mode)
+    // Model fallback chain — confirmed stable models as of 2026-04-22 (ai.google.dev/gemini-api/docs/models)
+    // 2.5-flash: best price/performance | 2.5-flash-lite: fastest & cheapest | 2.5-pro: most capable
     const modelChain = (plan === 'pro' || plan === 'agency')
-      ? ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-latest"]
-      : ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
+      ? ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+      : ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"];
 
     let aiResponse: any = null;
     let lastModelError: any = null;
