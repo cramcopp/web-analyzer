@@ -1,15 +1,28 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenAI, Type } from '@google/genai';
+import { getSessionUser, getSessionToken } from '@/lib/auth-server';
+import { getDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
-import { GoogleGenAI, Type } from '@google/genai';
 
 export async function POST(req: Request) {
+  const user = await getSessionUser();
+  const token = await getSessionToken();
+
   try {
     const scrapeData = await req.json();
-    const { plan = 'free' } = scrapeData;
 
     if (!scrapeData || !scrapeData.urlObj) {
       return NextResponse.json({ error: 'Missing scrape data' }, { status: 400 });
+    }
+
+    // Verify real plan from Firestore
+    let plan = 'free';
+    if (user && token) {
+      const userData = await getDocument('users', user.uid, token);
+      if (userData?.plan) {
+        plan = userData.plan;
+      }
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -65,88 +78,68 @@ export async function POST(req: Request) {
       WICHTIGE REGEL ZU CODE-VORSCHLÄGEN:
       - Es dürfen absolut KEINE Code-Vorschläge, Code-Beispiele, HTML, CSS, JavaScript oder JSON Snippets in den Lösungsansätzen, Empfehlungen oder Actionables enthalten sein.
       - Gib rein strategische und inhaltliche Anweisungen in Fließtext.
-
+      
+      Spezifische Anforderung: Phasen-Plan & Developer Handover
+      - Erstelle am Ende des Berichts einen 3-Phasen-Plan (implementationPlan):
+        - Phase 1: Quick Wins & Kritische Fixes (Sofortige Wirkung).
+        - Phase 2: Strategische Optimierung (Mittelfristig).
+        - Phase 3: Exzellenz & Perfektion (High-End Tweaks).
+      - Generiere zusätzlich einen "developerPrompt": Ein präzises technisches Briefing, das der Nutzer kopieren und einem Entwickler geben kann, um die Umsetzung aller Punkte in diesem Bericht zu starten.
+      - Es darf absolut KEIN Code (HTML/CSS/JS) generiert werden. Nur strategische Anweisungen.
+      
+      Spezifische Anforderung: Business Intelligence & Wettbewerb
+      - Identifiziere zuerst exakt die Nische der Seite.
+      - Nutze Google Search für Wettbewerber-Benchmarking.
+      
       URL: ${scrapeData.urlObj}
+      Detected Tech-Stack: ${scrapeData.techStack?.join(', ') || 'None detected'}
+      Schema.org Types Found: ${JSON.stringify(scrapeData.schemaTypes || [])}
+      Security Headers (Raw): ${JSON.stringify(scrapeData.securityHeaders || {})}
+      
       Title: ${scrapeData.title}
       Meta Description: ${scrapeData.metaDescription}
       Meta Keywords: ${scrapeData.metaKeywords}
       HTML Lang Attribute: ${scrapeData.htmlLang}
       Generator (Software): ${scrapeData.generator}
       Viewport: ${scrapeData.viewport}
-      Viewport Zoom allowed: ${scrapeData.viewportScalable}
       Robots: ${scrapeData.robots}
-      Forms found: ${scrapeData.formsCount} (${(scrapeData.formDetails || []).join(' | ')})
+      Forms found: ${scrapeData.formsCount}
       H1 count: ${scrapeData.h1Count}, H2 count: ${scrapeData.h2Count}
-      Images Total: ${scrapeData.imagesTotal}, Images missing ALT: ${scrapeData.imagesWithoutAlt}, Images Lazy-Loaded: ${scrapeData.lazyImages}
-      ARIA Attributes Count: ${scrapeData.ariaCount}
-      Empty Buttons/Links: ${scrapeData.emptyButtonsLinks}
-      Internal Links: ${scrapeData.internalLinksCount}, External Links: ${scrapeData.externalLinksCount}
+      Images Total: ${scrapeData.imagesTotal}, Images missing ALT: ${scrapeData.imagesWithoutAlt}
       
       Technical SEO signals:
-      - Canonical URL detected: ${scrapeData.technicalSeo?.canonical || 'None'}
-      - robots.txt found: ${scrapeData.technicalSeo?.robotsTxtFound ? 'YES' : 'NO'}
-      - Sitemap mentioned in robots.txt: ${scrapeData.technicalSeo?.sitemapMentionedInRobots ? 'YES' : 'NO'}
-      - Hreflang tags detected: ${JSON.stringify(scrapeData.technicalSeo?.hreflangs || [])}
-      - Semantic DOM Depth: Max ${scrapeData.maxDomDepth} Levels (Über 15 ist kritisch)
-      - Semantic HTML Tags Found: ${JSON.stringify(scrapeData.semanticTags)}
-      - Domain Age (Registration Date): ${scrapeData.domainAge || 'Nicht gefunden'}
+      - Canonical: ${scrapeData.technicalSeo?.canonical || 'None'}
+      - Semantic DOM Depth: Max ${scrapeData.maxDomDepth} Levels
+      - Semantic Tags: ${JSON.stringify(scrapeData.semanticTags)}
+      - Domain Registration: ${scrapeData.domainAge || 'Unknown'}
       
-      Security & Data Leakage:
-      - SSL Certificate Check: ${JSON.stringify(scrapeData.sslCertificate)}
-      - Hardcoded Emails Found: ${scrapeData.dataLeakage?.emailsFoundCount}
-      - Found Email Examples (Risk): ${JSON.stringify(scrapeData.dataLeakage?.sampleEmails)}
-      - Mailto Links: ${scrapeData.dataLeakage?.mailtoLinksCount}
-      - Google Safe Browsing Status:
-      ${scrapeData.safeBrowsingStr || 'Nicht geprüft'}
-
-      Social & Schema Context:
-      - OpenGraph Title: ${scrapeData.social?.ogTitle || 'None'}
-      - OpenGraph Description: ${scrapeData.social?.ogDescription || 'None'}
-      - OpenGraph Image: ${scrapeData.social?.ogImage || 'None'}
-      - OpenGraph Type: ${scrapeData.social?.ogType || 'None'}
-      - Existing JSON-LD Schema Blocks: ${scrapeData.existingSchemaCount}
-      - Schema.org Validation Details: ${JSON.stringify(scrapeData.schemaValidation || [])}
+      Security Audit:
+      - SSL Status: ${JSON.stringify(scrapeData.sslCertificate)}
+      - Data Leakage (Emails): ${scrapeData.dataLeakage?.emailsFoundCount} found
+      - Sample Risks: ${JSON.stringify(scrapeData.dataLeakage?.sampleEmails)}
+      - Google Safe Browsing: ${scrapeData.safeBrowsingStr}
       
-      Scripts (Total / Blocking): ${scrapeData.totalScripts} / ${scrapeData.blockingScripts}
-      Stylesheets: ${scrapeData.totalStylesheets}
-      Server Response Time (TTFB approx): ${scrapeData.responseTimeMs}ms
-      
+      Performance:
       ${scrapeData.psiMetricsStr}
-
-      HTTP Headers: ${JSON.stringify(scrapeData.headers)}
-      Detected Tech-Stack: ${scrapeData.techStack?.join(', ') || 'None detected'}
-      First 80 Links found: ${scrapeData.linkSummary}
+      Server Response: ${scrapeData.responseTimeMs}ms
       
       Legal signals:
-      - Impressum Link detected: ${scrapeData.legal?.impressesumLink ? 'YES' : 'NO'}
-      - Privacy Policy Link detected: ${scrapeData.legal?.privacyLink ? 'YES' : 'NO'}
-      - Terms of Service Link detected: ${scrapeData.legal?.tosLink ? 'YES' : 'NO'}
-      - Cookie Banner logic detected: ${scrapeData.legal?.cookieBannerFound ? 'YES' : 'NO'}
-      - Prominence: Privacy Link in footer? ${scrapeData.legal?.privacyInFooter ? 'YES' : 'NO'}
-      - Tracking Scripts detected: ${JSON.stringify(scrapeData.legal?.trackingScripts)}
-      - CMP (Consent Management Platform) detected: ${JSON.stringify(scrapeData.legal?.cmpDetected)}
-
-    Content Signals:
-      - Wiener Sachtextformel Index (Skala 4-15, niedriger = verständlicher): ${scrapeData.wienerSachtextIndex}
-      - Multiple H1 Headings: ${scrapeData.contentAudit?.duplicateH1s ? 'YES' : 'NO'}
-      - Duplicate H2 Headings: ${scrapeData.contentAudit?.duplicateH2s ? 'YES' : 'NO'}
-      - Identical H1 and H2 text: ${scrapeData.contentAudit?.identicalHeadings ? 'YES' : 'NO'}
-
-      Crawl Summary (Site-Wide Audit):
-      - Total internal links found: ${scrapeData.crawlSummary?.totalInternalLinks}
+      - Tracking Scripts: ${JSON.stringify(scrapeData.legal?.trackingScripts)}
+      - CMP / Consent: ${JSON.stringify(scrapeData.legal?.cmpDetected)}
+      - Legal Links: Impressum(${scrapeData.legal?.impressesumLink ? 'YES' : 'NO'}), Privacy(${scrapeData.legal?.privacyLink ? 'YES' : 'NO'})
+      
+      Content Quality:
+      - Wiener Sachtextformel: ${scrapeData.wienerSachtextIndex}
+      
+      Crawl Summary (Site-Wide):
       - Subpages scanned: ${scrapeData.crawlSummary?.scannedSubpagesCount}
       - Subpage Details: ${JSON.stringify(scrapeData.crawlSummary?.scannedSubpages)}
-      - Broken Links (404/5xx): ${JSON.stringify(scrapeData.crawlSummary?.brokenLinks || [])}
-      
-      Instructions for Site-Wide Audit:
-      1. Analyze the Subpage Details for inconsistencies. Are there pages missing H1s? Are meta descriptions duplicated or missing?
-      2. Identify patterns. Is the title structure consistent?
-      3. Include these findings in the 'seo' and 'overallAssessment' sections.
+      - Broken Links: ${JSON.stringify(scrapeData.crawlSummary?.brokenLinks || [])}
 
       Excerpt of Body Text (max 15000 chars):
       ${scrapeData.bodyText}
       
-      Jina AI Rendered Fallback Content (if native text parsing failed):
+      Jina AI Fallback:
       ${scrapeData.jinaRenderedContent || 'Not used'}
       `;
 
@@ -164,14 +157,57 @@ export async function POST(req: Request) {
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            businessIntelligence: {
+            competitorBenchmarking: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  url: { type: Type.STRING },
+                  estimatedScores: {
+                    type: Type.OBJECT,
+                    properties: {
+                      seo: { type: Type.NUMBER },
+                      security: { type: Type.NUMBER },
+                      performance: { type: Type.NUMBER }
+                    },
+                    required: ["seo", "security", "performance"]
+                  }
+                },
+                required: ["name", "url", "estimatedScores"]
+              },
+              description: "Daten von 2-3 direkten Wettbewerbern für den Vergleichschart."
+            },
+            implementationPlan: {
               type: Type.OBJECT,
               properties: {
-                businessNiche: { type: Type.STRING, description: "Die exakt erkannte Nische/Branche der Webseite (z.B. 'Döner-Imbiss', 'B2B Software', 'Immobilienmakler')." },
-                targetAudience: { type: Type.STRING, description: "Die wahrscheinliche Kern-Zielgruppe der Webseite." },
-                keywordGapAnalysis: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Liste von 3-5 harten High-Intent Keywords, die im Text fehlen, aber in dieser Nische kritisch sind (z.B. 'Döner Husum Öffnungszeiten')." }
+                phase1: { 
+                  type: Type.OBJECT, 
+                  properties: { 
+                    title: { type: Type.STRING, description: "Z.B. 'Quick Wins & Kritische Fixes'" }, 
+                    tasks: { type: Type.ARRAY, items: { type: Type.STRING } } 
+                  },
+                  required: ["title", "tasks"]
+                },
+                phase2: { 
+                  type: Type.OBJECT, 
+                  properties: { 
+                    title: { type: Type.STRING, description: "Z.B. 'Strategische Optimierung'" }, 
+                    tasks: { type: Type.ARRAY, items: { type: Type.STRING } } 
+                  },
+                  required: ["title", "tasks"]
+                },
+                phase3: { 
+                  type: Type.OBJECT, 
+                  properties: { 
+                    title: { type: Type.STRING, description: "Z.B. 'Exzellenz & Perfektion'" }, 
+                    tasks: { type: Type.ARRAY, items: { type: Type.STRING } } 
+                  },
+                  required: ["title", "tasks"]
+                },
+                developerPrompt: { type: Type.STRING, description: "Ein kompakter technischer Prompt/Briefing, den man einem Entwickler geben kann, um die Umsetzung zu starten." }
               },
-              required: ["businessNiche", "targetAudience", "keywordGapAnalysis"]
+              required: ["phase1", "phase2", "phase3", "developerPrompt"]
             },
             overallAssessment: { type: Type.STRING, description: "Kurze Zusammenfassung der Analyse und des Gesamteindrucks." },
             industryNews: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-3 aktuelle News/Insights zur ermittelten Branche." },

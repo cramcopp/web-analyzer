@@ -1,23 +1,33 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth-server';
-import { db } from '@/firebase';
-import { doc, updateDoc, arrayUnion, arrayRemove, query, collection, where, getDocs, limit } from 'firebase/firestore';
+import { getSessionUser, getSessionToken } from '@/lib/auth-server';
+import { getDocument, updateDocument, queryDocuments } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-export async function POST(req: Request) {
+export async function PATCH(req: Request) {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const token = await getSessionToken();
+  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { teamId, memberUid, action } = await req.json();
-    const teamRef = doc(db, 'teams', teamId);
+    const { uid, isAdmin } = await req.json();
     
-    if (action === 'add') {
-      await updateDoc(teamRef, { admins: arrayUnion(memberUid) });
+    // Find team where user is owner (only owners can change admins)
+    const teams = await queryDocuments('teams', [
+      { field: 'ownerId', op: 'EQUAL', value: user.uid }
+    ], 'AND', token);
+    
+    if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found or not owner' }, { status: 403 });
+    const team = teams[0];
+
+    let updatedAdmins = team.admins || [];
+    if (isAdmin) {
+      if (!updatedAdmins.includes(uid)) updatedAdmins.push(uid);
     } else {
-      await updateDoc(teamRef, { admins: arrayRemove(memberUid) });
+      updatedAdmins = updatedAdmins.filter((a: string) => a !== uid);
     }
+    
+    await updateDocument('teams', team.id, { admins: updatedAdmins }, token);
     
     return NextResponse.json({ success: true });
   } catch (error: any) {

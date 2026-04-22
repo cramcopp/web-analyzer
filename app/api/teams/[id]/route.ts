@@ -1,23 +1,22 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth-server';
-import { db } from '@/firebase';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { getSessionUser, getSessionToken } from '@/lib/auth-server';
+import { getDocument, deleteDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const token = await getSessionToken();
+  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const docRef = doc(db, 'teams', id);
-    const docSnap = await getDoc(docRef);
+    const team = await getDocument('teams', id, token);
 
-    if (!docSnap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (docSnap.data().ownerId !== user.uid) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!team) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (team.ownerId !== user.uid) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    await deleteDoc(docRef);
+    await deleteDocument('teams', id, token);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth-server';
-import { queryDocuments, addDocument, updateDocument } from '@/lib/firestore-edge';
+import { getSessionUser, getSessionToken } from '@/lib/auth-server';
+import { queryDocuments, addDocument, updateDocument, getDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
 export async function GET(req: Request) {
   const user = await getSessionUser();
-  if (!user) {
+  const token = await getSessionToken();
+  if (!user || !token) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
       filters.push({ field: 'url', op: 'EQUAL', value: urlFilter });
     }
     
-    const reports = await queryDocuments('reports', filters);
+    const reports = await queryDocuments('reports', filters, 'AND', token);
     return NextResponse.json(reports);
   } catch (error: any) {
     console.error('Fetch Reports Error:', error);
@@ -29,7 +30,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
-  if (!user) {
+  const token = await getSessionToken();
+  if (!user || !token) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
@@ -41,16 +43,20 @@ export async function POST(req: Request) {
       ...reportData,
       userId: user.uid,
       createdAt: new Date().toISOString()
-    });
+    }, token);
     
     // 2. Increment Scan Count on User Profile automatically
-    // Since we don't have atomic increments in REST API easily without field-level operations,
-    // and setDocument/updateDocument here doesn't support 'increment' operator in the same way,
-    // we fetch and update. Or we can just use the update with values if we have them.
-    // Better: use the user fetch we did anyway.
-    
-    // Actually, for incrementing, we might need a fetch-then-set or a different REST endpoint.
-    // But for now, let's keep it simple.
+    try {
+      const userDoc = await getDocument('users', user.uid, token);
+      if (userDoc) {
+        await updateDocument('users', user.uid, {
+          scanCount: (userDoc.scanCount || 0) + 1
+        }, token);
+      }
+    } catch (incError) {
+      console.error('Failed to increment scanCount:', incError);
+      // We don't fail the whole request if just the counter update fails
+    }
     
     return NextResponse.json({ id: newReport.id, success: true });
   } catch (error: any) {

@@ -4,9 +4,13 @@ import { cookies } from 'next/headers';
  * Verifies the session cookie and returns the user information.
  * Uses the Firebase REST API to ensure Edge compatibility.
  */
-export async function getSessionUser() {
+export async function getSessionToken() {
   const cookieStore = await cookies();
-  const token = cookieStore.get('wap_session')?.value;
+  return cookieStore.get('wap_session')?.value;
+}
+
+export async function getSessionUser() {
+  const token = await getSessionToken();
 
   if (!token) return null;
 

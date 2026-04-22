@@ -1,6 +1,46 @@
 @import "tailwindcss";
 @custom-variant dark (&:is(.dark *));
 
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #F5F5F3;
+}
+
+.dark body {
+  background: #09090b;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #D4AF37;
+  border-radius: 10px;
+}
+
 @media print {
   @page {
     size: auto;
@@ -20,21 +60,13 @@
   }
   
   /* Hide unnecessary nav and UI elements */
-  nav, header, aside, .sticky, button, .pointer-events-none, .fixed {
+  nav, header, aside, .sticky, button, .pointer-events-none, .fixed, .print\:hidden {
     display: none !important;
   }
 
-  /* Do not hide exactly the print report elements */
-  #business-intelligence, #summary, .report-section {
+  #summary, #implementation-plan, section, .break-inside-avoid {
     break-inside: avoid;
     page-break-inside: avoid;
     margin-bottom: 2rem !important;
-  }
-  
-  /* Make sure everything within main content is fully visible */
-  .fade-in, .slide-in-from-bottom-4 {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
   }
 }

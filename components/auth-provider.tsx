@@ -12,6 +12,7 @@ interface AuthContextType {
   signUpEmail: (email: string, pass: string, name: string) => Promise<void>;
   logOut: () => Promise<void>;
   updateUser: (data: { displayName?: string; email?: string; password?: string }) => Promise<void>;
+  updateUserData: (data: any) => Promise<void>;
   deleteAccount: () => Promise<void>;
   clearError: () => void;
 }
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   signUpEmail: async (email: string, pass: string, name: string) => {},
   logOut: async () => {},
   updateUser: async (data: { displayName?: string; email?: string; password?: string }) => {},
+  updateUserData: async (data: any) => {},
   deleteAccount: async () => {},
   clearError: () => {}
 });
@@ -166,6 +168,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw e;
     }
   };
+  
+  const updateUserData = async (data: any) => {
+    try {
+      setError(null);
+      const res = await fetch('/api/user/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Update fehlgeschlagen');
+      }
+      await checkSession();
+    } catch (e: any) {
+      setError(e.message);
+      throw e;
+    }
+  };
 
   const deleteAccount = async () => {
     try {
@@ -197,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ 
-      user, userData, loading, error, signIn, signInEmail, signUpEmail, logOut, updateUser, deleteAccount, clearError 
+      user, userData, loading, error, signIn, signInEmail, signUpEmail, logOut, updateUser, updateUserData, deleteAccount, clearError 
     }}>
       {children}
     </AuthContext.Provider>

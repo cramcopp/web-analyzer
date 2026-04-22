@@ -56,8 +56,10 @@ service cloud.firestore {
     }
 
     function isTeamMember(teamId) {
-      let team = get(/databases/$(database)/documents/teams/$(teamId)).data;
-      return isAuthenticated() && (team.ownerId == request.auth.uid || request.auth.uid in team.members);
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == request.auth.uid || 
+        request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members
+      );
     }
 
     function isTeamAdmin(teamData) {
@@ -80,7 +82,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'photoURL', 'plan', 'reports', 'scanCount', 'maxScans', 'subscriptionId', 'trialUntil', 'internalSecret']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'photoURL', 'plan', 'reports', 'scanCount', 'maxScans', 'subscriptionId', 'trialUntil', 'internalSecret', 'lastScanReset', 'brandLogo', 'adminSecret']) &&
         data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
         data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
         (!('role' in data) || (data.role in ['admin', 'user'])) &&
@@ -93,20 +95,24 @@ service cloud.firestore {
     }
 
     function isValidReport(data) {
-      return hasOnlyAllowedFields(['userId', 'url', 'score', 'results', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'url', 'score', 'results', 'rawScrapeData', 'createdAt', 'projectId', 'adminSecret']) &&
         data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
         data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
         (!('score' in data) || data.score is number) &&
+        (!('projectId' in data) || data.projectId is string) &&
         data.results is string && data.results.size() < 500000 && // 500KB cap approx
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
     function isValidProject(data) {
-      return hasOnlyAllowedFields(['userId', 'teamId', 'name', 'url', 'cronEnabled', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'teamId', 'name', 'url', 'members', 'cronEnabled', 'createdAt', 'lastReportId', 'lastScore', 'lastScanAt', 'adminSecret']) &&
         data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
         data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
         data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
         (!('cronEnabled' in data) || data.cronEnabled is bool) &&
+        (!('lastReportId' in data) || data.lastReportId is string) &&
+        (!('lastScore' in data) || data.lastScore is number) &&
+        (!('lastScanAt' in data) || isValidDateString(data.lastScanAt)) &&
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
@@ -122,45 +128,44 @@ service cloud.firestore {
     // ===============================================================
     // Rules
     // ===============================================================
+    
+    function isServerAdmin() {
+      return request.resource.data.adminSecret == "WAP_ST_SEC_647cc70a49dd2222e0fc092c00871902";
+    }
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+      allow create: if (isAuthenticated() && isValidUser(request.resource.data) && (
         (isOwner(userId) && request.resource.data.uid == userId && request.resource.data.role == 'user') || 
         isAdmin()
-      );
+      )) || isServerAdmin();
       allow update: if (isAuthenticated() && isValidUser(request.resource.data) && (
         (isOwner(userId) && request.resource.data.uid == resource.data.uid && request.resource.data.role == resource.data.role) || 
         isAdmin()
-      )) || (
-        request.resource.data.internalSecret == "***REMOVED_INTERNAL_SECRET***" &&
-        request.resource.data.keys().hasOnly(['plan', 'subscriptionId', 'trialUntil', 'internalSecret', 'uid', 'email', 'role', 'createdAt', 'displayName'])
-      );
+      )) || isServerAdmin();
       allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
       allow read: if isAuthenticated() && isOwner(resource.data.userId);
-      allow create: if isAuthenticated() && isValidReport(request.resource.data) && isOwner(request.resource.data.userId);
-      allow update: if isAuthenticated() && isValidReport(request.resource.data) && 
-                    isOwner(resource.data.userId) && isOwner(request.resource.data.userId) &&
-                    request.resource.data.createdAt == resource.data.createdAt;
+      allow create: if (isAuthenticated() && isValidReport(request.resource.data) && isOwner(request.resource.data.userId)) || isServerAdmin();
+      allow update: if (isAuthenticated() && isValidReport(request.resource.data) && isOwner(resource.data.userId)) || isServerAdmin();
       allow delete: if isAuthenticated() && isOwner(resource.data.userId);
     }
 
     match /projects/{projectId} {
-      allow read: if isAuthenticated() && (
+      allow read: if (isAuthenticated() && (
         isOwner(resource.data.userId) || 
         (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
-      );
-      allow create: if isAuthenticated() && isValidProject(request.resource.data) && (
+      )) || resource.data.cronEnabled == true;
+      allow create: if (isAuthenticated() && isValidProject(request.resource.data) && (
         isOwner(request.resource.data.userId) || 
         (request.resource.data.teamId != null && isTeamMember(request.resource.data.teamId) && hasAgencyPlan())
-      );
-      allow update: if isAuthenticated() && isValidProject(request.resource.data) && (
-        isOwner(resource.data.userId) || 
+      )) || isServerAdmin();
+      allow update: if (isAuthenticated() && isValidProject(request.resource.data) && (
+        isOwner(request.resource.data.userId) || 
         (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
-      );
+      )) || isServerAdmin();
       allow delete: if isAuthenticated() && (
         isOwner(resource.data.userId) || 
         (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())

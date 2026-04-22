@@ -47,9 +47,12 @@ function valueFromFirestore(value: any): any {
   return null;
 }
 
-export async function getDocument(collection: string, id: string) {
+export async function getDocument(collection: string, id: string, token?: string) {
   const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
-  const res = await fetch(url);
+  const headers: any = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(url, { headers });
   if (res.status === 404) return null;
   if (!res.ok) {
     const err = await res.json();
@@ -64,16 +67,19 @@ export async function getDocument(collection: string, id: string) {
   return { id, ...result };
 }
 
-export async function setDocument(collection: string, id: string, data: any) {
+export async function setDocument(collection: string, id: string, data: any, token?: string) {
   const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
   const fields: any = {};
   for (const [k, v] of Object.entries(data)) {
     fields[k] = valueToFirestore(v);
   }
   
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(url, {
-    method: 'PATCH', // PATCH with no updateMask will overwrite/create
-    headers: { 'Content-Type': 'application/json' },
+    method: 'PATCH',
+    headers,
     body: JSON.stringify({ fields })
   });
 
@@ -84,16 +90,19 @@ export async function setDocument(collection: string, id: string, data: any) {
   return await res.json();
 }
 
-export async function addDocument(collection: string, data: any) {
+export async function addDocument(collection: string, data: any, token?: string) {
   const url = `${BASE_URL}/${collection}?key=${API_KEY}`;
   const fields: any = {};
   for (const [k, v] of Object.entries(data)) {
     fields[k] = valueToFirestore(v);
   }
 
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ fields })
   });
 
@@ -106,16 +115,11 @@ export async function addDocument(collection: string, data: any) {
   return { id: nameParts[nameParts.length - 1], ...data };
 }
 
-export type FirestoreFilter = { 
-  field: string, 
-  op: 'EQUAL' | 'GREATER_THAN' | 'LESS_THAN' | 'ARRAY_CONTAINS', 
-  value: any 
-};
-
 export async function queryDocuments(
   collection: string, 
   filters: FirestoreFilter[], 
-  compositeOp: 'AND' | 'OR' = 'AND'
+  compositeOp: 'AND' | 'OR' = 'AND',
+  token?: string
 ) {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery?key=${API_KEY}`;
   
@@ -125,6 +129,7 @@ export async function queryDocuments(
       case 'GREATER_THAN': return 'GREATER_THAN';
       case 'LESS_THAN': return 'LESS_THAN';
       case 'ARRAY_CONTAINS': return 'ARRAY_CONTAINS';
+      case 'IN': return 'IN';
       default: return 'EQUAL';
     }
   };
@@ -147,9 +152,12 @@ export async function queryDocuments(
     }
   };
 
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(query)
   });
 
@@ -173,7 +181,7 @@ export async function queryDocuments(
     });
 }
 
-export async function updateDocument(collection: string, id: string, data: any) {
+export async function updateDocument(collection: string, id: string, data: any, token?: string) {
   const fields: any = {};
   const fieldPaths: string[] = [];
   for (const [k, v] of Object.entries(data)) {
@@ -184,9 +192,12 @@ export async function updateDocument(collection: string, id: string, data: any) 
   const mask = fieldPaths.map(p => `updateMask.fieldPaths=${p}`).join('&');
   const url = `${BASE_URL}/${collection}/${id}?${mask}&key=${API_KEY}`;
 
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ fields })
   });
 
@@ -197,10 +208,14 @@ export async function updateDocument(collection: string, id: string, data: any) 
   return await res.json();
 }
 
-export async function deleteDocument(collection: string, id: string) {
+export async function deleteDocument(collection: string, id: string, token?: string) {
   const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
+  const headers: any = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(url, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers
   });
 
   if (!res.ok) {
@@ -211,5 +226,7 @@ export async function deleteDocument(collection: string, id: string) {
 }
 
 export async function updateStripeSubscription(uid: string, data: any) {
+  // Webhooks use internal secret bypass or admin access if possible
+  // For now, we'll assume the webhook has a way or we use a service account later
   return updateDocument('users', uid, data);
 }

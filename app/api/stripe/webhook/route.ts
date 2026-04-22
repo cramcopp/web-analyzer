@@ -34,10 +34,13 @@ export async function POST(req: Request) {
         if (uid && plan) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           
+          const maxScans = plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5;
+          
           await updateStripeSubscription(uid, {
             plan: plan,
             subscriptionId: session.subscription as string,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+            maxScans: maxScans
           });
         }
         break;
@@ -52,6 +55,7 @@ export async function POST(req: Request) {
             plan: 'free',
             subscriptionId: null,
             trialUntil: null,
+            maxScans: 5
           });
         }
         break;
@@ -63,10 +67,12 @@ export async function POST(req: Request) {
         const plan = subscription.metadata.plan;
 
         if (uid && plan) {
+          const maxScans = plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5;
           await updateStripeSubscription(uid, {
             plan: plan,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-            subscriptionId: subscription.id
+            subscriptionId: subscription.id,
+            maxScans: maxScans
           });
         }
         break;

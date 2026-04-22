@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, memo } from "react";
 import { useAuth } from "./auth-provider";
 import {
   LogOut,
@@ -44,7 +44,7 @@ const isValidUrl = (urlString: string) => {
   }
 };
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   onLoadReport,
   onSelectProject,
   onOpenSettings,
@@ -154,8 +154,9 @@ export function Sidebar({
       // Re-fetch projects
       const projRes = await fetch('/api/projects');
       if (projRes.ok) setProjects(await projRes.json());
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to create project", e);
+      setValidationError("Fehler beim Erstellen: " + e.message);
     }
 
   };
