@@ -84,8 +84,11 @@ export async function POST(req: Request) {
         - Phase 1: Quick Wins & Kritische Fixes (Sofortige Wirkung).
         - Phase 2: Strategische Optimierung (Mittelfristig).
         - Phase 3: Exzellenz & Perfektion (High-End Tweaks).
-      - Generiere zusätzlich einen "developerPrompt": Ein präzises technisches Briefing, das der Nutzer kopieren und einem Entwickler geben kann, um die Umsetzung aller Punkte in diesem Bericht zu starten.
-      - Es darf absolut KEIN Code (HTML/CSS/JS) generiert werden. Nur strategische Anweisungen.
+      - Generiere zusätzlich einen ausführlichen "developerPrompt": 
+        - Zeige ALLE identifizierten Probleme auf, nicht nur die kritischen!
+        - Unterteile das Briefing zwingend in 3 klare Gruppen: 1. SEO & Content, 2. Performance & Speed, 3. Security & Compliance.
+        - Das Briefing muss präzise, technisch fundiert und für einen Full-Stack Entwickler direkt umsetzbar sein.
+        - Es darf weiterhin absolut KEIN konkreter Code generiert werden, nur die exakten Anweisungen zur Umsetzung.
       
       Spezifische Anforderung: Business Intelligence & Wettbewerb
       - Identifiziere zuerst exakt die Nische der Seite.

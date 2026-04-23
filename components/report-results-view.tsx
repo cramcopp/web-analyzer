@@ -135,7 +135,7 @@ function ReportResultsView({
         <ErrorBoundary moduleName="SEO Deep Dive">
           <SeoDeepDiveModule 
             detailedSeo={report.seo.detailedSeo} 
-            socialData={report.seo.detailedSeo} 
+            socialData={rawScrapeData?.social} 
             crawlSummary={rawScrapeData?.crawlSummary} 
             plan={plan} 
           />
