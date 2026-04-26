@@ -9,7 +9,7 @@ const competitorsSchema = z.object({
   domain: z.string().optional(),
 });
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 // Add timeout wrapper
 const fetchWithTimeout = async (url: string, ms = 5000) => {

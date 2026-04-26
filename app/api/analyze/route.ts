@@ -4,7 +4,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, queryDocuments } from '@/lib/firestore-edge';
 import { analyzeSchema } from '@/lib/validations';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function POST(req: Request) {
   const user = await getSessionUser();

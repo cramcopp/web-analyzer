@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
