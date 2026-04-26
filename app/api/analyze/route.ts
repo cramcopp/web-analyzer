@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     
     if (!result.success) {
       return NextResponse.json({ 
-        error: result.error.errors[0]?.message || 'Ungültige Eingabe' 
+        error: result.error.issues[0]?.message || 'Ungültige Eingabe' 
       }, { status: 400 });
     }
 

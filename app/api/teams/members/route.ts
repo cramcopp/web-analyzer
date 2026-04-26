@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({ 
-        error: result.error.errors[0]?.message || 'Ungültige E-Mail' 
+        error: result.error.issues[0]?.message || 'Ungültige E-Mail' 
       }, { status: 400 });
     }
 
@@ -66,7 +66,7 @@ export async function DELETE(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({ 
-        error: result.error.errors[0]?.message || 'Ungültige UID' 
+        error: result.error.issues[0]?.message || 'Ungültige UID' 
       }, { status: 400 });
     }
 

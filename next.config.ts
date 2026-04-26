@@ -3,9 +3,6 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: any = {
   reactStrictMode: true,
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
   typescript: {
     ignoreBuildErrors: false,
   },
@@ -27,7 +24,6 @@ const nextConfig: any = {
     ],
   },
   output: 'standalone',
-  xPoweredBy: false,
   async headers() {
     return [
       {
@@ -76,5 +72,4 @@ export default withSentryConfig(nextConfig, {
   sourcemaps: {
     deleteSourcemapsAfterUpload: true,
   },
-  disableLogger: true,
 });
