@@ -189,7 +189,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   // Optimized O(N) DOM depth calculation with safety limit (CQ-05)
   let maxDomDepth = 0;
   const MAX_DEPTH = 100;
-  function calculateDepth(element: cheerio.Element, currentDepth: number) {
+  function calculateDepth(element: any, currentDepth: number) {
     if (currentDepth > maxDomDepth) maxDomDepth = currentDepth;
     if (currentDepth >= MAX_DEPTH) return; // Prevent stack overflow
     
