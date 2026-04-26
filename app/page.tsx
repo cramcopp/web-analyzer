@@ -35,7 +35,7 @@ export default function WebsiteAnalyzer() {
   const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile' | 'pricing' | 'team'>('analyzer');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-  const { effectivePlan, trialDaysLeft, showTrialBadge } = useTrial();
+  const { effectivePlan, trialDaysLeft, showTrialBadge, isInTrial } = useTrial();
 
   const addNotification = (title: string, message: string) => {
     const newNotif: Notification = {
