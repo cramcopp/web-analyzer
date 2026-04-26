@@ -33,6 +33,8 @@ export async function POST(req: Request) {
     }
 
     const { priceId, planName, interval = 'monthly' } = result.data;
+    const uid = user.uid;
+    const userEmail = user.email;
 
 
     // Get the correct Price ID from matrix or fallback to provided priceId
