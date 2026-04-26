@@ -63,13 +63,4 @@ const nextConfig: any = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  silent: true,
-  org: "website-analyzer-pro",
-  project: "web-analyzer",
-  widenClientFileUpload: true,
-  tunnelRoute: "/monitoring",
-  sourcemaps: {
-    deleteSourcemapsAfterUpload: true,
-  },
-});
+export default nextConfig;
