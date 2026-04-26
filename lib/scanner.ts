@@ -78,7 +78,7 @@ export interface AnalysisResult {
   social: {
     ogTitle: string;
     ogDescription: string;
-    ogImage: string | undefined;
+    ogImage: string;
     ogType: string;
     twitterCard: string;
   };
@@ -323,7 +323,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content') 
                || root.querySelector('meta[name="og:title"]')?.getAttribute('content')
                || root.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
-               || root.querySelector('title')?.text.trim();
+               || root.querySelector('title')?.text.trim() || '';
 
   const ogDescription = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
                      || root.querySelector('meta[name="og:description"]')?.getAttribute('content')

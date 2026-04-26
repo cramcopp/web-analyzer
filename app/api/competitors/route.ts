@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
+import { parse } from 'node-html-parser';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
 import { z } from 'zod';
@@ -128,11 +128,11 @@ export async function POST(req: Request) {
           if (!res.ok) return { url: item.link, name: item.title, error: 'Access Denied' };
           
           const html = await res.text();
-          const $ = cheerio.load(html);
+          const root = parse(html);
           
-          const title = $('title').text().trim() || item.title;
-          const metaDescription = $('meta[name="description"]').attr('content') || item.snippet;
-          const h1Count = $('h1').length;
+          const title = root.querySelector('title')?.text.trim() || item.title;
+          const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || item.snippet;
+          const h1Count = root.querySelectorAll('h1').length;
           
           return {
              url: item.link,
