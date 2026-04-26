@@ -6,16 +6,18 @@ import { POST as signupPOST } from './signup';
 
 export const runtime = 'edge';
 
-export async function GET(req: Request, { params }: { params: { action: string[] } }) {
-  const action = params.action[0];
-  if (action === 'me') return meGET(req);
+export async function GET(req: Request, { params }: { params: Promise<{ action: string[] }> }) {
+  const { action } = await params;
+  const mainAction = action[0];
+  if (mainAction === 'me') return meGET(req);
   return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 }
 
-export async function POST(req: Request, { params }: { params: { action: string[] } }) {
-  const action = params.action[0];
-  if (action === 'login') return loginPOST(req);
-  if (action === 'logout') return logoutPOST(req);
-  if (action === 'signup') return signupPOST(req);
+export async function POST(req: Request, { params }: { params: Promise<{ action: string[] }> }) {
+  const { action } = await params;
+  const mainAction = action[0];
+  if (mainAction === 'login') return loginPOST(req);
+  if (mainAction === 'logout') return logoutPOST(req);
+  if (mainAction === 'signup') return signupPOST(req);
   return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 }
