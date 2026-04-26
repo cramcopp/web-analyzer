@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument } from '@/lib/firestore-edge';
+import { getDocument, updateDocument } from '@/lib/firestore-edge';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -16,14 +16,51 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing scrape data' }, { status: 400 });
     }
 
-    // Verify real plan from Firestore
+    // BIZ-01 & BIZ-03: Quota check and Admin Bypass
     let plan = 'free';
-    if (user && token) {
+    let isAdmin = false;
+
+    // Check for admin bypass (BIZ-03)
+    const adminSecret = req.headers.get('x-admin-secret');
+    if (adminSecret && adminSecret === process.env.INTERNAL_SECRET) {
+      isAdmin = true;
+      plan = 'agency'; // Admin/Cron gets agency level analysis
+    }
+
+    if (!isAdmin) {
+      if (!user || !token) {
+        return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+      }
+
       const userData = await getDocument('users', user.uid, token);
-      if (userData?.plan) {
-        plan = userData.plan;
+      if (userData) {
+        plan = userData.plan || 'free';
+        const scanCount = userData.scanCount || 0;
+        const maxScans = userData.maxScans || 5;
+
+        // Rate Limiting (Throttle: 1 request per 10 seconds per user)
+        const now = Date.now();
+        const lastReq = userData.lastReportReqAt ? new Date(userData.lastReportReqAt).getTime() : 0;
+        
+        if (now - lastReq < 10000) {
+          return NextResponse.json({ 
+            error: 'Zu viele Anfragen', 
+            details: 'Bitte warte einen Moment, bevor du den Bericht generierst.' 
+          }, { status: 429 });
+        }
+
+        // Update last request time (don't wait for it to continue generation)
+        updateDocument('users', user.uid, { lastReportReqAt: new Date(now).toISOString() }, token).catch(console.error);
+
+        if (scanCount >= maxScans) {
+          return NextResponse.json({ 
+            error: 'Scan-Limit erreicht', 
+            details: `Dein Abo erlaubt ${maxScans} Scans. Bitte upgrade für mehr Reports.` 
+          }, { status: 403 });
+        }
       }
     }
+
 
     const apiKey = process.env.GEMINI_API_KEY;
 
@@ -257,6 +294,8 @@ export async function POST(req: Request) {
                     linkStructure: { type: Type.STRING },
                     mobileFriendly: { type: Type.STRING },
                     localSeoNap: { type: Type.STRING },
+                    semanticStructure: { type: Type.STRING, description: "Bewertung der H-Hierarchie und semantischen HTML-Tags." },
+                    ctaAnalysis: { type: Type.STRING, description: "Analyse der Call-to-Action Elemente und deren Platzierung." },
                     contentQuality: {
                       type: Type.OBJECT,
                       properties: {
@@ -286,7 +325,7 @@ export async function POST(req: Request) {
                       }
                     }
                   },
-                  required: ["keywordAnalysis", "metaTagsAssessment", "linkStructure", "mobileFriendly", "localSeoNap", "contentQuality", "technicalSeo", "prioritizedTasks"]
+                  required: ["keywordAnalysis", "metaTagsAssessment", "linkStructure", "mobileFriendly", "localSeoNap", "semanticStructure", "ctaAnalysis", "contentQuality", "technicalSeo", "prioritizedTasks"]
                 }
               },
               required: ["score", "insights", "recommendations", "detailedSeo"]
@@ -334,6 +373,7 @@ export async function POST(req: Request) {
                     coreVitalsAssessment: { type: Type.STRING, description: "Einschätzung von Metriken wie FCP, LCP, TTI basierend auf den Daten." },
                     resourceOptimization: { type: Type.STRING, description: "Bewertung von blockierenden Skripten, unoptimierten Bildern und CSS." },
                     serverAndCache: { type: Type.STRING, description: "Server Reaktionszeit, Caching-Header und Komprimierung (GZIP/Brotli)." },
+                    domComplexity: { type: Type.STRING, description: "Bewertung der DOM-Gre und Tiefe (maxDomDepth)." },
                     lighthouseMetrics: {
                       type: Type.OBJECT,
                       properties: {
@@ -427,7 +467,7 @@ export async function POST(req: Request) {
                       }
                     }
                   },
-                  required: ["coreVitalsAssessment", "resourceOptimization", "serverAndCache", "lighthouseMetrics", "coreWebVitals", "cachingAnalysis", "chartData", "prioritizedTasks"]
+                  required: ["coreVitalsAssessment", "resourceOptimization", "serverAndCache", "domComplexity", "lighthouseMetrics", "coreWebVitals", "cachingAnalysis", "chartData", "prioritizedTasks"]
                 }
               },
               required: ["score", "insights", "recommendations", "detailedPerformance"]
@@ -499,7 +539,7 @@ export async function POST(req: Request) {
         } catch (err: any) {
           lastModelError = err;
           const is429 = err?.message?.includes('429') || err?.status === 429 || err?.message?.includes('RESOURCE_EXHAUSTED');
-          console.warn(`[GenerateReport] Model ${modelId} attempt ${attempt + 1} failed:`, err?.message);
+          console.warn(`[GenerateReport] Model ${modelId} attempt ${attempt + 1} failed:`, err instanceof Error ? err.message : 'Unknown error');
 
           if (is429 && attempt === 0) {
             // Wait before retrying same model
@@ -515,7 +555,7 @@ export async function POST(req: Request) {
     }
 
     if (!aiResponse) {
-      console.error("All models exhausted:", lastModelError);
+      console.error("All AI models exhausted");
       return NextResponse.json(
         { error: lastModelError?.message || 'Alle Gemini-Modelle sind momentan nicht verfügbar (Quota). Bitte versuche es in 1 Minute erneut.' },
         { status: 429 }
@@ -530,7 +570,7 @@ export async function POST(req: Request) {
     return NextResponse.json(finalReport);
 
   } catch (error: any) {
-    console.error("AI Generation Error:", error);
+    console.error("AI Generation Global Error:", error instanceof Error ? error.message : 'Unknown error');
     const is429 = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
     return NextResponse.json(
       { error: error.message || 'Server error occurred during AI generation.' },

@@ -21,6 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     await updateDocument('projects', id, { ...data, updatedAt: new Date().toISOString() }, token);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('[PATCH /api/projects/:id] Update error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -41,6 +42,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     await deleteDocument('projects', id, token);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('[DELETE /api/projects/:id] Delete error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

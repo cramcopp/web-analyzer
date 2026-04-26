@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument } from '@/lib/firestore-edge';
+import { projectCreateSchema } from '@/lib/validations';
 
 export const runtime = 'edge';
 
@@ -40,24 +41,28 @@ export async function POST(req: Request) {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const data = await req.json();
+    const body = await req.json();
+    const result = projectCreateSchema.safeParse(body);
+    
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige Eingabe' 
+      }, { status: 400 });
+    }
+
     const projectData: any = {
-      ...data,
+      name: result.data.name,
+      url: result.data.url || null,
+      teamId: result.data.teamId || null,
       userId: user.uid,
       members: [user.uid],
       createdAt: new Date().toISOString()
     };
-    if (!projectData.url) delete projectData.url;
-    if (!projectData.teamId) delete projectData.teamId;
 
     const newProject = await addDocument('projects', projectData, token);
     return NextResponse.json({ id: newProject.id, success: true });
   } catch (error: any) {
-    // Log full error for Cloudflare dashboard visibility
-    console.error('[POST /api/projects] Firestore error:', JSON.stringify({
-      message: error.message,
-      stack: error.stack,
-    }));
-    return NextResponse.json({ error: error.message, detail: error.stack }, { status: 500 });
+    console.error('[POST /api/projects] Firestore error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

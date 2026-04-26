@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 interface AuthContextType {
   user: any | null;
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const checkSession = async () => {
+  const checkSession = useCallback(async () => {
     try {
       const res = await fetch('/api/user/me');
       if (res.ok) {
@@ -67,12 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
 
   useEffect(() => {
     checkSession();
-  }, []);
+  }, [checkSession]);
 
   const signIn = async () => {
     try {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { fetchWithRetry } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
@@ -14,7 +15,7 @@ export async function GET() {
 
     // Verify token with Firebase REST API (Edge compatible)
     const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY}`;
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken: token })
@@ -45,7 +46,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('Session Verification Error:', error);
+    console.error('Session Verification Error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({ authenticated: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }

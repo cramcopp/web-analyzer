@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import { updateStripeSubscription } from '@/lib/firestore-edge';
 import Stripe from 'stripe';
 
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     if (!sig || !endpointSecret) {
       throw new Error('Missing signature or endpoint secret');
     }
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+    event = getStripe().webhooks.constructEvent(body, sig, endpointSecret);
   } catch (err: any) {
     console.error(`Webhook Error: ${err.message}`);
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         const plan = session.metadata?.plan;
 
         if (uid && plan) {
-          const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+          const subscription = await getStripe().subscriptions.retrieve(session.subscription as string);
           
           const maxScans = plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5;
           
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error: any) {
-    console.error('Firestore Update Error:', error);
+    console.error('Firestore Update Error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({ error: 'Firestore Update Error' }, { status: 500 });
   }
 }

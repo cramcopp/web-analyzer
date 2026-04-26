@@ -5,7 +5,96 @@ export interface ScanOptions {
   plan?: string;
 }
 
-export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
+export interface PsiMetrics {
+  fcp: number | null;
+  lcp: number | null;
+  tbt: number | null;
+  cls: number | null;
+  speedIndex: number | null;
+  tti: number | null;
+}
+
+export interface LighthouseScores {
+  performance: number;
+  accessibility: number;
+  bestPractices: number;
+  seo: number;
+}
+
+export interface SslCertificateData {
+  status?: string;
+  grade?: string;
+  issuerSubject?: string;
+  validUntil?: string;
+  hstsPolicy?: string;
+}
+
+export interface SubpageResult {
+  error: boolean;
+  url: string;
+  title?: string;
+  metaDescription?: string;
+  h1Count?: number;
+  imagesWithoutAlt?: number;
+  status: number | string;
+}
+
+export interface AnalysisResult {
+  urlObj: string;
+  title: string;
+  metaDescription: string;
+  metaKeywords: string;
+  htmlLang: string;
+  generator: string;
+  viewport: string;
+  viewportScalable: string;
+  robots: string;
+  h1Count: number;
+  h2Count: number;
+  imagesTotal: number;
+  imagesWithoutAlt: number;
+  lazyImages: number;
+  maxDomDepth: number;
+  semanticTags: { main: number; article: number; section: number; nav: number };
+  napSignals: { googleMapsLinks: number; phoneLinks: number };
+  dataLeakage: { emailsFoundCount: number; sampleEmails: string[] };
+  internalLinksCount: number;
+  externalLinksCount: number;
+  totalScripts: number;
+  blockingScripts: number;
+  totalStylesheets: number;
+  responseTimeMs: number;
+  psiMetricsStr: string;
+  psiMetrics: PsiMetrics | null;
+  lighthouseScores: LighthouseScores | null;
+  safeBrowsingStr: string;
+  domainAge: string;
+  sslCertificate: SslCertificateData;
+  wienerSachtextIndex: number;
+  bodyText: string;
+  techStack: string[];
+  cdn: string;
+  serverInfo: string;
+  social: {
+    ogTitle: string;
+    ogDescription: string;
+    ogImage: string | undefined;
+    ogType: string;
+    twitterCard: string;
+  };
+  existingSchemaCount: number;
+  schemaTypes: string[];
+  securityHeaders: Record<string, string>;
+  headers: Record<string, string>;
+  crawlSummary: { 
+    totalInternalLinks: number; 
+    scannedSubpagesCount: number; 
+    scannedSubpages: Omit<SubpageResult, 'error'>[]; 
+    brokenLinks: { url: string; status: number | string }[] 
+  };
+}
+
+export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
   const PLAN_LIMITS: Record<string, number> = {
     'free': 0,
     'pro': 20,
@@ -77,7 +166,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
 
   // --- Header Analysis & CDN Detection ---
   const headers = Object.fromEntries(response.headers.entries());
-  const securityHeaders = {
+  const securityHeaders: Record<string, string> = {
     'Content-Security-Policy': headers['content-security-policy'] ? 'Present' : 'Missing',
     'Strict-Transport-Security': headers['strict-transport-security'] ? 'Present' : 'Missing',
     'X-Frame-Options': headers['x-frame-options'] || 'Missing',
@@ -97,16 +186,19 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
 
   const serverInfo = headers['server'] || 'Hidden';
 
-  // Optimized O(N) DOM depth calculation
+  // Optimized O(N) DOM depth calculation with safety limit (CQ-05)
   let maxDomDepth = 0;
-  function calculateDepth(element: any, currentDepth: number) {
+  const MAX_DEPTH = 100;
+  function calculateDepth(element: cheerio.Element, currentDepth: number) {
     if (currentDepth > maxDomDepth) maxDomDepth = currentDepth;
+    if (currentDepth >= MAX_DEPTH) return; // Prevent stack overflow
+    
     const children = $(element).children();
     children.each((_, child) => {
-      calculateDepth(child as any, currentDepth + 1);
+      calculateDepth(child, currentDepth + 1);
     });
   }
-  $('html').each((_, el) => calculateDepth(el as any, 1));
+  $('html').each((_, el) => calculateDepth(el, 1));
 
   // Unified Link Extraction
   const internalLinks: string[] = [];
@@ -143,13 +235,15 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
       if (linkSummaryList.length < 80) {
         linkSummaryList.push(`${text.slice(0, 30)} (${href.slice(0, 50)})`);
       }
-    } catch (e) {}
+    } catch (e: unknown) {
+      console.error("Link processing failed:", e);
+    }
   });
 
   // Process other parallel results
   let psiMetricsStr = "Keine PageSpeed Insights Daten verfügbar.";
-  let lighthouseScores = null;
-  let psiMetrics: any = null;
+  let lighthouseScores: LighthouseScores | null = null;
+  let psiMetrics: PsiMetrics | null = null;
   const psiRes = await psiPromise;
   if (psiRes && psiRes.ok) {
     const psiData = await psiRes.json();
@@ -190,10 +284,10 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
   if (rdapRes && rdapRes.ok) {
     const rdapData = await rdapRes.json();
     const regEvent = rdapData.events?.find((e: any) => e.eventAction === 'registration');
-    if (regEvent?.eventDate) domainAgeStr = regEvent.eventDate.split('T')[0];
+    if (regEvent?.eventDate) domainAgeStr = regEvent.eventDate.split('T')[0] as string;
   }
 
-  let sslCertificateData: any = { status: "Not retrieved" };
+  let sslCertificateData: SslCertificateData = { status: "Not retrieved" };
   const sslRes = await sslPromise;
   if (sslRes && sslRes.ok) {
     const sslData = await sslRes.json();
@@ -226,16 +320,15 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
   const canonical = $('link[rel="canonical"]').attr('href') || 'Not found';
 
   // --- Enhanced OpenGraph & Social Extraction ---
-  // Many sites use 'property', some use 'name', some use Twitter-specific tags.
   const ogTitle = $('meta[property="og:title"]').attr('content') 
                || $('meta[name="og:title"]').attr('content')
                || $('meta[name="twitter:title"]').attr('content')
-               || $('title').text().trim(); // Last fallback to standard title
+               || $('title').text().trim();
 
   const ogDescription = $('meta[property="og:description"]').attr('content')
                      || $('meta[name="og:description"]').attr('content')
                      || $('meta[name="twitter:description"]').attr('content')
-                     || $('meta[name="description"]').attr('content'); // Fallback to standard meta description
+                     || $('meta[name="description"]').attr('content') || '';
 
   let ogImage = $('meta[property="og:image"]').attr('content')
              || $('meta[name="og:image"]').attr('content')
@@ -247,7 +340,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
   if (ogImage && !ogImage.startsWith('http')) {
     try {
       ogImage = new URL(ogImage, urlObj.toString()).toString();
-    } catch (e) {}
+    } catch (e) {
+      console.warn(`Failed to resolve absolute URL for ogImage: ${ogImage}`, e);
+    }
   }
 
   const ogType = $('meta[property="og:type"]').attr('content') || 'website';
@@ -255,9 +350,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
 
   // Subpage Scanning
   const subpagesToScan = internalLinks.slice(0, subpageLimit);
-  const scanSubpage = async (subUrl: string) => {
+  const scanSubpage = async (subUrl: string): Promise<SubpageResult> => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000); // 10s limit per subpage
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
       const subRes = await fetch(subUrl, { 
@@ -274,11 +369,14 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
         h1Count: $s('h1').length, imagesWithoutAlt: $s('img:not([alt]), img[alt=""]').length,
         status: subRes.status
       };
-    } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
+    } catch (e) { 
+      console.warn(`Subpage scan failed for ${subUrl}`, e);
+      return { error: true, url: subUrl, status: 'Error' }; 
+    }
   };
 
   const subpageResults = await Promise.all(subpagesToScan.map(url => scanSubpage(url)));
-  const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error, ...d }: any) => d);
+  const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error, ...d }) => d);
   const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
 
   // Text Audit (Cleaned)
@@ -315,13 +413,15 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
     try {
       const json = JSON.parse($(el).text());
       const extractTypes = (obj: any) => {
-        if (obj['@type']) schemaTypes.push(obj['@type']);
+        if (obj['@type']) schemaTypes.push(obj['@type'] as string);
         if (obj['@graph'] && Array.isArray(obj['@graph'])) {
-          obj['@graph'].forEach((item: any) => { if (item['@type']) schemaTypes.push(item['@type']); });
+          obj['@graph'].forEach((item: any) => { if (item['@type']) schemaTypes.push(item['@type'] as string); });
         }
       };
       extractTypes(json);
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Failed to parse JSON-LD schema", e);
+    }
   });
 
   // Final structure
@@ -332,14 +432,15 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
     semanticTags: { main: $('main').length, article: $('article').length, section: $('section').length, nav: $('nav').length },
     napSignals: { googleMapsLinks, phoneLinks },
     dataLeakage: { 
-      emailsFoundCount: (bodyText.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g) || []).length,
-      sampleEmails: (bodyText.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}/g) || []).slice(0, 3)
+      emailsFoundCount: (bodyText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g) || []).length,
+      sampleEmails: (bodyText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g) || []).slice(0, 3)
     },
     internalLinksCount: internalLinks.length, externalLinksCount, totalScripts, blockingScripts, totalStylesheets,
-    responseTimeMs, psiMetricsStr, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
+    responseTimeMs, psiMetricsStr, psiMetrics, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
     wienerSachtextIndex, bodyText, techStack,
     cdn,
     serverInfo,
+
     social: {
       ogTitle,
       ogDescription,
@@ -350,7 +451,13 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions) {
     existingSchemaCount: schemaTypes.length,
     schemaTypes: Array.from(new Set(schemaTypes)),
     securityHeaders,
-    headers: headers,
-    crawlSummary: { totalInternalLinks: internalLinks.length, scannedSubpagesCount: successfulSubpages.length, scannedSubpages: successfulSubpages, brokenLinks }
+    headers,
+    crawlSummary: { 
+      totalInternalLinks: internalLinks.length, 
+      scannedSubpagesCount: successfulSubpages.length, 
+      scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
+      brokenLinks 
+    }
   };
 }
+

@@ -14,8 +14,9 @@ export async function POST(req: Request) {
 
     const authData = await signUpWithEmailRest(email, password);
     const idToken = authData.idToken;
+    const refreshToken = authData.refreshToken;
 
-    // Set a secure, httpOnly cookie for the session so updateUserProfile can use it
+    // Set secure, httpOnly cookies for the session
     const cookieStore = await cookies();
     cookieStore.set('wap_session', idToken, {
       httpOnly: true,
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/'
     });
+    
+    cookieStore.set('wap_refresh', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/'
+    });
+
 
     if (displayName) {
       try {

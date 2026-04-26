@@ -1,16 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getSessionUser, getSessionToken } from '@/lib/auth-server';
+import { getDocument, updateDocument, fetchWithRetry } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
-
-function parseCookies(cookieHeader: string | null): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  if (!cookieHeader) return cookies;
-  for (const part of cookieHeader.split(';')) {
-    const [key, ...val] = part.trim().split('=');
-    if (key) cookies[key.trim()] = decodeURIComponent(val.join('='));
-  }
-  return cookies;
-}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -20,24 +12,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'URL is required' }, { status: 400 });
   }
 
-  const cookies = parseCookies(req.headers.get('cookie'));
-  const tokensCookieRaw = cookies['gsc_tokens'];
+  const user = await getSessionUser();
+  const token = await getSessionToken();
 
-  if (!tokensCookieRaw) {
-    return NextResponse.json({ error: 'User not authenticated with Google' }, { status: 401 });
+  if (!user || !token) {
+    return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
   try {
-    const tokens = JSON.parse(tokensCookieRaw);
-    const accessToken = tokens.access_token;
+    const userData = await getDocument('users', user.uid, token);
+    const tokensRaw = userData?.gscTokens;
 
-    if (!accessToken) {
-       throw new Error('Access token missing in session');
+    if (!tokensRaw) {
+      return NextResponse.json({ error: 'Search Console nicht verbunden' }, { status: 401 });
     }
 
-    // Helper for API calls
-    const googleFetch = async (url: string, options: any = {}) => {
-      const res = await fetch(url, {
+    let tokens = JSON.parse(tokensRaw);
+    let accessToken = tokens.access_token;
+
+    // Helper for API calls with automatic refresh
+    const googleFetch = async (url: string, options: any = {}, isRetry = false): Promise<any> => {
+      const res = await fetchWithRetry(url, {
         ...options,
         headers: {
           ...options.headers,
@@ -47,6 +42,35 @@ export async function GET(req: Request) {
       });
       
       if (!res.ok) {
+        if (res.status === 401 && !isRetry && tokens.refresh_token) {
+          console.log('Google Access Token expired, attempting refresh...');
+          const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: process.env.GOOGLE_CLIENT_ID || '',
+              client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+              refresh_token: tokens.refresh_token,
+              grant_type: 'refresh_token',
+            })
+          });
+
+          if (refreshRes.ok) {
+            const newTokens = await refreshRes.json();
+            tokens = { ...tokens, ...newTokens };
+            accessToken = tokens.access_token;
+
+            // Save updated tokens back to Firestore
+            await updateDocument('users', user.uid, {
+              gscTokens: JSON.stringify(tokens),
+              adminSecret: process.env.INTERNAL_SECRET
+            });
+
+            // Retry the original request
+            return googleFetch(url, options, true);
+          }
+        }
+
         const err = await res.json().catch(() => ({ error: 'Unknown Error' }));
         console.error(`Google API Error (${url}):`, err);
         if (res.status === 401) throw new Error('AUTH_EXPIRED');
@@ -56,8 +80,8 @@ export async function GET(req: Request) {
     };
 
     // 1. Find the property (Search Console Sites)
-    // API: https://www.googleapis.com/webmasters/v3/sites
     const siteListData = await googleFetch('https://www.googleapis.com/webmasters/v3/sites');
+
     const sites = siteListData.siteEntry || [];
     
     // Simple matching: find a site that is a prefix of the provided URL or matches the domain

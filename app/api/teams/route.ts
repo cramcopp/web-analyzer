@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument, getDocument } from '@/lib/firestore-edge';
+import { teamCreateSchema } from '@/lib/validations';
 
 export const runtime = 'edge';
 
@@ -47,9 +48,25 @@ export async function POST(req: Request) {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const data = await req.json();
+    // BIZ-11: Verify Agency Plan on Server
+    const userData = await getDocument('users', user.uid, token);
+    if (userData?.plan !== 'agency') {
+       return NextResponse.json({ 
+         error: 'Team-Funktionen sind nur im Agency-Plan verfügbar.' 
+       }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const result = teamCreateSchema.safeParse(body);
+    
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige Eingabe' 
+      }, { status: 400 });
+    }
+
     const newTeam = await addDocument('teams', {
-      name: data.name,
+      name: result.data.name,
       ownerId: user.uid,
       members: [user.uid],
       admins: [user.uid],
@@ -58,6 +75,7 @@ export async function POST(req: Request) {
     
     return NextResponse.json(newTeam);
   } catch (error: any) {
+    console.error('[POST /api/teams] Creation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

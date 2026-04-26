@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
+import { getSessionUser } from '@/lib/auth-server';
+import { checkoutSchema } from '@/lib/validations';
 export const runtime = 'edge';
 
 // Plan and Interval to Price ID mapping
@@ -16,11 +18,22 @@ const PRICE_MATRIX: Record<string, Record<string, string>> = {
 
 export async function POST(req: Request) {
   try {
-    const { priceId, planName, interval = 'monthly', uid, userEmail } = await req.json();
-
-    if (!uid) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
     }
+
+    const body = await req.json();
+    const result = checkoutSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige Daten' 
+      }, { status: 400 });
+    }
+
+    const { priceId, planName, interval = 'monthly' } = result.data;
+
 
     // Get the correct Price ID from matrix or fallback to provided priceId
     const stripePriceId = PRICE_MATRIX[planName]?.[interval] || priceId;
@@ -29,7 +42,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid plan or interval' }, { status: 400 });
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -59,7 +72,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error: any) {
-    console.error('Stripe Checkout Error:', error);
+    console.error('Stripe Checkout Error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

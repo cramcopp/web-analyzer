@@ -14,6 +14,9 @@ import ProjectDashboardView from '../components/project-dashboard-view';
 import SettingsView from '../components/settings-view';
 import ProfileView from '../components/profile-view';
 import { ReportData, PrioritizedTask } from '../types/report';
+import { AnalysisResult } from '../lib/scanner';
+import { Notification, Project } from '../types/common';
+import { useTrial } from '../hooks/use-trial';
 
 export default function WebsiteAnalyzer() {
   const { user, userData, loading: authLoading } = useAuth();
@@ -21,27 +24,21 @@ export default function WebsiteAnalyzer() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
-  const [rawScrapeData, setRawScrapeData] = useState<any>(null);
-  const [gscData, setGscData] = useState<any>(null);
+  const [rawScrapeData, setRawScrapeData] = useState<AnalysisResult | null>(null);
+  const [gscData, setGscData] = useState<GscData | null>(null);
   const [isGscLoading, setIsGscLoading] = useState(false);
   const [gscError, setGscError] = useState<string | null>(null);
   const [lastAnalyzedUrl, setLastAnalyzedUrl] = useState<string | null>(null);
   const [notification, setNotification] = useState<{message: string, url: string} | null>(null);
-  const [notifications, setNotifications] = useState<{id: string, title: string, message: string, time: string, read: boolean}[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile' | 'pricing' | 'team'>('analyzer');
-  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-  // Trial Logic
-  const isInTrial = userData?.trialUntil && new Date(userData.trialUntil) > new Date();
-  const effectivePlan = (userData?.plan === 'free' && isInTrial) ? 'pro' : (userData?.plan || 'free');
-  
-  const trialDaysLeft = userData?.trialUntil 
-    ? Math.max(0, Math.ceil((new Date(userData.trialUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
-    : 0;
+  const { effectivePlan, trialDaysLeft, showTrialBadge } = useTrial();
 
   const addNotification = (title: string, message: string) => {
-    const newNotif = {
+    const newNotif: Notification = {
       id: Date.now().toString(),
       title,
       message,
@@ -66,14 +63,15 @@ export default function WebsiteAnalyzer() {
       setUrl(data.url);
       setActiveView('analyzer');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e: any) {
-      setError(e.message || 'Fehler beim Laden des Reports.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Fehler beim Laden des Reports.';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSelectProject = (proj: any) => {
+  const handleSelectProject = (proj: Project) => {
     setSelectedProject(proj);
     if (proj.url) setUrl(proj.url);
     setActiveView('project');
@@ -87,8 +85,9 @@ export default function WebsiteAnalyzer() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Fehler beim Laden von GSC Daten');
       setGscData(data);
-    } catch (err: any) {
-      setGscError(err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
+      setGscError(msg);
     } finally {
       setIsGscLoading(false);
     }
@@ -177,12 +176,14 @@ export default function WebsiteAnalyzer() {
         }
       }
       fetchGSCData(targetUrl);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Fehler bei der Analyse';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   const handleConnectGSC = async () => {
     try {

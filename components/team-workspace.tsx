@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Users, 
   Plus, 
@@ -42,8 +42,9 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
 
   const isAgency = userData?.plan === 'agency';
 
-  const fetchTeamData = async () => {
+  const fetchTeamData = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
     try {
       const res = await fetch('/api/teams');
       if (res.ok) {
@@ -61,23 +62,17 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchedForRef = React.useRef<string | null>(null);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user) {
       setTeam(null);
       setMembers([]);
-      fetchedForRef.current = null;
       return;
     }
 
-    if (fetchedForRef.current === user.uid) return;
-    fetchedForRef.current = user.uid;
-
     fetchTeamData();
-  }, [user]);
+  }, [user?.uid, fetchTeamData]);
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim() || !user || !isAgency) return;

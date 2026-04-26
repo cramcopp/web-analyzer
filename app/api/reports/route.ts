@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { queryDocuments, addDocument, updateDocument, getDocument } from '@/lib/firestore-edge';
+import { queryDocuments, addDocument, updateDocument, getDocument, incrementField } from '@/lib/firestore-edge';
+import { reportSaveSchema } from '@/lib/validations';
 
 export const runtime = 'edge';
 
@@ -36,27 +37,29 @@ export async function POST(req: Request) {
   }
 
   try {
-    const reportData = await req.json();
+    const body = await req.json();
+    const result = reportSaveSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige Daten' 
+      }, { status: 400 });
+    }
     
     // 1. Save Report
     const newReport = await addDocument('reports', {
-      ...reportData,
+      ...result.data,
       userId: user.uid,
       createdAt: new Date().toISOString()
     }, token);
     
-    // 2. Increment Scan Count on User Profile automatically
+    // 2. Atomic Increment Scan Count (BIZ-02)
     try {
-      const userDoc = await getDocument('users', user.uid, token);
-      if (userDoc) {
-        await updateDocument('users', user.uid, {
-          scanCount: (userDoc.scanCount || 0) + 1
-        }, token);
-      }
+      await incrementField('users', user.uid, 'scanCount', 1, token);
     } catch (incError) {
       console.error('Failed to increment scanCount:', incError);
-      // We don't fail the whole request if just the counter update fails
     }
+
     
     return NextResponse.json({ id: newReport.id, success: true });
   } catch (error: any) {

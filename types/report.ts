@@ -107,8 +107,9 @@ export type ComplianceReportSection = ReportSection & {
 export type ReportData = {
   businessIntelligence?: {
     businessNiche: string;
-    targetAudience: string;
     keywordGapAnalysis: string[];
+    targetAudienceProfile: string;
+    uniqueSellingPropositions: string[];
     toneAndReadabilityAlignment?: string;
   };
   competitorBenchmarking?: {

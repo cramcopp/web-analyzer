@@ -1,19 +1,34 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { fetchWithRetry } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get('code');
+  const state = searchParams.get('state');
+
+  const cookieStore = await cookies();
+  const storedState = cookieStore.get('oauth_state')?.value;
+  
+  // SEC-07: CSRF Protection
+  if (!state || !storedState || state !== storedState) {
+    console.error('OAuth State Mismatch detected');
+    return NextResponse.json({ error: 'Ungültiger OAuth State (CSRF Schutz)' }, { status: 403 });
+  }
+
+  // Clear state cookie
+  cookieStore.delete('oauth_state');
 
   if (!code) {
+
     return NextResponse.json({ error: 'No code provided' }, { status: 400 });
   }
 
   try {
     // Exchange Auth Code for Tokens using native fetch
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    const tokenResponse = await fetchWithRetry('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -27,7 +42,7 @@ export async function GET(req: Request) {
     
     if (!tokenResponse.ok) {
        const errorData = await tokenResponse.json();
-       console.error('Token Exchange Error:', errorData);
+       console.error('Token Exchange Error occurred');
        throw new Error(`Failed to exchange code for tokens: ${errorData.error_description || errorData.error}`);
     }
     
@@ -35,7 +50,7 @@ export async function GET(req: Request) {
     const idToken = tokens.id_token;
 
     // Exchange Google ID Token for Firebase ID Token
-    const firebaseResp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${process.env.FIREBASE_API_KEY}`, {
+    const firebaseResp = await fetchWithRetry(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${process.env.FIREBASE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -56,21 +71,35 @@ export async function GET(req: Request) {
     // Store tokens in a secure, httpOnly cookie
     const cookieStore = await cookies();
     
-    // Primary app session
+    // Primary app session (ID Token)
     cookieStore.set('wap_session', firebaseData.idToken, {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7 // 1 week
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: '/'
     });
 
-    // Secondary tokens for Search Console usage
-    cookieStore.set('gsc_tokens', JSON.stringify(tokens), {
+    // Refresh token for long-lived sessions
+    cookieStore.set('wap_refresh', firebaseData.refreshToken, {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7 // 1 week
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: '/'
     });
+
+    // SEC-08 Fix: Store GSC tokens in Firestore instead of cookies to avoid 4KB limit
+    try {
+      const { updateDocument } = await import('@/lib/firestore-edge');
+      await updateDocument('users', firebaseData.localId, {
+        gscTokens: JSON.stringify(tokens),
+        adminSecret: process.env.INTERNAL_SECRET
+      });
+    } catch (dbErr) {
+      console.error('Failed to store GSC tokens in Firestore:', dbErr);
+    }
+
 
     // Return a simple HTML page that communicates success to the opener and closes
     const html = `
@@ -93,7 +122,7 @@ export async function GET(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('Google OAuth Callback Error:', error);
+    console.error('Google OAuth Callback Error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({ error: error.message || 'Authentication failed' }, { status: 500 });
   }
 }

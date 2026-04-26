@@ -14,8 +14,9 @@ export async function POST(req: Request) {
 
     const authData = await signInWithEmailRest(email, password);
     const idToken = authData.idToken;
+    const refreshToken = authData.refreshToken;
 
-    // Set a secure, httpOnly cookie for the session
+    // Set secure, httpOnly cookies for the session
     const cookieStore = await cookies();
     cookieStore.set('wap_session', idToken, {
       httpOnly: true,
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/'
     });
+    
+    cookieStore.set('wap_refresh', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/'
+    });
+
 
     return NextResponse.json({ 
       success: true,
@@ -36,7 +46,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('Login Error:', error);
+    console.error('Login Error:', error instanceof Error ? error.message : 'Unknown error');
     let message = 'Anmeldung fehlgeschlagen';
     const errorCode = error.message; // REST API returns error message in text usually
 

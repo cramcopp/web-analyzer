@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument, queryDocuments } from '@/lib/firestore-edge';
+import { teamInviteSchema, teamMemberSchema } from '@/lib/validations';
 
 export const runtime = 'edge';
 
@@ -10,7 +11,16 @@ export async function POST(req: Request) {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { email } = await req.json();
+    const body = await req.json();
+    const result = teamInviteSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige E-Mail' 
+      }, { status: 400 });
+    }
+
+    const { email } = result.data;
     
     // Find team where user is owner or admin
     const teams = await queryDocuments('teams', [
@@ -40,6 +50,7 @@ export async function POST(req: Request) {
     
     return NextResponse.json({ success: true, user: invitedUser });
   } catch (error: any) {
+    console.error('[POST /api/teams/members] Invite error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -50,7 +61,16 @@ export async function DELETE(req: Request) {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { uid } = await req.json();
+    const body = await req.json();
+    const result = teamMemberSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige UID' 
+      }, { status: 400 });
+    }
+
+    const { uid } = result.data;
     
     const teams = await queryDocuments('teams', [
       { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
@@ -78,6 +98,7 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('[DELETE /api/teams/members] Removal error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -41,7 +41,10 @@ function ProfileView() {
       setIsEditing(false);
       setEditPass('');
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {} finally {
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+      alert("Fehler beim Aktualisieren des Profils.");
+    } finally {
       setIsUpdating(false);
     }
   };

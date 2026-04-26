@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { 
   Download, Share2, Zap, BarChart3, Filter, Search, 
   ShieldCheck, UserCheck, Scale, CodeXml, Copy 
@@ -53,6 +53,11 @@ function ReportResultsView({
 }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+
+  const techMetadata = useMemo(() => ({
+    audit_id: crypto.randomUUID().slice(0, 8),
+    timestamp: new Date().toISOString()
+  }), [rawScrapeData?.urlObj]);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-10 duration-1000 ease-out">
@@ -191,8 +196,8 @@ function ReportResultsView({
               <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
                 <pre className="text-[12px] font-mono text-zinc-400 selection:bg-[#D4AF37]/30 whitespace-pre">
                   {JSON.stringify({
-                    audit_id: crypto.randomUUID().slice(0, 8),
-                    timestamp: new Date().toISOString(),
+                    audit_id: techMetadata.audit_id,
+                    timestamp: techMetadata.timestamp,
                     tech_stack: rawScrapeData?.techStack,
                     security_headers: rawScrapeData?.securityHeaders,
                     ssl_details: rawScrapeData?.sslCertificate,

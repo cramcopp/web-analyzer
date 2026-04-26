@@ -82,7 +82,8 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'photoURL', 'plan', 'reports', 'scanCount', 'maxScans', 'subscriptionId', 'trialUntil', 'internalSecret', 'lastScanReset', 'brandLogo', 'adminSecret']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'photoURL', 'plan', 'reports', 'scanCount', 'maxScans', 'subscriptionId', 'trialUntil', 'internalSecret', 'lastScanReset', 'brandLogo', 'adminSecret', 'gscTokens']) &&
+
         data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
         data.email is string && isValidEmail(data.email) && data.email.size() < 100 &&
         (!('role' in data) || (data.role in ['admin', 'user'])) &&
@@ -130,8 +131,14 @@ service cloud.firestore {
     // ===============================================================
     
     function isServerAdmin() {
-      return request.resource.data.adminSecret == "WAP_ST_SEC_647cc70a49dd2222e0fc092c00871902";
+      return request.resource.data.adminSecret == get(/databases/$(database)/documents/_internal/secrets).data.adminSecret;
     }
+
+    // Protection for internal configuration
+    match /_internal/{document=**} {
+      allow read, write: if false;
+    }
+
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -140,9 +147,18 @@ service cloud.firestore {
         isAdmin()
       )) || isServerAdmin();
       allow update: if (isAuthenticated() && isValidUser(request.resource.data) && (
-        (isOwner(userId) && request.resource.data.uid == resource.data.uid && request.resource.data.role == resource.data.role) || 
+        (isOwner(userId) && 
+          request.resource.data.uid == resource.data.uid && 
+          request.resource.data.role == resource.data.role &&
+          (!('plan' in request.resource.data) || request.resource.data.plan == resource.data.plan) &&
+          (!('maxScans' in request.resource.data) || request.resource.data.maxScans == resource.data.maxScans) &&
+          (!('scanCount' in request.resource.data) || request.resource.data.scanCount == resource.data.scanCount) &&
+          (!('subscriptionId' in request.resource.data) || request.resource.data.subscriptionId == resource.data.subscriptionId) &&
+          (!('trialUntil' in request.resource.data) || request.resource.data.trialUntil == resource.data.trialUntil)
+        ) || 
         isAdmin()
       )) || isServerAdmin();
+
       allow delete: if isAdmin();
     }
 
@@ -158,7 +174,8 @@ service cloud.firestore {
         isOwner(resource.data.userId) ||
         request.auth.uid in resource.data.members ||
         (resource.data.teamId != null && isTeamMember(resource.data.teamId) && hasAgencyPlan())
-      )) || resource.data.cronEnabled == true;
+      ));
+
       allow create: if (isAuthenticated() && isValidProject(request.resource.data) && (
         isOwner(request.resource.data.userId) || 
         (request.resource.data.teamId != null && isTeamMember(request.resource.data.teamId) && hasAgencyPlan())

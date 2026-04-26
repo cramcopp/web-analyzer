@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { getSessionUser, getSessionToken } from '@/lib/auth-server';
+import { getDocument, updateDocument } from '@/lib/firestore-edge';
+import { z } from 'zod';
 
-export const runtime = 'edge';
+const competitorsSchema = z.object({
+  niche: z.string().min(1, "Nische ist erforderlich"),
+  domain: z.string().optional(),
+});
+
+export const runtime = 'nodejs';
 
 // Add timeout wrapper
 const fetchWithTimeout = async (url: string, ms = 5000) => {
@@ -25,8 +33,39 @@ const fetchWithTimeout = async (url: string, ms = 5000) => {
 };
 
 export async function POST(req: Request) {
+  const user = await getSessionUser();
+  const token = await getSessionToken();
+
+  if (!user || !token) {
+    return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  }
+
   try {
-    const { niche, domain } = await req.json();
+    const body = await req.json();
+    const result = competitorsSchema.safeParse(body);
+    
+    if (!result.success) {
+      return NextResponse.json({ 
+        error: result.error.errors[0]?.message || 'Ungültige Eingabe' 
+      }, { status: 400 });
+    }
+
+    const { niche, domain } = result.data;
+
+    // Rate Limiting (Throttle: 1 request per 10 seconds per user)
+    const userData = await getDocument('users', user.uid, token);
+    const now = Date.now();
+    const lastReq = userData?.lastCompetitorReqAt ? new Date(userData.lastCompetitorReqAt).getTime() : 0;
+    
+    if (now - lastReq < 10000) { // 10 seconds
+      return NextResponse.json({ 
+        error: 'Zu viele Anfragen', 
+        details: 'Bitte warte einen Moment, bevor du eine neue Wettbewerber-Suche startest.' 
+      }, { status: 429 });
+    }
+
+    // Update last request time
+    await updateDocument('users', user.uid, { lastCompetitorReqAt: new Date(now).toISOString() }, token);
 
     if (!niche) {
       return NextResponse.json({ error: 'Niche is required' }, { status: 400 });

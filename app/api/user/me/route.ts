@@ -52,10 +52,25 @@ export async function PATCH(req: Request) {
 
   try {
     const data = await req.json();
-    // Prevent sensitive fields from being updated here if necessary
-    const { uid, email, role, createdAt, ...allowedData } = data;
     
-    await updateDocument('users', user.uid, allowedData, token);
+    // SEC-02: Privilege Escalation Fix
+    // Only allow updating non-sensitive profile fields.
+    // Specifically block: role, plan, maxScans, scanCount, subscriptionId, etc.
+    const allowedFields = ['displayName', 'photoURL', 'brandLogo'];
+    const filteredData: any = {};
+    
+    for (const key of allowedFields) {
+      if (data[key] !== undefined) {
+        filteredData[key] = data[key];
+      }
+    }
+
+    if (Object.keys(filteredData).length === 0) {
+      return NextResponse.json({ error: 'Keine gültigen Felder zum Aktualisieren angegeben' }, { status: 400 });
+    }
+    
+    await updateDocument('users', user.uid, filteredData, token);
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Update User Firestore Error:', error);

@@ -6,5 +6,7 @@ export const runtime = 'edge';
 export async function POST() {
   const cookieStore = await cookies();
   cookieStore.delete('wap_session');
+  cookieStore.delete('wap_refresh');
   return NextResponse.json({ success: true });
+
 }
