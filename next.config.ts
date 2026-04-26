@@ -23,7 +23,7 @@ const nextConfig: any = {
       },
     ],
   },
-  output: 'standalone',
+  // Removed standalone output as it's not compatible with next-on-pages
   async headers() {
     return [
       {
