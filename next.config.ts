@@ -49,7 +49,7 @@ const nextConfig: any = {
       },
     ];
   },
-  transpilePackages: ['motion'],
+  // Removed transpilePackages for motion to reduce bundle size
   turbopack: {},
   webpack: (config: any, {dev}: any) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.

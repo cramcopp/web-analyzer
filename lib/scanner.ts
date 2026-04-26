@@ -1,4 +1,4 @@
-import * as cheerio from 'cheerio';
+import { parse } from 'node-html-parser';
 
 export interface ScanOptions {
   url: string;
@@ -162,7 +162,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   }
 
   const html = await response.text();
-  const $ = cheerio.load(html);
+  const root = parse(html);
 
   // --- Header Analysis & CDN Detection ---
   const headers = Object.fromEntries(response.headers.entries());
@@ -186,19 +186,20 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   const serverInfo = headers['server'] || 'Hidden';
 
-  // Optimized O(N) DOM depth calculation with safety limit (CQ-05)
+  // Optimized O(N) DOM depth calculation with safety limit
   let maxDomDepth = 0;
   const MAX_DEPTH = 100;
   function calculateDepth(element: any, currentDepth: number) {
     if (currentDepth > maxDomDepth) maxDomDepth = currentDepth;
-    if (currentDepth >= MAX_DEPTH) return; // Prevent stack overflow
+    if (currentDepth >= MAX_DEPTH) return; 
     
-    const children = $(element).children();
-    children.each((_, child) => {
+    const children = element.childNodes.filter((node: any) => node.nodeType === 1);
+    children.forEach((child: any) => {
       calculateDepth(child, currentDepth + 1);
     });
   }
-  $('html').each((_, el) => calculateDepth(el, 1));
+  const htmlEl = root.querySelector('html');
+  if (htmlEl) calculateDepth(htmlEl, 1);
 
   // Unified Link Extraction
   const internalLinks: string[] = [];
@@ -209,17 +210,17 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const linkSummaryList: string[] = [];
   const baseDomain = urlObj.hostname;
 
-  $('a').each((_, el) => {
-    const href = $(el).attr('href') || '';
-    const text = $(el).text().trim();
+  root.querySelectorAll('a').forEach((el) => {
+    const href = el.getAttribute('href') || '';
+    const text = el.text.trim();
     if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
     
-    if (href.startsWith('mailto:')) return; // handled separately via data leakage
+    if (href.startsWith('mailto:')) return; 
     if (href.startsWith('tel:')) { phoneLinks++; return; }
     if (href.includes('google.com/maps') || href.includes('maps.google') || href.includes('maps.app.goo.gl')) {
       googleMapsLinks++;
     }
-
+    
     try {
       const absoluteUrl = new URL(href, urlObj.toString());
       if (absoluteUrl.hostname === baseDomain) {
@@ -236,7 +237,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         linkSummaryList.push(`${text.slice(0, 30)} (${href.slice(0, 50)})`);
       }
     } catch (e: unknown) {
-      console.error("Link processing failed:", e);
+      // Ignore invalid URLs
     }
   });
 
@@ -304,37 +305,36 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   }
 
   // Metadata & Stats
-  const totalScripts = $('script').length;
-  const blockingScripts = totalScripts - $('script[async], script[defer]').length;
-  const totalStylesheets = $('link[rel="stylesheet"]').length;
-  const lazyImages = $('img[loading="lazy"]').length;
-  const imagesTotal = $('img').length;
-  const imagesWithoutAlt = $('img:not([alt]), img[alt=""]').length;
-  const viewport = $('meta[name="viewport"]').attr('content') || 'Not found';
-  const robots = $('meta[name="robots"]').attr('content') || 'Not found';
-  const metaKeywords = $('meta[name="keywords"]').attr('content') || 'Not found';
-  const generator = $('meta[name="generator"]').attr('content') || 'Not found';
-  const htmlLang = $('html').attr('lang') || 'Not set';
-  const ariaCount = $('[aria-hidden], [aria-label], [role]').length;
-  const emptyButtonsLinks = $('button:empty, a:empty').length;
-  const canonical = $('link[rel="canonical"]').attr('href') || 'Not found';
+  const totalScripts = root.querySelectorAll('script').length;
+  const blockingScripts = totalScripts - root.querySelectorAll('script[async], script[defer]').length;
+  const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
+  const lazyImages = root.querySelectorAll('img[loading="lazy"]').length;
+  const imagesTotal = root.querySelectorAll('img').length;
+  const imagesWithoutAlt = root.querySelectorAll('img:not([alt])').length;
+  const viewport = root.querySelector('meta[name="viewport"]')?.getAttribute('content') || 'Not found';
+  const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'Not found';
+  const metaKeywords = root.querySelector('meta[name="keywords"]')?.getAttribute('content') || 'Not found';
+  const generator = root.querySelector('meta[name="generator"]')?.getAttribute('content') || 'Not found';
+  const htmlLang = root.querySelector('html')?.getAttribute('lang') || 'Not set';
+  const ariaCount = root.querySelectorAll('[aria-hidden], [aria-label], [role]').length;
+  const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href') || 'Not found';
 
   // --- Enhanced OpenGraph & Social Extraction ---
-  const ogTitle = $('meta[property="og:title"]').attr('content') 
-               || $('meta[name="og:title"]').attr('content')
-               || $('meta[name="twitter:title"]').attr('content')
-               || $('title').text().trim();
+  const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content') 
+               || root.querySelector('meta[name="og:title"]')?.getAttribute('content')
+               || root.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
+               || root.querySelector('title')?.text.trim();
 
-  const ogDescription = $('meta[property="og:description"]').attr('content')
-                     || $('meta[name="og:description"]').attr('content')
-                     || $('meta[name="twitter:description"]').attr('content')
-                     || $('meta[name="description"]').attr('content') || '';
+  const ogDescription = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
+                     || root.querySelector('meta[name="og:description"]')?.getAttribute('content')
+                     || root.querySelector('meta[name="twitter:description"]')?.getAttribute('content')
+                     || root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
 
-  let ogImage = $('meta[property="og:image"]').attr('content')
-             || $('meta[name="og:image"]').attr('content')
-             || $('meta[name="twitter:image"]').attr('content')
-             || $('meta[name="twitter:image:src"]').attr('content')
-             || $('link[rel="image_src"]').attr('href');
+  let ogImage = root.querySelector('meta[property="og:image"]')?.getAttribute('content')
+             || root.querySelector('meta[name="og:image"]')?.getAttribute('content')
+             || root.querySelector('meta[name="twitter:image"]')?.getAttribute('content')
+             || root.querySelector('meta[name="twitter:image:src"]')?.getAttribute('content')
+             || root.querySelector('link[rel="image_src"]')?.getAttribute('href');
 
   // Ensure ogImage is absolute if found
   if (ogImage && !ogImage.startsWith('http')) {
@@ -345,8 +345,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     }
   }
 
-  const ogType = $('meta[property="og:type"]').attr('content') || 'website';
-  const twitterCard = $('meta[name="twitter:card"]').attr('content') || 'summary';
+  const ogType = root.querySelector('meta[property="og:type"]')?.getAttribute('content') || 'website';
+  const twitterCard = root.querySelector('meta[name="twitter:card"]')?.getAttribute('content') || 'summary';
 
   // Subpage Scanning
   const subpagesToScan = internalLinks.slice(0, subpageLimit);
@@ -362,11 +362,12 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       clearTimeout(timeout);
       if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
       const subHtml = await subRes.text();
-      const $s = cheerio.load(subHtml);
+      const subRoot = parse(subHtml);
       return {
-        error: false, url: subUrl, title: $s('title').text().trim(),
-        metaDescription: $s('meta[name="description"]').attr('content') || '',
-        h1Count: $s('h1').length, imagesWithoutAlt: $s('img:not([alt]), img[alt=""]').length,
+        error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
+        metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+        h1Count: subRoot.querySelectorAll('h1').length, 
+        imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
         status: subRes.status
       };
     } catch (e) { 
@@ -380,12 +381,12 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
 
   // Text Audit (Cleaned)
-  $('script, style, noscript, iframe, svg, video, audio').remove();
-  const title = $('title').text().trim();
-  const metaDescription = $('meta[name="description"]').attr('content') || '';
-  const bodyText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 15000);
-  const h1Count = $('h1').length;
-  const h2Count = $('h2').length;
+  const title = root.querySelector('title')?.text.trim() || '';
+  const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+  const body = root.querySelector('body');
+  const bodyText = body ? body.text.replace(/\s+/g, ' ').trim().slice(0, 15000) : '';
+  const h1Count = root.querySelectorAll('h1').length;
+  const h2Count = root.querySelectorAll('h2').length;
 
   // Simple Wiener Sachtextformel (approximation for German)
   const words = bodyText.split(/\s+/).filter(w => w.length > 0);
@@ -409,9 +410,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   // --- Deep Schema.org Extraction ---
   const schemaTypes: string[] = [];
-  $('script[type="application/ld+json"]').each((_, el) => {
+  root.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
     try {
-      const json = JSON.parse($(el).text());
+      const json = JSON.parse(el.text);
       const extractTypes = (obj: any) => {
         if (obj['@type']) schemaTypes.push(obj['@type'] as string);
         if (obj['@graph'] && Array.isArray(obj['@graph'])) {
@@ -429,7 +430,12 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, generator, viewport,
     viewportScalable: viewport.includes('user-scalable=no') ? 'No' : 'Yes',
     robots, h1Count, h2Count, imagesTotal, imagesWithoutAlt, lazyImages, maxDomDepth,
-    semanticTags: { main: $('main').length, article: $('article').length, section: $('section').length, nav: $('nav').length },
+    semanticTags: { 
+      main: root.querySelectorAll('main').length, 
+      article: root.querySelectorAll('article').length, 
+      section: root.querySelectorAll('section').length, 
+      nav: root.querySelectorAll('nav').length 
+    },
     napSignals: { googleMapsLinks, phoneLinks },
     dataLeakage: { 
       emailsFoundCount: (bodyText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g) || []).length,
