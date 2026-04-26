@@ -135,3 +135,14 @@ export type ReportData = {
   accessibility: AccessibilityReportSection;
   compliance: ComplianceReportSection;
 };
+
+export interface GscData {
+  property: string;
+  performance: any[];
+  performanceTotals: {
+    clicks: number;
+    impressions: number;
+  };
+  inspection: any;
+  sitemaps: any[];
+}

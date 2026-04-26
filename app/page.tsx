@@ -13,7 +13,7 @@ import ReportResultsView from '../components/report-results-view';
 import ProjectDashboardView from '../components/project-dashboard-view';
 import SettingsView from '../components/settings-view';
 import ProfileView from '../components/profile-view';
-import { ReportData, PrioritizedTask } from '../types/report';
+import { ReportData, PrioritizedTask, GscData } from '../types/report';
 import { AnalysisResult } from '../lib/scanner';
 import { Notification, Project } from '../types/common';
 import { useTrial } from '../hooks/use-trial';
