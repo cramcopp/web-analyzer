@@ -32,7 +32,7 @@ export function middleware(request: NextRequest) {
   // 4. CSRF Check: Verify Origin and Referer
   const origin = request.headers.get('origin');
   const referer = request.headers.get('referer');
-  const appUrl = process.env.APP_URL || '';
+  const appUrl = process.env.APP_URL || `${nextUrl.protocol}//${nextUrl.host}`;
   
   // In development, we might use localhost
   const isDevelopment = process.env.NODE_ENV === 'development';

@@ -35,7 +35,7 @@ export async function GET(req: Request) {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID || '',
         client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL}/api/auth/google/callback`,
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL || new URL(req.url).origin}/api/auth/google/callback`,
         grant_type: 'authorization_code',
       }),
     });
@@ -50,12 +50,13 @@ export async function GET(req: Request) {
     const idToken = tokens.id_token;
 
     // Exchange Google ID Token for Firebase ID Token
+    const origin = new URL(req.url).origin;
     const firebaseResp = await fetchWithRetry(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${process.env.FIREBASE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         postBody: `id_token=${idToken}&providerId=google.com`,
-        requestUri: `${process.env.APP_URL}/api/auth/google/callback`,
+        requestUri: `${process.env.APP_URL || origin}/api/auth/google/callback`,
         returnIdpCredential: true,
         returnSecureToken: true
       })

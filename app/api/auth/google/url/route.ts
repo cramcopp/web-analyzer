@@ -3,7 +3,8 @@ import { cookies } from 'next/headers';
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const origin = new URL(req.url).origin;
   const state = crypto.randomUUID();
   const cookieStore = await cookies();
   
@@ -17,7 +18,7 @@ export async function GET() {
 
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID || '',
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL}/api/auth/google/callback`,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL || origin}/api/auth/google/callback`,
     response_type: 'code',
     scope: 'openid email profile https://www.googleapis.com/auth/webmasters.readonly',
     access_type: 'offline',

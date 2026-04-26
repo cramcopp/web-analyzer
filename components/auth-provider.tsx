@@ -78,7 +78,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       const res = await fetch('/api/auth/google/url');
-      const { url } = await res.json();
+      if (!res.ok) {
+        throw new Error(`Auth URL API failed with status ${res.status}`);
+      }
+      const data = await res.json();
+      const { url } = data;
       
       const popup = window.open(url, 'GoogleAuth', 'width=500,height=600');
       

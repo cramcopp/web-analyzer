@@ -63,8 +63,8 @@ export async function POST(req: Request) {
       },
       client_reference_id: uid,
       customer_email: userEmail,
-      success_url: `${process.env.APP_URL || 'http://localhost:3000'}/?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.APP_URL || 'http://localhost:3000'}/`,
+      success_url: `${process.env.APP_URL || new URL(req.url).origin}/?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL || new URL(req.url).origin}/`,
       metadata: {
         uid: uid,
         plan: planName,
