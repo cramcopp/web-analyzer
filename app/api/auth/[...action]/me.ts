@@ -4,7 +4,7 @@ import { fetchWithRetry } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('wap_session')?.value;

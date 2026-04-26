@@ -4,7 +4,7 @@ import { getDocument, setDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-export async function POST() {
+export async function POST(req: Request) {
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

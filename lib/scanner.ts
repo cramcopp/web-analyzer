@@ -450,7 +450,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     social: {
       ogTitle,
       ogDescription,
-      ogImage,
+      ogImage: ogImage || '',
       ogType,
       twitterCard
     },

@@ -4,7 +4,7 @@ import { getDocument, updateDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(req: Request) {
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) {
