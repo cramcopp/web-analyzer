@@ -32,8 +32,8 @@ export const reportSaveSchema = z.object({
   url: z.string().url(),
   score: z.number().min(0).max(100),
   results: z.string(), // JSON string of results
-  categories: z.record(z.any()).optional(),
-  metrics: z.record(z.any()).optional(),
+  categories: z.record(z.string(), z.any()).optional(),
+  metrics: z.record(z.string(), z.any()).optional(),
 });
 
 export const checkoutSchema = z.object({
