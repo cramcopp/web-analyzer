@@ -14,6 +14,7 @@ function SettingsView() {
     setIsDeleting(true);
     try {
       await deleteAccount();
+      window.location.href = '/';
     } catch (err) {
       setIsDeleting(false);
     }
@@ -68,7 +69,9 @@ function SettingsView() {
                 
                 {authError && (
                   <div className="w-full p-4 bg-[#EB5757]/10 border border-[#EB5757]/20 text-[#EB5757] text-[11px] font-bold text-center">
-                    {authError}
+                    {authError.includes('CREDENTIAL_TOO_OLD_LOGIN_AGAIN') 
+                      ? 'Aus Sicherheitsgründen müssen Sie sich vor dem Löschen einmal kurz ab- und wieder anmelden.' 
+                      : authError}
                   </div>
                 )}
 
