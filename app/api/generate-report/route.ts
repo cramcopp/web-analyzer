@@ -335,13 +335,20 @@ export async function POST(req: NextRequest) {
     let success = false;
     let lastModelError = null;
 
-    // Plan-based model selection (Tier-optimized with Gemini 2.0)
-    let preferredModel = "gemini-2.0-flash"; 
+    // Plan-based model selection (Tier-optimized)
+    let preferredModel = "gemini-1.5-flash"; 
     if (plan === 'agency') preferredModel = "gemini-1.5-pro"; 
-    else if (plan === 'pro') preferredModel = "gemini-2.0-flash";
-    else if (plan === 'free') preferredModel = "gemini-1.5-flash";
+    else if (plan === 'pro') preferredModel = "gemini-1.5-flash";
+    else if (plan === 'free') preferredModel = "gemini-1.5-flash-8b";
 
-    const models = [preferredModel, "gemini-1.5-flash", "gemini-1.5-pro"]; 
+    // Robust list of models to try (ordered by priority/stability)
+    const models = [
+      preferredModel,
+      "gemini-1.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-pro",
+      "gemini-1.5-flash-8b"
+    ]; 
 
 
     for (const modelId of models) {
@@ -404,19 +411,20 @@ export async function POST(req: NextRequest) {
 
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+            lastModelError = new Error(`Gemini API error (${modelId}): ${response.status} - ${errorText}`);
+            throw lastModelError;
           }
 
           const result = await response.json();
           const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (!text) throw new Error('No response text from Gemini');
+          if (!text) throw new Error(`No response text from Gemini (${modelId})`);
           
           aiResponse = JSON.parse(text);
           success = true;
           break;
-        } catch (err) {
+        } catch (err: any) {
           lastModelError = err;
-          console.warn(`Attempt ${attempt + 1} with ${modelId} failed:`, err);
+          console.warn(`Attempt ${attempt + 1} with ${modelId} failed:`, err.message);
         }
       }
       if (success) break;
