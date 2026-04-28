@@ -237,8 +237,16 @@ export function SidebarProjects({
                 onClick={() => onItemClick(() => onSelectProject?.(proj))}
                 className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-white dark:hover:bg-zinc-900 border border-transparent hover:border-[#E5E5E5] dark:border-zinc-800 transition-all text-left group cursor-pointer"
               >
-                <span className="w-6 h-6 rounded bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
-                  <Folder className="w-3 h-3 text-[#888]" />
+                <span className="w-6 h-6 rounded bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 flex items-center justify-center shrink-0 overflow-hidden">
+                  {proj.url ? (
+                    <img 
+                      src={`https://www.google.com/s2/favicons?domain=${proj.url}&sz=32`} 
+                      alt=""
+                      className="w-4 h-4 object-contain"
+                    />
+                  ) : (
+                    <Folder className="w-3 h-3 text-[#888]" />
+                  )}
                 </span>
                 <div className="flex flex-col flex-1 min-w-0">
                   <span className="text-[11px] font-bold text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-wide truncate">{proj.name}</span>
