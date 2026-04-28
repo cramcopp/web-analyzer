@@ -83,8 +83,15 @@ function SeoDeepDiveModule({ detailedSeo, socialData, crawlSummary, plan = 'free
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[40px] mb-[40px]">
          <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
-            <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">Keywords & Inhaltsrelevanz</span>
-             <p className="text-[13px] leading-[1.6] text-[#1A1A1A] dark:text-zinc-100 font-medium">{detailedSeo.keywordAnalysis}</p>
+            <span className="text-[11px] uppercase font-bold mb-[12px] text-[#888888] dark:text-zinc-400 tracking-wider">Keywords & Inhaltsrelevanz</span>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {detailedSeo.keywordAnalysis.split(/[,\n.]/).filter(k => k.trim().length > 2 && k.trim().length < 40).slice(0, 10).map((kw, i) => (
+                <span key={i} className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 rounded-sm">
+                  {kw.trim()}
+                </span>
+              ))}
+            </div>
+             <p className="text-[12px] leading-[1.6] text-[#888] font-medium italic opacity-80">{detailedSeo.keywordAnalysis}</p>
          </div>
          <div className="flex flex-col border-t border-[#EEE] dark:border-zinc-800 pt-[15px]">
             <span className="text-[11px] uppercase font-bold mb-[5px] text-[#888888] dark:text-zinc-400 tracking-wider">Meta-Tags & Struktur</span>

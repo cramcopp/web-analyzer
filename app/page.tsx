@@ -237,7 +237,7 @@ export default function WebsiteAnalyzer() {
   );
 
   return (
-    <main className="min-h-screen bg-[#F5F5F3] dark:bg-zinc-950 text-[#1A1A1A] dark:text-zinc-100 font-sans overflow-x-hidden md:pl-16 relative">
+    <main className="min-h-screen bg-[#F5F5F3] dark:bg-zinc-950 text-[#1A1A1A] dark:text-zinc-100 font-sans overflow-x-hidden md:pl-16 relative transition-colors duration-500">
       <Sidebar 
         onLoadReport={handleLoadReport}
         onSelectProject={handleSelectProject}
@@ -263,11 +263,11 @@ export default function WebsiteAnalyzer() {
         </div>
       )}
 
-      <div className="max-w-[1024px] mx-auto px-10 py-[60px] flex flex-col justify-between min-h-screen">
+      <div className="max-w-[1600px] mx-auto px-6 md:px-10 py-10 md:py-[60px] flex flex-col justify-between min-h-screen">
         <div>
           <header className="mb-10 flex flex-col md:flex-row md:justify-between md:items-start gap-8">
             <h1 
-              className="text-[50px] md:text-[82px] leading-[0.85] tracking-[-3px] font-bold uppercase max-w-[500px] cursor-pointer hover:text-[#D4AF37] transition-all duration-500" 
+              className="text-[40px] sm:text-[50px] md:text-[82px] leading-[0.85] tracking-[-3px] font-bold uppercase max-w-[200px] sm:max-w-[500px] cursor-pointer hover:text-[#D4AF37] transition-all duration-500" 
               onClick={() => setActiveView('analyzer')}
             >
               {activeView === 'analyzer' ? 'Website Analyzer Pro' : 'WAP'}

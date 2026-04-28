@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback, useMemo } from 'react';
 import { 
-  Zap, RefreshCw, BarChart3, Filter, LayoutDashboard, 
+  Zap, RefreshCw, LayoutDashboard, 
   ShieldCheck, TrendingUp, Network, Link, Trophy, 
   Wrench, History, Settings, Sparkles, ChevronRight, CheckCircle2
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import ProjectCompetitionView from './project-competition-view';
 import ProjectBacklinksView from './project-backlinks-view';
 import ProjectToolsView from './project-tools-view';
 import ProjectSetupView from './project-setup-view';
+import ProjectKeywordsView from './project-keywords-view';
 import { AnalysisResult, PrioritizedTask } from '@/lib/scanner/types';
 
 interface Project {
@@ -41,11 +42,12 @@ interface ProjectDashboardProps {
   setActiveView: (view: any) => void;
 }
 
-type TabId = 'overview' | 'audit' | 'rankings' | 'linking' | 'ai_plan' | 'backlinks' | 'competition' | 'tools' | 'history' | 'settings';
+type TabId = 'overview' | 'audit' | 'rankings' | 'keywords' | 'linking' | 'ai_plan' | 'backlinks' | 'competition' | 'tools' | 'history' | 'settings';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Übersicht', icon: LayoutDashboard },
   { id: 'audit', label: 'On-Page Audit', icon: ShieldCheck },
+  { id: 'keywords', label: 'Keyword Scan', icon: Search },
   { id: 'rankings', label: 'Rankings', icon: TrendingUp },
   { id: 'linking', label: 'Verlinkung', icon: Network },
   { id: 'ai_plan', label: 'AI-Aktionsplan', icon: Sparkles },
@@ -124,10 +126,10 @@ function ProjectDashboardView({
                 <div className="p-8 bg-[#1A1A1A] dark:bg-zinc-950 border border-white/5 flex flex-col justify-between group">
                    <div>
                       <span className="text-[9px] font-black uppercase tracking-[3px] text-[#D4AF37] mb-4 block">Indexierung</span>
-                      <div className="text-[24px] font-black text-white uppercase tracking-tighter mb-1">
-                         {activeReport?.compliance?.detailedCompliance?.cookieBannerStatus?.includes('Gefunden') ? 'Valid' : 'Check...'}
-                      </div>
-                      <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">DSGVO & Robots OK</p>
+                    <div className="text-[18px] sm:text-[24px] font-black text-white uppercase tracking-tighter mb-1 truncate">
+                       {activeReport?.compliance?.detailedCompliance?.cookieBannerStatus?.includes('Gefunden') ? 'Valid' : 'Check...'}
+                    </div>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">DSGVO & Robots OK</p>
                    </div>
                    <div className="pt-4 border-t border-white/10 mt-4">
                       <div className="flex items-center justify-between text-white">
@@ -140,9 +142,18 @@ function ProjectDashboardView({
                 <div className="p-8 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex flex-col justify-between">
                    <div>
                       <span className="text-[9px] font-black uppercase tracking-[3px] text-[#888] mb-4 block">Nischen-Fokus</span>
-                      <div className="text-[20px] font-black text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-tighter leading-tight">
+                      <div className="text-[16px] sm:text-[20px] font-black text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-tighter leading-tight mb-3">
                          {activeReport?.businessIntelligence?.businessNiche || 'Analyzing...'}
                       </div>
+                      {activeReport?.businessIntelligence?.keywordGapAnalysis && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeReport.businessIntelligence.keywordGapAnalysis.slice(0, 3).map((kw: string, i: number) => (
+                            <span key={i} className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-sm">
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                    </div>
                    <button 
                      onClick={() => setActiveTab('competition')}
@@ -257,6 +268,7 @@ function ProjectDashboardView({
           </div>
         );
 
+      case 'keywords': return <ProjectKeywordsView report={activeReport} />;
       case 'rankings': return <ProjectRankingsView report={activeReport} />;
       case 'linking': return <ProjectLinkingView report={activeReport} plan={plan} />;
       case 'ai_plan': return <ProjectAiActionPlanView report={activeReport} />;
