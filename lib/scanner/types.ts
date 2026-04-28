@@ -95,7 +95,10 @@ export interface AnalysisResult {
   imagesWithoutAlt: number;
   lazyImages: number;
   maxDomDepth: number;
-  semanticTags: { main: number; article: number; section: number; nav: number };
+  semanticTags: { main: number; article: number; section: number; nav: number; header: number; footer: number; aside: number };
+  headings: { h1: string[]; h2: string[]; h3: string[] };
+  imageDetails: { src: string; alt: string | null }[];
+  hreflangs: { hreflang: string; href: string }[];
   napSignals: { googleMapsLinks: number; phoneLinks: number };
   dataLeakage: { emailsFoundCount: number; sampleEmails: string[] };
   internalLinksCount: number;

@@ -80,7 +80,21 @@ function ProjectDashboardView({
     setActiveTab('audit');
   }, []);
 
-  const activeReport = useMemo(() => viewingHistoricalReport || report, [viewingHistoricalReport, report]);
+  const activeData = useMemo(() => {
+    if (viewingHistoricalReport) {
+      return {
+        report: viewingHistoricalReport.results,
+        raw: viewingHistoricalReport.rawScrapeData
+      };
+    }
+    return {
+      report: report,
+      raw: rawScrapeData
+    };
+  }, [viewingHistoricalReport, report, rawScrapeData]);
+
+  const activeReport = activeData.report;
+  const activeRaw = activeData.raw;
 
   const faviconDomain = useMemo(() => {
     try {
@@ -282,7 +296,7 @@ function ProjectDashboardView({
             )}
             <ReportResultsView
               report={activeReport}
-              rawScrapeData={activeReport}
+              rawScrapeData={activeRaw}
               gscData={gscData}
               isGscLoading={isGscLoading}
               onConnectGSC={onConnectGSC}

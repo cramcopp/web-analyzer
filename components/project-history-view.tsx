@@ -14,8 +14,19 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
         const res = await fetch(`/api/reports?url=${encodeURIComponent(url)}`);
         if (res.ok) {
           const data = await res.json();
-          // Sort by date descending
-          const sorted = data.sort((a: any, b: any) => 
+          const parsed = data.map((r: any) => {
+            const results = typeof r.results === 'string' ? JSON.parse(r.results) : r.results;
+            return {
+              ...r,
+              results,
+              seoScore: r.seoScore ?? results?.seo?.score ?? 0,
+              performanceScore: r.performanceScore ?? results?.performance?.score ?? 0,
+              securityScore: r.securityScore ?? results?.security?.score ?? 0,
+              accessibilityScore: r.accessibilityScore ?? results?.accessibility?.score ?? 0,
+              complianceScore: r.complianceScore ?? results?.compliance?.score ?? 0
+            };
+          });
+          const sorted = parsed.sort((a: any, b: any) => 
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
           setReports(sorted);
@@ -84,9 +95,9 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
                     />
                     <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: '#888' }} />
                     <Line type="monotone" name="Global Score" dataKey="score" stroke="#1A1A1A" strokeWidth={4} dot={{ r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" name="SEO" dataKey="seo.score" stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
-                    <Line type="monotone" name="Performance" dataKey="performance.score" stroke="#27AE60" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
-                    <Line type="monotone" name="Security" dataKey="security.score" stroke="#2D9CDB" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
+                    <Line type="monotone" name="SEO" dataKey="seoScore" stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
+                    <Line type="monotone" name="Performance" dataKey="performanceScore" stroke="#27AE60" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
+                    <Line type="monotone" name="Security" dataKey="securityScore" stroke="#2D9CDB" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
                  </LineChart>
               </ResponsiveContainer>
            </div>
@@ -132,15 +143,15 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
                   <div className="flex items-center gap-4 mt-1">
                     <div className="flex items-center gap-1.5">
                       <Search className="w-3 h-3 text-[#888]" />
-                      <span className="text-[9px] font-bold text-[#888] uppercase">SEO: {report.seo?.score || '0'}</span>
+                      <span className="text-[9px] font-bold text-[#888] uppercase">SEO: {report.seoScore}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Zap className="w-3 h-3 text-[#888]" />
-                      <span className="text-[9px] font-bold text-[#888] uppercase">Perf: {report.performance?.score || '0'}</span>
+                      <span className="text-[9px] font-bold text-[#888] uppercase">Perf: {report.performanceScore}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <ShieldCheck className="w-3 h-3 text-[#888]" />
-                      <span className="text-[9px] font-bold text-[#888] uppercase">Sec: {report.security?.score || '0'}</span>
+                      <span className="text-[9px] font-bold text-[#888] uppercase">Sec: {report.securityScore}</span>
                     </div>
                   </div>
                 </div>

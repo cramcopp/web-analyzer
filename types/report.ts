@@ -78,6 +78,21 @@ export type DetailedCompliance = {
   prioritizedTasks: PrioritizedTask[];
 };
 
+export type DetailedContentStrategy = {
+  topicClusters: string[];
+  headingHierarchy: string;
+  keywordCannibalization: string;
+  readabilityAndTone: string;
+  prioritizedTasks: PrioritizedTask[];
+};
+
+export type DetailedUxAndDesign = {
+  mobileExperience: string;
+  conversionFunnels: string;
+  visualHierarchy: string;
+  prioritizedTasks: PrioritizedTask[];
+};
+
 export type ReportSection = {
   score: number;
   insights: string[];
@@ -102,6 +117,14 @@ export type AccessibilityReportSection = ReportSection & {
 
 export type ComplianceReportSection = ReportSection & {
   detailedCompliance?: DetailedCompliance;
+};
+
+export type ContentStrategyReportSection = ReportSection & {
+  detailedContent: DetailedContentStrategy;
+};
+
+export type UxAndDesignReportSection = ReportSection & {
+  detailedUx: DetailedUxAndDesign;
 };
 
 export type ReportData = {
@@ -134,6 +157,8 @@ export type ReportData = {
   performance?: PerformanceReportSection;
   accessibility?: AccessibilityReportSection;
   compliance?: ComplianceReportSection;
+  contentStrategy?: ContentStrategyReportSection;
+  uxAndDesign?: UxAndDesignReportSection;
 };
 
 export interface GscData {

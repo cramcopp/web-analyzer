@@ -113,8 +113,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   // Optimized DOM depth calculation (iterative, limited)
   let maxDomDepth = 0;
-  const MAX_DEPTH = 50; // Reduced from 100 to save CPU
-  const MAX_NODES_TO_CHECK = 1000; // Hard limit to avoid scanning massive DOMs
+  const MAX_DEPTH = 200; // Maximum deep dive analysis
+  const MAX_NODES_TO_CHECK = 10000; // Maximum limit for detailed scanning
   let nodesChecked = 0;
 
   function calculateDepth(element: any, currentDepth: number) {
@@ -246,6 +246,10 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const metaKeywords = root.querySelector('meta[name="keywords"]')?.getAttribute('content') || 'Not found';
   const generator = root.querySelector('meta[name="generator"]')?.getAttribute('content') || 'Not found';
   const htmlLang = root.querySelector('html')?.getAttribute('lang') || 'Not set';
+  const hreflangs = root.querySelectorAll('link[rel="alternate"][hreflang]').map(el => ({
+    hreflang: el.getAttribute('hreflang') || '',
+    href: el.getAttribute('href') || ''
+  }));
 
   // --- Enhanced OpenGraph & Social Extraction ---
   const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content') 
@@ -323,8 +327,16 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   const body = root.querySelector('body');
   const bodyText = body ? body.text.replace(/\s+/g, ' ').trim().slice(0, 15000) : '';
-  const h1Count = root.querySelectorAll('h1').length;
-  const h2Count = root.querySelectorAll('h2').length;
+  const h1Texts = root.querySelectorAll('h1').map(el => el.text.replace(/\s+/g, ' ').trim());
+  const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
+  const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
+  const h1Count = h1Texts.length;
+  const h2Count = h2Texts.length;
+
+  const imageDetails = root.querySelectorAll('img').slice(0, 100).map(img => ({
+    src: img.getAttribute('src') || '',
+    alt: img.getAttribute('alt') || null
+  }));
 
   // Simple Wiener Sachtextformel (approximation for German)
   const words = bodyText.split(/\s+/).filter(w => w.length > 0);
@@ -335,7 +347,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   // --- Enhanced Tech Stack Detection (Optimized) ---
   const techStack: string[] = [];
-  const htmlStr = html.substring(0, 100000); // Check only the first 100KB for common signatures to save CPU
+  const htmlStr = html.substring(0, 500000); // Deep check the first 500KB for maximum accuracy
   if (htmlStr.includes('__NEXT_DATA__')) techStack.push('Next.js');
   if (htmlStr.includes('wp-content') || htmlStr.includes('wp-includes')) techStack.push('WordPress');
   if (htmlStr.includes('cdn.shopify.com')) techStack.push('Shopify');
@@ -400,14 +412,19 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   return {
     audit_id: Math.random().toString(36).substring(7).toUpperCase(),
     createdAt: new Date().toISOString(),
-    urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, generator, viewport,
+    urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, hreflangs, generator, viewport,
     viewportScalable: viewport.includes('user-scalable=no') ? 'No' : 'Yes',
     robots, h1Count, h2Count, imagesTotal, imagesWithoutAlt, lazyImages, maxDomDepth,
+    headings: { h1: h1Texts, h2: h2Texts, h3: h3Texts },
+    imageDetails,
     semanticTags: { 
       main: root.querySelectorAll('main').length, 
       article: root.querySelectorAll('article').length, 
       section: root.querySelectorAll('section').length, 
-      nav: root.querySelectorAll('nav').length 
+      nav: root.querySelectorAll('nav').length,
+      header: root.querySelectorAll('header').length,
+      footer: root.querySelectorAll('footer').length,
+      aside: root.querySelectorAll('aside').length
     },
     napSignals: { googleMapsLinks, phoneLinks },
     dataLeakage: { 

@@ -6,7 +6,7 @@ export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
-    const { scrapeData, url } = await req.json();
+    const { scrapeData, url, plan = 'free' } = await req.json();
 
     if (!scrapeData) {
       return NextResponse.json({ error: 'No scrape data provided' }, { status: 400 });
@@ -267,27 +267,96 @@ export async function POST(req: NextRequest) {
             }
           },
           required: ["score", "insights", "recommendations", "detailedCompliance"]
+        },
+        contentStrategy: {
+          type: "object",
+          properties: {
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
+            detailedContent: {
+              type: "object",
+              properties: {
+                topicClusters: { type: "array", items: { type: "string" } },
+                headingHierarchy: { type: "string" },
+                keywordCannibalization: { type: "string" },
+                readabilityAndTone: { type: "string" },
+                prioritizedTasks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      priority: { type: "string" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
+                    }
+                  }
+                }
+              },
+              required: ["topicClusters", "headingHierarchy", "keywordCannibalization", "readabilityAndTone", "prioritizedTasks"]
+            }
+          },
+          required: ["score", "insights", "recommendations", "detailedContent"]
+        },
+        uxAndDesign: {
+          type: "object",
+          properties: {
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
+            detailedUx: {
+              type: "object",
+              properties: {
+                mobileExperience: { type: "string" },
+                conversionFunnels: { type: "string" },
+                visualHierarchy: { type: "string" },
+                prioritizedTasks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      priority: { type: "string" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
+                    }
+                  }
+                }
+              },
+              required: ["mobileExperience", "conversionFunnels", "visualHierarchy", "prioritizedTasks"]
+            }
+          },
+          required: ["score", "insights", "recommendations", "detailedUx"]
         }
       },
-      required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance"]
+      required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance", "contentStrategy", "uxAndDesign"]
     };
 
     let aiResponse = null;
     let success = false;
     let lastModelError = null;
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+    // Plan-based model selection (Tier-optimized with Gemini 2.0)
+    let preferredModel = "gemini-2.0-flash"; 
+    if (plan === 'agency') preferredModel = "gemini-1.5-pro"; // 1.5 Pro is still superior for deep reasoning than 2.0 Flash
+    else if (plan === 'pro') preferredModel = "gemini-2.0-flash";
+    else if (plan === 'free') preferredModel = "gemini-1.5-flash-8b";
+
+    const models = [preferredModel, "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"];
 
     for (const modelId of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          // Trim the payload to save LLM tokens and costs
-          const { headers, securityHeaders, apiEndpoints, ...trimmedScrapeData } = scrapeData;
-          if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 5000) {
-             trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 5000) + '...[TRUNCATED]';
+          // Keep all critical data for deep analysis
+          const trimmedScrapeData = { ...scrapeData };
+          if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 75000) {
+             trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 75000) + '...[TRUNCATED]';
           }
 
-          const prompt = `Analysiere die folgenden Website-Daten für ${url} und erstelle einen detaillierten SEO-Bericht in deutscher Sprache. Nutze die Daten für Wettbewerber-Benchmarking, Keyword-Lücken-Analyse und einen konkreten Umsetzungsplan für Entwickler.
+          const prompt = `Du bist ein hochgradig strenger, technischer SEO- und Security-Auditor auf Enterprise-Niveau. 
+          Analysiere die folgenden Website-Daten für ${url} und erstelle einen extrem detaillierten und kritischen SEO-Bericht in deutscher Sprache. 
+          Sei SEHR streng bei der Punktevergabe (Scores). Eine Seite mit fehlenden Security-Headern, schlechter Performance oder wenig Text MUSS schlechte Scores erhalten (z.B. unter 50). 
+          Fülle alle Felder im JSON-Schema maximal und ausführlich aus. Generiere so viele nützliche Datenpakete für Diagramme ('chartData') und priorisierte Aufgaben wie möglich, um einen maximal großen Deep-Dive zu gewährleisten.
+          Nutze die Daten für tiefgreifendes Wettbewerber-Benchmarking, Keyword-Lücken-Analyse und einen konkreten Umsetzungsplan für Entwickler.
           
           Daten: ${JSON.stringify(trimmedScrapeData)}`;
 

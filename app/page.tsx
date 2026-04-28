@@ -71,9 +71,32 @@ export default function WebsiteAnalyzer() {
     }
   };
 
-  const handleSelectProject = (proj: Project) => {
+  const handleSelectProject = async (proj: Project) => {
     setSelectedProject(proj);
-    if (proj.url) setUrl(proj.url);
+    if (proj.url) {
+      setUrl(proj.url);
+      // Automatically load latest report for this URL
+      try {
+        const resp = await fetch(`/api/reports?url=${encodeURIComponent(proj.url)}`);
+        if (resp.ok) {
+          const reports = await resp.json();
+          if (reports && reports.length > 0) {
+             const latest = reports.sort((a: any, b: any) => 
+               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+             )[0];
+             
+             if (latest.results) setReport(typeof latest.results === 'string' ? JSON.parse(latest.results) : latest.results);
+             if (latest.rawScrapeData) setRawScrapeData(typeof latest.rawScrapeData === 'string' ? JSON.parse(latest.rawScrapeData) : latest.rawScrapeData);
+             setLastAnalyzedUrl(proj.url);
+          } else {
+             setReport(null);
+             setRawScrapeData(null);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading latest report for project:", e);
+      }
+    }
     setActiveView('project');
   };
 
@@ -155,8 +178,10 @@ export default function WebsiteAnalyzer() {
           (finalReport.security?.score || 0) + 
           (finalReport.performance?.score || 0) + 
           (finalReport.accessibility?.score || 0) + 
-          (finalReport.compliance?.score || 0)
-        ) / 5);
+          (finalReport.compliance?.score || 0) +
+          (finalReport.contentStrategy?.score || 0) +
+          (finalReport.uxAndDesign?.score || 0)
+        ) / 7);
         
         // Technical optimization: Prune large fields before saving to stay under Firestore limits
         const storageData = { ...scrapeData };
@@ -169,7 +194,12 @@ export default function WebsiteAnalyzer() {
             url: targetUrl,
             score: avgScore,
             results: JSON.stringify(finalReport),
-            rawScrapeData: JSON.stringify(storageData)
+            rawScrapeData: JSON.stringify(storageData),
+            seoScore: finalReport.seo?.score || 0,
+            performanceScore: finalReport.performance?.score || 0,
+            securityScore: finalReport.security?.score || 0,
+            accessibilityScore: finalReport.accessibility?.score || 0,
+            complianceScore: finalReport.compliance?.score || 0
           })
         });
 
@@ -220,6 +250,8 @@ export default function WebsiteAnalyzer() {
     addTasks('Performance', report.performance?.detailedPerformance?.prioritizedTasks);
     addTasks('Accessibility', report.accessibility?.detailedAccessibility?.prioritizedTasks);
     addTasks('Legal', report.compliance?.detailedCompliance?.prioritizedTasks);
+    addTasks('Content Strategy', report.contentStrategy?.detailedContent?.prioritizedTasks);
+    addTasks('UX & Design', report.uxAndDesign?.detailedUx?.prioritizedTasks);
 
     const csvContent = "\ufeff" + rows.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

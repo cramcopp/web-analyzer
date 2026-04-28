@@ -3,7 +3,7 @@
 import { memo, useMemo } from 'react';
 import { 
   Download, Share2, Zap, Search, 
-  ShieldCheck, UserCheck, Scale, CodeXml, Copy 
+  ShieldCheck, UserCheck, Scale, CodeXml, Copy, Star 
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -25,6 +25,8 @@ const SecurityDeepDiveModule = dynamic(() => import('./security-module'), { load
 const PerformanceDeepDiveModule = dynamic(() => import('./performance-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const AccessibilityDeepDiveModule = dynamic(() => import('./accessibility-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const ComplianceDeepDiveModule = dynamic(() => import('./compliance-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
+const ContentStrategyModule = dynamic(() => import('./content-strategy-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
+const UxDesignModule = dynamic(() => import('./ux-design-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const ImplementationPlanModule = dynamic(() => import('./implementation-plan'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const CompetitorMap = dynamic(() => import('./competitor-map'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const QuickNav = dynamic(() => import('./quick-nav'), { ssr: false });
@@ -85,6 +87,8 @@ function ReportResultsView({
     { subject: 'Perf', A: report.performance?.score || 0, full: 100 },
     { subject: 'A11y', A: report.accessibility?.score || 0, full: 100 },
     { subject: 'Legal', A: report.compliance?.score || 0, full: 100 },
+    { subject: 'Content', A: report.contentStrategy?.score || 0, full: 100 },
+    { subject: 'UX', A: report.uxAndDesign?.score || 0, full: 100 },
   ], [report]);
 
   return (
@@ -127,6 +131,8 @@ function ReportResultsView({
           <ScoreCard title="Performance" score={report.performance?.score || 0} desc="Speed & Assets" icon={<Zap className="w-3 h-3" />} />
           <ScoreCard title="Accessibility" score={report.accessibility?.score || 0} desc="A11y & Structure" icon={<UserCheck className="w-3 h-3" />} />
           <ScoreCard title="Compliance" score={report.compliance?.score || 0} desc="GDPR & Legal" icon={<Scale className="w-3 h-3" />} />
+          <ScoreCard title="Content Strategy" score={report.contentStrategy?.score || 0} desc="Topics & Tone" icon={<Zap className="w-3 h-3" />} />
+          <ScoreCard title="UX & Design" score={report.uxAndDesign?.score || 0} desc="Funnels & Layout" icon={<Star className="w-3 h-3" />} />
         </div>
         <div className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-[#E5E5E5] dark:border-zinc-800 p-8 h-[400px] flex flex-col items-center justify-center relative overflow-hidden group shadow-2xl shadow-black/5" style={{ minHeight: 200 }}>
            <div className="absolute top-4 left-6">
@@ -162,7 +168,10 @@ function ReportResultsView({
         <DetailSection title="SEO Deep Insights" data={report.seo || { score: 0, insights: [], recommendations: [] }} badge="VISIBILITY" />
         <DetailSection title="Security Audit" data={report.security || { score: 0, insights: [], recommendations: [] }} badge="PROTECTION" />
         <DetailSection title="Performance" data={report.performance || { score: 0, insights: [], recommendations: [] }} badge="UX/SPEED" />
+        <DetailSection title="Accessibility" data={report.accessibility || { score: 0, insights: [], recommendations: [] }} badge="INCLUSION" />
         <DetailSection title="Compliance" data={report.compliance || { score: 0, insights: [], recommendations: [] }} badge="LEGAL" />
+        <DetailSection title="Content Strategy" data={report.contentStrategy || { score: 0, insights: [], recommendations: [] }} badge="AUTHORITY" />
+        <DetailSection title="UX & Design" data={report.uxAndDesign || { score: 0, insights: [], recommendations: [] }} badge="CONVERSION" />
       </motion.div>
 
       <div className="space-y-[80px] pb-20">
@@ -216,6 +225,22 @@ function ReportResultsView({
             <ComplianceDeepDiveModule 
               detailedCompliance={report.compliance?.detailedCompliance || {} as any} 
               legalData={rawScrapeData?.legal} 
+            />
+          </ErrorBoundary>
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
+          <ErrorBoundary moduleName="Content Strategy Module">
+            <ContentStrategyModule 
+              detailedContent={report.contentStrategy?.detailedContent || {} as any} 
+            />
+          </ErrorBoundary>
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
+          <ErrorBoundary moduleName="UX Design Module">
+            <UxDesignModule 
+              detailedUx={report.uxAndDesign?.detailedUx || {} as any} 
             />
           </ErrorBoundary>
         </motion.div>
