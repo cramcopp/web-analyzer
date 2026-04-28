@@ -560,6 +560,206 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         usercentrics: html.includes('usercentrics'),
         cookieConsent: html.includes('cookie-consent') || html.includes('CookieConsent'),
         borlabs: html.includes('borlabs')
+    } catch (e) {
+      console.warn(`Failed to resolve absolute URL for ogImage: ${ogImage}`, e);
+    }
+  }
+
+  const ogType = root.querySelector('meta[property="og:type"]')?.getAttribute('content') || 'website';
+  const twitterCard = root.querySelector('meta[name="twitter:card"]')?.getAttribute('content') || 'summary';
+
+  // Subpage Scanning
+  const subpagesToScan = internalLinks.slice(0, subpageLimit);
+  const scanSubpage = async (subUrl: string): Promise<SubpageResult> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const subRes = await fetch(subUrl, { 
+        signal: controller.signal,
+        headers: { 'User-Agent': 'WebsiteAnalyzerPro/1.0 (Enterprise Auditor)' }
+      });
+      clearTimeout(timeout);
+      if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
+      const subHtml = await subRes.text();
+      const subRoot = parse(subHtml);
+      
+      // Extreme Stripping for subpages to keep context window manageable
+      const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
+
+      return {
+        error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
+        metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+        robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
+        canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
+        h1Count: subRoot.querySelectorAll('h1').length, 
+        imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
+        status: subRes.status,
+        strippedContent
+      };
+    } catch (e) { 
+      console.warn(`Subpage scan failed for ${subUrl}`, e);
+      return { error: true, url: subUrl, status: 'Error' }; 
+    }
+  };
+
+  // Smart Queue Manager for Subpages
+  const subpageResults: SubpageResult[] = [];
+  
+  if (crawlDelayMs > 0) {
+    // Strict Sequential Mode for Politeness
+    for (const subUrl of subpagesToScan) {
+      const result = await scanSubpage(subUrl);
+      subpageResults.push(result);
+      await new Promise(resolve => setTimeout(resolve, Math.min(crawlDelayMs, 3000))); // Cap at 3s to avoid Worker timeout
+    }
+  } else {
+    // Batch Mode for Speed
+    const BATCH_SIZE = 8; 
+    for (let i = 0; i < subpagesToScan.length; i += BATCH_SIZE) {
+      const batch = subpagesToScan.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(url => scanSubpage(url)));
+      subpageResults.push(...results);
+      // Small break even without delay to be "nice"
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
+  const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
+
+  // Text Audit (Cleaned)
+  const title = root.querySelector('title')?.text.trim() || '';
+  const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+  const htmlStripped = stripHtmlForAi(html);
+  const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000); 
+  const h1Texts = root.querySelectorAll('h1').map(el => el.text.replace(/\s+/g, ' ').trim());
+  const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
+  const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
+  const h1Count = h1Texts.length;
+  const h2Count = h2Texts.length;
+
+  const imageDetails = root.querySelectorAll('img').slice(0, 100).map(img => ({
+    src: img.getAttribute('src') || '',
+    alt: img.getAttribute('alt') || null
+  }));
+
+  // Simple Wiener Sachtextformel (approximation for German)
+  const words = bodyText.split(/\s+/).filter(w => w.length > 0);
+  const avgSentenceLength = words.length / (bodyText.split(/[.!?]+/).filter(s => s.trim().length > 0).length || 1);
+  const countSyllables = (word: string) => word.toLowerCase().match(/[aeiouyäöü]{1,2}/g)?.length || 1;
+  const avgSyllablesPerWord = words.reduce((acc, w) => acc + countSyllables(w), 0) / (words.length || 1);
+  const wienerSachtextIndex = Math.round((0.26 * avgSentenceLength + 0.27 * (avgSyllablesPerWord * 6) - 1.69) * 10) / 10;
+
+  // --- Enhanced Tech Stack Detection (Optimized) ---
+  const techStack: string[] = [];
+  const htmlStr = html.substring(0, 500000); // Deep check the first 500KB for maximum accuracy
+  if (htmlStr.includes('__NEXT_DATA__')) techStack.push('Next.js');
+  if (htmlStr.includes('wp-content') || htmlStr.includes('wp-includes')) techStack.push('WordPress');
+  if (htmlStr.includes('cdn.shopify.com')) techStack.push('Shopify');
+  if (htmlStr.includes('id="_nuxt"') || htmlStr.includes('window.__NUXT__')) techStack.push('Nuxt.js');
+  if (htmlStr.includes('data-reactroot')) techStack.push('React');
+  if (htmlStr.includes('wix-config') || htmlStr.includes('wix.com')) techStack.push('Wix');
+  if (htmlStr.includes('static1.squarespace.com')) techStack.push('Squarespace');
+  if (htmlStr.includes('hubspot.com')) techStack.push('HubSpot');
+  if (htmlStr.includes('googletagmanager.com/gtm.js')) techStack.push('Google Tag Manager');
+  if (htmlStr.includes('google-analytics.com')) techStack.push('Google Analytics');
+
+
+  // --- API Endpoint Discovery ---
+  const apiEndpoints: string[] = [];
+  if (plan !== 'free') {
+    const apiPaths = ['/api', '/graphql', '/v1', '/wp-json/wp/v2'];
+    await Promise.all(apiPaths.map(async (path) => {
+      try {
+        const testUrl = new URL(path, urlObj.toString()).toString();
+        const apiRes = await fetch(testUrl, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
+        if (apiRes.ok || apiRes.status === 401 || apiRes.status === 403) {
+          apiEndpoints.push(path);
+        }
+      } catch { /* ignore */ }
+    }));
+
+  }
+
+  // --- Legal & Tracking Signal Extraction ---
+  const scriptsText = root.querySelectorAll('script').map(s => s.getAttribute('src') || s.text).join(' ');
+  const cmpDetected = html.includes('cookie-consent') || html.includes('CookieConsent') || html.includes('cookiebot') || html.includes('usercentrics') || html.includes('cmp-banner');
+  const links = root.querySelectorAll('a');
+  const impressumLink = links.some(a => {
+    const text = a.text.toLowerCase();
+    const href = (a.getAttribute('href') || '').toLowerCase();
+    return text.includes('impressum') || href.includes('impressum') || text.includes('legal notice');
+  });
+  const privacyLink = links.some(a => {
+    const text = a.text.toLowerCase();
+    const href = (a.getAttribute('href') || '').toLowerCase();
+    return text.includes('datenschutz') || href.includes('datenschutz') || text.includes('privacy') || href.includes('privacy-policy');
+  });
+
+  // --- Deep Schema.org Extraction ---
+  const schemaTypes: string[] = [];
+  root.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
+    try {
+      const json = JSON.parse(el.text);
+      const extractTypes = (obj: any) => {
+        if (obj['@type']) schemaTypes.push(obj['@type'] as string);
+        if (obj['@graph'] && Array.isArray(obj['@graph'])) {
+          obj['@graph'].forEach((item: any) => { if (item['@type']) schemaTypes.push(item['@type'] as string); });
+        }
+      };
+      extractTypes(json);
+    } catch (e) {
+      console.warn("Failed to parse JSON-LD schema", e);
+    }
+  });
+
+  // --- Indexability Check ---
+  const mainIsIndexable = !robots.toLowerCase().includes('noindex');
+  const indexableSubpagesCount = successfulSubpages.filter(p => !p.robots?.toLowerCase().includes('noindex')).length;
+  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpagesCount;
+
+  // Final structure
+  return {
+    audit_id: Math.random().toString(36).substring(7).toUpperCase(),
+    createdAt: new Date().toISOString(),
+    urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, hreflangs, generator, viewport,
+    viewportScalable: viewport.includes('user-scalable=no') ? 'No' : 'Yes',
+    robots, h1Count, h2Count, imagesTotal, imagesWithoutAlt, lazyImages, maxDomDepth,
+    headings: { h1: h1Texts, h2: h2Texts, h3: h3Texts },
+    imageDetails,
+    semanticTags: { 
+      main: root.querySelectorAll('main').length, 
+      article: root.querySelectorAll('article').length, 
+      section: root.querySelectorAll('section').length, 
+      nav: root.querySelectorAll('nav').length,
+      header: root.querySelectorAll('header').length,
+      footer: root.querySelectorAll('footer').length,
+      aside: root.querySelectorAll('aside').length
+    },
+    napSignals: { googleMapsLinks, phoneLinks },
+    dataLeakage: { 
+      emailsFoundCount: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).length,
+      sampleEmails: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).slice(0, 3)
+    },
+    internalLinksCount: internalLinks.length, externalLinksCount, totalScripts, blockingScripts, totalStylesheets,
+    responseTimeMs, ttfbMs, preflight, psiMetricsStr, psiMetrics, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
+    wienerSachtextIndex, bodyText, techStack,
+    cdn,
+    serverInfo,
+    legal: {
+      trackingScripts: {
+        googleAnalytics: scriptsText.includes('googletagmanager.com/gtm.js') || scriptsText.includes('google-analytics.com'),
+        facebookPixel: scriptsText.includes('facebook.net/en_US/fbevents.js'),
+        hubspot: scriptsText.includes('js.hs-scripts.com') || scriptsText.includes('js.hubspot.com'),
+        hotjar: scriptsText.includes('hotjar.com'),
+        clarity: scriptsText.includes('clarity.ms')
+      },
+      cmpDetected: {
+        cookieBot: html.includes('cookiebot'),
+        usercentrics: html.includes('usercentrics'),
+        cookieConsent: html.includes('cookie-consent') || html.includes('CookieConsent'),
+        borlabs: html.includes('borlabs')
       },
       linksInFooter: impressumLink,
       privacyInFooter: privacyLink,
@@ -579,10 +779,10 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     crawlSummary: { 
       totalInternalLinks: internalLinks.length, 
       scannedSubpagesCount: successfulSubpages.length, 
+      indexablePagesCount,
       scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
       brokenLinks 
     },
     apiEndpoints
   };
 }
-

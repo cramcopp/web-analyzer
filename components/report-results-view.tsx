@@ -105,12 +105,12 @@ function ReportResultsView({
               <div className="h-4 w-[1px] bg-[#888]/30 hidden sm:block" />
               <div className="flex items-center gap-3">
                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Seiten gefunden</span>
+                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Gecrawlte Seiten</span>
                     <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{rawScrapeData?.crawlSummary?.totalInternalLinks || 1}</span>
                  </div>
                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Analysiert</span>
-                    <span className="text-[14px] font-black text-[#D4AF37] leading-tight">{(rawScrapeData?.crawlSummary?.scannedSubpagesCount || 0) + 1}</span>
+                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Indexierbare Seiten</span>
+                    <span className="text-[14px] font-black text-[#D4AF37] leading-tight">{rawScrapeData?.crawlSummary?.indexablePagesCount || 1}</span>
                  </div>
               </div>
            </div>
