@@ -51,6 +51,7 @@ const nextConfig: any = {
     ];
   },
   // Removed transpilePackages for motion to reduce bundle size
+  turbopack: {},
   webpack: (config: any, {dev}: any) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
     // Do not modifyâ€”file watching is disabled to prevent flickering during agent edits.
