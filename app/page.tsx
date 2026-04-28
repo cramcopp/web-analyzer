@@ -150,7 +150,13 @@ export default function WebsiteAnalyzer() {
       addNotification('Analyse abgeschlossen', `Bericht für ${targetUrl} ist bereit.`);
 
       if (user) {
-        const avgScore = Math.round((finalReport.seo.score + finalReport.security.score + finalReport.performance.score + finalReport.accessibility.score + finalReport.compliance.score) / 5);
+        const avgScore = Math.round((
+          (finalReport.seo?.score || 0) + 
+          (finalReport.security?.score || 0) + 
+          (finalReport.performance?.score || 0) + 
+          (finalReport.accessibility?.score || 0) + 
+          (finalReport.compliance?.score || 0)
+        ) / 5);
         
         // Technical optimization: Prune large fields before saving to stay under Firestore limits
         const storageData = { ...scrapeData };
@@ -209,11 +215,11 @@ export default function WebsiteAnalyzer() {
     const addTasks = (cat: string, tasks?: PrioritizedTask[]) => {
       tasks?.forEach(t => rows.push([cat, `"${t.priority}"`, `"${t.task}"`, `"${t.remediation || ''}"`]));
     };
-    addTasks('SEO', report.seo.detailedSeo?.prioritizedTasks);
-    addTasks('Security', report.security.detailedSecurity?.prioritizedTasks);
-    addTasks('Performance', report.performance.detailedPerformance?.prioritizedTasks);
-    addTasks('Accessibility', report.accessibility.detailedAccessibility?.prioritizedTasks);
-    addTasks('Legal', report.compliance.detailedCompliance?.prioritizedTasks);
+    addTasks('SEO', report.seo?.detailedSeo?.prioritizedTasks);
+    addTasks('Security', report.security?.detailedSecurity?.prioritizedTasks);
+    addTasks('Performance', report.performance?.detailedPerformance?.prioritizedTasks);
+    addTasks('Accessibility', report.accessibility?.detailedAccessibility?.prioritizedTasks);
+    addTasks('Legal', report.compliance?.detailedCompliance?.prioritizedTasks);
 
     const csvContent = "\ufeff" + rows.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

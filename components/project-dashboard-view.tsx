@@ -17,7 +17,7 @@ import ProjectCompetitionView from './project-competition-view';
 import ProjectBacklinksView from './project-backlinks-view';
 import ProjectToolsView from './project-tools-view';
 import ProjectSetupView from './project-setup-view';
-import { AnalysisResult } from '@/lib/scanner/types';
+import { AnalysisResult, PrioritizedTask } from '@/lib/scanner/types';
 
 interface Project {
   id: string;
@@ -30,7 +30,7 @@ interface ProjectDashboardProps {
   project: Project;
   onStartScan: (url: string) => void;
   isLoading: boolean;
-  report: AnalysisResult | null;
+  report: any;
   rawScrapeData: any;
   gscData: any;
   isGscLoading: boolean;
@@ -71,9 +71,9 @@ function ProjectDashboardView({
   setActiveView
 }: ProjectDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [viewingHistoricalReport, setViewingHistoricalReport] = useState<AnalysisResult | null>(null);
+  const [viewingHistoricalReport, setViewingHistoricalReport] = useState<any>(null);
 
-  const handleSelectHistoricalReport = useCallback((reportData: AnalysisResult) => {
+  const handleSelectHistoricalReport = useCallback((reportData: any) => {
     setViewingHistoricalReport(reportData);
     setActiveTab('audit');
   }, []);
@@ -170,7 +170,7 @@ function ProjectDashboardView({
                       <Sparkles className="w-4 h-4 text-[#D4AF37]" />
                    </div>
                    <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 divide-y divide-[#EEE] dark:divide-zinc-800">
-                      {(activeReport?.seo?.detailedSeo?.prioritizedTasks || []).slice(0, 3).map((task, i) => (
+                      {(activeReport?.seo?.detailedSeo?.prioritizedTasks || []).slice(0, 3).map((task: PrioritizedTask, i: number) => (
                         <div key={i} className="p-4 flex items-start gap-3 hover:bg-black/[0.02] transition-colors group cursor-pointer" onClick={() => setActiveTab('ai_plan')}>
                            <div className="w-6 h-6 shrink-0 bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center text-[10px] font-black rounded-sm group-hover:bg-[#D4AF37] group-hover:text-white transition-all">
                               {i + 1}
