@@ -179,9 +179,8 @@ export default function WebsiteAnalyzer() {
           (finalReport.performance?.score || 0) + 
           (finalReport.accessibility?.score || 0) + 
           (finalReport.compliance?.score || 0) +
-          (finalReport.contentStrategy?.score || 0) +
-          (finalReport.uxAndDesign?.score || 0)
-        ) / 7);
+          (finalReport.contentStrategy?.score || 0)
+        ) / 6);
         
         // Technical optimization: Prune large fields before saving to stay under Firestore limits
         const storageData = { ...scrapeData };
@@ -251,7 +250,6 @@ export default function WebsiteAnalyzer() {
     addTasks('Accessibility', report.accessibility?.detailedAccessibility?.prioritizedTasks);
     addTasks('Legal', report.compliance?.detailedCompliance?.prioritizedTasks);
     addTasks('Content Strategy', report.contentStrategy?.detailedContent?.prioritizedTasks);
-    addTasks('UX & Design', report.uxAndDesign?.detailedUx?.prioritizedTasks);
 
     const csvContent = "\ufeff" + rows.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

@@ -226,4 +226,14 @@ export interface AnalysisResult {
       prioritizedTasks: PrioritizedTask[];
     }
   };
+  
+  contentStrategy?: AISection & {
+    detailedContent: {
+      topicClusters: string[];
+      headingHierarchy: string;
+      keywordCannibalization: string;
+      readabilityAndTone: string;
+      prioritizedTasks: PrioritizedTask[];
+    }
+  };
 }

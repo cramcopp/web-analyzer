@@ -298,18 +298,19 @@ export async function POST(req: NextRequest) {
           },
           required: ["score", "insights", "recommendations", "detailedContent"]
         },
-        uxAndDesign: {
+        contentStrategy: {
           type: "object",
           properties: {
             score: { type: "integer" },
             insights: { type: "array", items: { type: "string" } },
             recommendations: { type: "array", items: { type: "string" } },
-            detailedUx: {
+            detailedContent: {
               type: "object",
               properties: {
-                mobileExperience: { type: "string" },
-                conversionFunnels: { type: "string" },
-                visualHierarchy: { type: "string" },
+                topicClusters: { type: "array", items: { type: "string" } },
+                headingHierarchy: { type: "string" },
+                keywordCannibalization: { type: "string" },
+                readabilityAndTone: { type: "string" },
                 prioritizedTasks: {
                   type: "array",
                   items: {
@@ -322,13 +323,13 @@ export async function POST(req: NextRequest) {
                   }
                 }
               },
-              required: ["mobileExperience", "conversionFunnels", "visualHierarchy", "prioritizedTasks"]
+              required: ["topicClusters", "headingHierarchy", "keywordCannibalization", "readabilityAndTone", "prioritizedTasks"]
             }
           },
-          required: ["score", "insights", "recommendations", "detailedUx"]
+          required: ["score", "insights", "recommendations", "detailedContent"]
         }
       },
-      required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance", "contentStrategy", "uxAndDesign"]
+      required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance", "contentStrategy"]
     };
 
     let aiResponse = null;

@@ -26,7 +26,6 @@ const PerformanceDeepDiveModule = dynamic(() => import('./performance-module'), 
 const AccessibilityDeepDiveModule = dynamic(() => import('./accessibility-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const ComplianceDeepDiveModule = dynamic(() => import('./compliance-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const ContentStrategyModule = dynamic(() => import('./content-strategy-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
-const UxDesignModule = dynamic(() => import('./ux-design-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const ImplementationPlanModule = dynamic(() => import('./implementation-plan'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const CompetitorMap = dynamic(() => import('./competitor-map'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
 const QuickNav = dynamic(() => import('./quick-nav'), { ssr: false });
@@ -88,7 +87,6 @@ function ReportResultsView({
     { subject: 'A11y', A: report.accessibility?.score || 0, full: 100 },
     { subject: 'Legal', A: report.compliance?.score || 0, full: 100 },
     { subject: 'Content', A: report.contentStrategy?.score || 0, full: 100 },
-    { subject: 'UX', A: report.uxAndDesign?.score || 0, full: 100 },
   ], [report]);
 
   return (
@@ -102,7 +100,20 @@ function ReportResultsView({
         <div>
            <span className="text-[10px] font-black uppercase tracking-[2.5px] text-[#D4AF37] mb-2 block">Audit abgeschlossen</span>
            <h2 className="text-[32px] md:text-[48px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Audit Bericht</h2>
-           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest">{rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : '—'} • {new Date().toLocaleDateString('de-DE')}</p>
+           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
+              <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest">{rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : '—'} • {new Date().toLocaleDateString('de-DE')}</p>
+              <div className="h-4 w-[1px] bg-[#888]/30 hidden sm:block" />
+              <div className="flex items-center gap-3">
+                 <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Seiten gefunden</span>
+                    <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{rawScrapeData?.crawlSummary?.totalInternalLinks || 1}</span>
+                 </div>
+                 <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Analysiert</span>
+                    <span className="text-[14px] font-black text-[#D4AF37] leading-tight">{(rawScrapeData?.crawlSummary?.scannedSubpagesCount || 0) + 1}</span>
+                 </div>
+              </div>
+           </div>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -132,7 +143,6 @@ function ReportResultsView({
           <ScoreCard title="Accessibility" score={report.accessibility?.score || 0} desc="A11y & Structure" icon={<UserCheck className="w-3 h-3" />} />
           <ScoreCard title="Compliance" score={report.compliance?.score || 0} desc="GDPR & Legal" icon={<Scale className="w-3 h-3" />} />
           <ScoreCard title="Content Strategy" score={report.contentStrategy?.score || 0} desc="Topics & Tone" icon={<Zap className="w-3 h-3" />} />
-          <ScoreCard title="UX & Design" score={report.uxAndDesign?.score || 0} desc="Funnels & Layout" icon={<Star className="w-3 h-3" />} />
         </div>
         <div className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-[#E5E5E5] dark:border-zinc-800 p-8 h-[400px] flex flex-col items-center justify-center relative overflow-hidden group shadow-2xl shadow-black/5" style={{ minHeight: 200 }}>
            <div className="absolute top-4 left-6">
@@ -171,7 +181,6 @@ function ReportResultsView({
         <DetailSection title="Accessibility" data={report.accessibility || { score: 0, insights: [], recommendations: [] }} badge="INCLUSION" />
         <DetailSection title="Compliance" data={report.compliance || { score: 0, insights: [], recommendations: [] }} badge="LEGAL" />
         <DetailSection title="Content Strategy" data={report.contentStrategy || { score: 0, insights: [], recommendations: [] }} badge="AUTHORITY" />
-        <DetailSection title="UX & Design" data={report.uxAndDesign || { score: 0, insights: [], recommendations: [] }} badge="CONVERSION" />
       </motion.div>
 
       <div className="space-y-[80px] pb-20">
@@ -233,14 +242,6 @@ function ReportResultsView({
           <ErrorBoundary moduleName="Content Strategy Module">
             <ContentStrategyModule 
               detailedContent={report.contentStrategy?.detailedContent || {} as any} 
-            />
-          </ErrorBoundary>
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <ErrorBoundary moduleName="UX Design Module">
-            <UxDesignModule 
-              detailedUx={report.uxAndDesign?.detailedUx || {} as any} 
             />
           </ErrorBoundary>
         </motion.div>
