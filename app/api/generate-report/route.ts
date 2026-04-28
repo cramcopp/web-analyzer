@@ -335,20 +335,16 @@ export async function POST(req: NextRequest) {
     let success = false;
     let lastModelError = null;
 
-    // Plan-based model selection (Tier-optimized)
-    let preferredModel = "gemini-1.5-flash"; 
-    if (plan === 'agency') preferredModel = "gemini-1.5-pro"; 
-    else if (plan === 'pro') preferredModel = "gemini-1.5-flash";
-    else if (plan === 'free') preferredModel = "gemini-1.5-flash-8b";
+    // Tier-based model selection (Updated for April 2026 - Gemini 3 Series)
+    // We prioritize the latest generation but keep 2.x/1.5 as fallbacks
+    const TIER_MAPPING: Record<string, string[]> = {
+      'agency': ['gemini-3.1-pro', 'gemini-3-flash', 'gemini-2.0-pro-exp', 'gemini-1.5-pro'],
+      'pro': ['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'],
+      'free': ['gemini-3.1-flash-lite', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-lite', 'gemini-1.5-flash']
+    };
 
-    // Robust list of models to try (ordered by priority/stability)
-    const models = [
-      preferredModel,
-      "gemini-1.5-flash",
-      "gemini-2.0-flash",
-      "gemini-1.5-pro",
-      "gemini-1.5-flash-8b"
-    ]; 
+    // eslint-disable-next-line security/detect-object-injection
+    const models = TIER_MAPPING[plan] || TIER_MAPPING['free'];
 
 
     for (const modelId of models) {
