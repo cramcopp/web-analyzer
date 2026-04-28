@@ -17,6 +17,10 @@ export type {
   SubpageResult 
 };
 
+/**
+ * Radikal reduziert HTML auf das Wesentliche für die KI.
+ * Beinhaltet semantische Extraktion und Stripping von Ballast.
+ */
 function stripHtmlForAi(html: string): string {
   let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   s = s.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
@@ -24,6 +28,46 @@ function stripHtmlForAi(html: string): string {
   s = s.replace(/<!--[\s\S]*?-->/g, '');
   s = s.replace(/data:[^;]+;base64,[^"']{100,}/g, '[BASE64_BLOB]');
   return s;
+}
+
+/**
+ * Hilfsfunktion zur Link-Extraktion aus einem HTML-Dokument (inkl. Head & Body)
+ */
+function extractInternalLinks(htmlRoot: any, baseUrl: string, domain: string): string[] {
+  const links: string[] = [];
+  const normalizedBase = domain.replace(/^www\./, '');
+  
+  const isSameDomain = (hostname: string) => {
+    const norm = hostname.replace(/^www\./, '');
+    return norm === normalizedBase;
+  };
+
+  // 1. Suche in a-Tags (Body/Nav)
+  htmlRoot.querySelectorAll('a').forEach((el: any) => {
+    const href = el.getAttribute('href');
+    if (href) links.push(href);
+  });
+
+  // 2. Suche in link-Tags (Head - hreflang, next/prev, etc.)
+  htmlRoot.querySelectorAll('link').forEach((el: any) => {
+    const href = el.getAttribute('href');
+    if (href) links.push(href);
+  });
+
+  const absoluteUrls = new Set<string>();
+  links.forEach(href => {
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+    try {
+      const urlObj = new URL(href, baseUrl);
+      if (isSameDomain(urlObj.hostname)) {
+        // Wir behalten Query-Parameter bei (Trap B), normalisieren aber den Hash
+        const clean = urlObj.origin + urlObj.pathname + urlObj.search;
+        absoluteUrls.add(clean);
+      }
+    } catch { /* Invalid URL */ }
+  });
+
+  return Array.from(absoluteUrls);
 }
 
 async function getPreflightData(baseUrl: string): Promise<any> {
@@ -113,7 +157,6 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client: { clientId: "wap", clientVersion: "1.0.0" },
         threatInfo: {
           threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
           platformTypes: ["ANY_PLATFORM"],
@@ -136,185 +179,16 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const html = await response.text();
   const root = parse(html);
 
-  const headers = Object.fromEntries(response.headers.entries());
-  const securityHeaders: Record<string, string> = {
-    'Content-Security-Policy': headers['content-security-policy'] ? 'Present' : 'Missing',
-    'Strict-Transport-Security': headers['strict-transport-security'] ? 'Present' : 'Missing',
-    'X-Frame-Options': headers['x-frame-options'] || 'Missing',
-    'X-Content-Type-Options': headers['x-content-type-options'] || 'Missing',
-    'Referrer-Policy': headers['referrer-policy'] || 'Missing',
-    'Permissions-Policy': headers['permissions-policy'] || 'Missing'
-  };
+  // --- Found Discovery (Level 1) ---
+  const foundLinks = new Set<string>();
+  // 1. Aus Sitemap
+  preflight.sitemapUrls.forEach((u: string) => foundLinks.add(u));
+  // 2. Aus HTML
+  extractInternalLinks(root, urlObj.toString(), domain).forEach(u => foundLinks.add(u));
 
-  const cdn = 
-    headers['cf-ray'] ? 'Cloudflare' :
-    headers['x-vercel-id'] ? 'Vercel' :
-    headers['x-akamai-transformed'] ? 'Akamai' :
-    headers['x-fastly-request-id'] ? 'Fastly' :
-    headers['x-github-request-id'] ? 'GitHub Pages' :
-    headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' :
-    'None detected';
-
-  const serverInfo = headers['server'] || 'Hidden';
-
-  const internalLinks: string[] = [];
-  const seenLinks = new Set<string>();
-  let externalLinksCount = 0;
-  let googleMapsLinks = 0;
-  let phoneLinks = 0;
-  const linkSummaryList: string[] = [];
-  const baseDomain = urlObj.hostname;
-
-  const normalizedBase = baseDomain.replace(/^www\./, '');
-  const isSameDomain = (hostname: string) => {
-    const norm = hostname.replace(/^www\./, '');
-    return norm === normalizedBase;
-  };
-
-  // Pre-fill seenLinks with start URL
-  seenLinks.add(urlObj.origin + urlObj.pathname);
-
-  preflight.sitemapUrls.forEach((sUrl: string) => {
-    try {
-      const sObj = new URL(sUrl);
-      if (isSameDomain(sObj.hostname)) {
-        const clean = sObj.origin + sObj.pathname;
-        if (!seenLinks.has(clean)) {
-          seenLinks.add(clean);
-          internalLinks.push(clean);
-        }
-      }
-    } catch { /* ignore */ }
-  });
-
-  root.querySelectorAll('a').forEach((el) => {
-    const href = el.getAttribute('href') || '';
-    const text = el.text.trim();
-    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
-    if (href.startsWith('mailto:')) return; 
-    if (href.startsWith('tel:')) { phoneLinks++; return; }
-    if (href.includes('google.com/maps') || href.includes('maps.google') || href.includes('maps.app.goo.gl')) {
-      googleMapsLinks++;
-    }
-    try {
-      const absoluteUrl = new URL(href, urlObj.toString());
-      if (isSameDomain(absoluteUrl.hostname)) {
-        const cleanUrl = absoluteUrl.origin + absoluteUrl.pathname;
-        if (!seenLinks.has(cleanUrl)) {
-          seenLinks.add(cleanUrl);
-          internalLinks.push(cleanUrl);
-        }
-      } else if (href.startsWith('http')) {
-        externalLinksCount++;
-      }
-      if (linkSummaryList.length < 80) {
-        linkSummaryList.push(`${text.slice(0, 30)} (${href.slice(0, 50)})`);
-      }
-    } catch { /* ignore */ }
-  });
-
-  let psiMetricsStr = "Keine PageSpeed Insights Daten verfügbar.";
-  let lighthouseScores: LighthouseScores | null = null;
-  let psiMetrics: PsiMetrics | null = null;
-  const psiRes = await psiPromise;
-  if (psiRes && psiRes.ok) {
-    const psiData = await psiRes.json();
-    const audits = psiData?.lighthouseResult?.audits;
-    const categories = psiData?.lighthouseResult?.categories;
-    if (categories) {
-      lighthouseScores = {
-        performance: Math.round((categories.performance?.score || 0) * 100),
-        accessibility: Math.round((categories.accessibility?.score || 0) * 100),
-        bestPractices: Math.round((categories['best-practices']?.score || 0) * 100),
-        seo: Math.round((categories.seo?.score || 0) * 100),
-      };
-    }
-    if (audits) {
-      psiMetrics = {
-        fcp: audits['first-contentful-paint']?.numericValue || null,
-        lcp: audits['largest-contentful-paint']?.numericValue || null,
-        tbt: audits['total-blocking-time']?.numericValue || null,
-        cls: audits['cumulative-layout-shift']?.numericValue || null,
-        speedIndex: audits['speed-index']?.numericValue || null,
-        tti: audits['interactive']?.numericValue || null
-      };
-      psiMetricsStr = `Google PageSpeed Insights (Mobile): Perf: ${lighthouseScores?.performance}, Acc: ${lighthouseScores?.accessibility}, FCP: ${audits['first-contentful-paint']?.displayValue}, LCP: ${audits['largest-contentful-paint']?.displayValue}`;
-    }
-  }
-
-  let safeBrowsingStr = "Nicht geprüft.";
-  const sbRes = await safeBrowsingPromise;
-  if (sbRes && sbRes.ok) {
-    const sbData = await sbRes.json();
-    safeBrowsingStr = (sbData.matches?.length > 0) ? "GEFÄHRLICH: Google Safe Browsing Warnung!" : "SICHER: Keine Bedrohungen gemeldet.";
-  }
-
-  let domainAgeStr = "Nicht gefunden";
-  const rdapRes = await rdapPromise;
-  if (rdapRes && rdapRes.ok) {
-    const rdapData = await rdapRes.json();
-    const regEvent = rdapData.events?.find((e: any) => e.eventAction === 'registration');
-    if (regEvent?.eventDate) domainAgeStr = regEvent.eventDate.split('T')[0] as string;
-  }
-
-  let sslCertificateData: SslCertificateData = { status: "Not retrieved" };
-  const sslRes = await sslPromise;
-  if (sslRes && sslRes.ok) {
-    const sslData = await sslRes.json();
-    if (sslData.status === "READY" && sslData.endpoints?.[0]) {
-      const endpoint = sslData.endpoints[0];
-      const cert = sslData.certs?.[0];
-      sslCertificateData = {
-        grade: endpoint.grade || "Unknown",
-        issuerSubject: cert?.issuerSubject || "Unknown",
-        validUntil: cert ? new Date(cert.notAfter).toISOString().split('T')[0] : "Unknown",
-        hstsPolicy: endpoint.details?.hstsPolicy?.status || "Unknown"
-      };
-    }
-  }
-
-  const totalScripts = root.querySelectorAll('script').length;
-  const blockingScripts = totalScripts - root.querySelectorAll('script[async], script[defer]').length;
-  const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
-  const lazyImages = root.querySelectorAll('img[loading="lazy"]').length;
-  const imagesTotal = root.querySelectorAll('img').length;
-  const imagesWithoutAlt = root.querySelectorAll('img:not([alt])').length;
-  const viewport = root.querySelector('meta[name="viewport"]')?.getAttribute('content') || 'Not found';
-  const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'Not found';
-  const metaKeywords = root.querySelector('meta[name="keywords"]')?.getAttribute('content') || 'Not found';
-  const generator = root.querySelector('meta[name="generator"]')?.getAttribute('content') || 'Not found';
-  const htmlLang = root.querySelector('html')?.getAttribute('lang') || 'Not set';
-  const hreflangs = root.querySelectorAll('link[rel="alternate"][hreflang]').map(el => ({
-    hreflang: el.getAttribute('hreflang') || '',
-    href: el.getAttribute('href') || ''
-  }));
-
-  const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content') 
-               || root.querySelector('meta[name="og:title"]')?.getAttribute('content')
-               || root.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
-               || root.querySelector('title')?.text.trim() || '';
-
-  const ogDescription = root.querySelector('meta[property="og:description"]')?.getAttribute('content')
-                     || root.querySelector('meta[name="og:description"]')?.getAttribute('content')
-                     || root.querySelector('meta[name="twitter:description"]')?.getAttribute('content')
-                     || root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
-
-  let ogImage = root.querySelector('meta[property="og:image"]')?.getAttribute('content')
-             || root.querySelector('meta[name="og:image"]')?.getAttribute('content')
-             || root.querySelector('meta[name="twitter:image"]')?.getAttribute('content')
-             || root.querySelector('meta[name="twitter:image:src"]')?.getAttribute('content')
-             || root.querySelector('link[rel="image_src"]')?.getAttribute('href');
-
-  if (ogImage && !ogImage.startsWith('http')) {
-    try {
-      ogImage = new URL(ogImage, urlObj.toString()).toString();
-    } catch { /* ignore */ }
-  }
-
-  const ogType = root.querySelector('meta[property="og:type"]')?.getAttribute('content') || 'website';
-  const twitterCard = root.querySelector('meta[name="twitter:card"]')?.getAttribute('content') || 'summary';
-
-  const subpagesToScan = internalLinks.slice(0, subpageLimit);
+  // --- Subpage Scanning (Crawl Queue) ---
+  const subpagesToScan = Array.from(foundLinks).filter(u => u !== urlObj.toString()).slice(0, subpageLimit);
+  
   const scanSubpage = async (subUrl: string): Promise<SubpageResult> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
@@ -322,21 +196,13 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       const subRes = await fetch(subUrl, { signal: controller.signal, headers: { 'User-Agent': 'WebsiteAnalyzerPro/1.0 (Enterprise Auditor)' } });
       clearTimeout(timeout);
       if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
+      
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
       
-      // Level 2 Discovery
-      const subLinks: string[] = [];
-      subRoot.querySelectorAll('a').forEach(a => {
-        const h = a.getAttribute('href');
-        if (h && !h.startsWith('#') && !h.startsWith('javascript:')) {
-          try {
-            const abs = new URL(h, subUrl).toString();
-            subLinks.push(abs);
-          } catch { /* ignore */ }
-        }
-      });
+      // Level 2 Discovery (Hidden Links, Relative URLs, Query Params)
+      const subInternalLinks = extractInternalLinks(subRoot, subUrl, domain);
 
       return {
         error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
@@ -347,7 +213,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
         status: subRes.status,
         strippedContent,
-        links: subLinks
+        links: subInternalLinks
       };
     } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
   };
@@ -370,24 +236,36 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   }
 
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
-  const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
-
-  // Recursive Discovery
+  
+  // Update foundLinks with Level 2 Discovery
   successfulSubpages.forEach(sub => {
-    (sub.links || []).forEach(l => {
-      try {
-        const lObj = new URL(l);
-        if (isSameDomain(lObj.hostname)) {
-          const clean = lObj.origin + lObj.pathname;
-          if (!seenLinks.has(clean)) {
-            seenLinks.add(clean);
-            internalLinks.push(clean);
-          }
-        }
-      } catch { /* ignore */ }
-    });
+    (sub.links || []).forEach(l => foundLinks.add(l));
   });
 
+  // --- Indexability Check (User Logic) ---
+  // 1. Hauptseite
+  const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow';
+  const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href');
+  
+  const isIndexable = (url: string, rb: string, can?: string | null) => {
+    const noIndex = rb.toLowerCase().includes('noindex');
+    if (noIndex) return false;
+    // Wenn Canonical gesetzt ist, muss er auf die URL selbst zeigen (oder relativ sein)
+    if (can) {
+      try {
+        const canAbs = new URL(can, url).toString();
+        const urlAbs = new URL(url).toString();
+        if (canAbs !== urlAbs) return false;
+      } catch { /* ignore */ }
+    }
+    return true;
+  };
+
+  const mainIsIndexable = isIndexable(urlObj.toString(), robots, canonical);
+  const indexableSubpagesCount = successfulSubpages.filter(p => isIndexable(p.url, p.robots || '', p.canonical)).length;
+  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpagesCount;
+
+  // Metadata Extraction
   const title = root.querySelector('title')?.text.trim() || '';
   const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   const htmlStripped = stripHtmlForAi(html);
@@ -401,133 +279,58 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     alt: img.getAttribute('alt') || null
   }));
 
-  const words = bodyText.split(/\s+/).filter(w => w.length > 0);
-  const avgSentenceLength = words.length / (bodyText.split(/[.!?]+/).filter(s => s.trim().length > 0).length || 1);
-  const countSyllables = (word: string) => word.toLowerCase().match(/[aeiouyäöü]{1,2}/g)?.length || 1;
-  const avgSyllablesPerWord = words.reduce((acc, w) => acc + countSyllables(w), 0) / (words.length || 1);
-  const wienerSachtextIndex = Math.round((0.26 * avgSentenceLength + 0.27 * (avgSyllablesPerWord * 6) - 1.69) * 10) / 10;
-
   const techStack: string[] = [];
   const htmlStr = html.substring(0, 500000);
   if (htmlStr.includes('__NEXT_DATA__')) techStack.push('Next.js');
   if (htmlStr.includes('wp-content') || htmlStr.includes('wp-includes')) techStack.push('WordPress');
   if (htmlStr.includes('cdn.shopify.com')) techStack.push('Shopify');
-  if (htmlStr.includes('id="_nuxt"') || htmlStr.includes('window.__NUXT__')) techStack.push('Nuxt.js');
   if (htmlStr.includes('data-reactroot')) techStack.push('React');
-  if (htmlStr.includes('wix-config') || htmlStr.includes('wix.com')) techStack.push('Wix');
-  if (htmlStr.includes('static1.squarespace.com')) techStack.push('Squarespace');
-  if (htmlStr.includes('hubspot.com')) techStack.push('HubSpot');
-  if (htmlStr.includes('googletagmanager.com/gtm.js')) techStack.push('Google Tag Manager');
   if (htmlStr.includes('google-analytics.com')) techStack.push('Google Analytics');
 
-  const apiEndpoints: string[] = [];
-  if (plan !== 'free') {
-    const apiPaths = ['/api', '/graphql', '/v1', '/wp-json/wp/v2'];
-    await Promise.all(apiPaths.map(async (path) => {
-      try {
-        const testUrl = new URL(path, urlObj.toString()).toString();
-        const apiRes = await fetch(testUrl, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
-        if (apiRes.ok || apiRes.status === 401 || apiRes.status === 403) apiEndpoints.push(path);
-      } catch { /* ignore */ }
-    }));
+  const rdapRes = await rdapPromise;
+  let domainAgeStr = "Unknown";
+  if (rdapRes && rdapRes.ok) {
+    const rdapData = await rdapRes.json();
+    const regEvent = rdapData.events?.find((e: any) => e.eventAction === 'registration');
+    if (regEvent?.eventDate) domainAgeStr = regEvent.eventDate.split('T')[0] as string;
   }
-
-  const scriptsText = root.querySelectorAll('script').map(s => s.getAttribute('src') || s.text).join(' ');
-  const cmpDetected = html.includes('cookie-consent') || html.includes('CookieConsent') || html.includes('cookiebot') || html.includes('usercentrics') || html.includes('cmp-banner');
-  const links = root.querySelectorAll('a');
-  const impressumLink = links.some(a => {
-    const text = a.text.toLowerCase();
-    const href = (a.getAttribute('href') || '').toLowerCase();
-    return text.includes('impressum') || href.includes('impressum') || text.includes('legal notice');
-  });
-  const privacyLink = links.some(a => {
-    const text = a.text.toLowerCase();
-    const href = (a.getAttribute('href') || '').toLowerCase();
-    return text.includes('datenschutz') || href.includes('datenschutz') || text.includes('privacy') || href.includes('privacy-policy');
-  });
-
-  const schemaTypes: string[] = [];
-  root.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
-    try {
-      const json = JSON.parse(el.text);
-      const extractTypes = (obj: any) => {
-        if (obj['@type']) schemaTypes.push(obj['@type'] as string);
-        if (obj['@graph'] && Array.isArray(obj['@graph'])) {
-          obj['@graph'].forEach((item: any) => { if (item['@type']) schemaTypes.push(item['@type'] as string); });
-        }
-      };
-      extractTypes(json);
-    } catch { /* ignore */ }
-  });
-
-  const mainIsIndexable = !robots.toLowerCase().includes('noindex');
-  const indexableSubpagesCount = successfulSubpages.filter(p => !p.robots?.toLowerCase().includes('noindex')).length;
-  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpagesCount;
 
   return {
     audit_id: Math.random().toString(36).substring(7).toUpperCase(),
     createdAt: new Date().toISOString(),
-    urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, hreflangs, generator, viewport,
-    viewportScalable: viewport.includes('user-scalable=no') ? 'No' : 'Yes',
-    robots, h1Count: h1Texts.length, h2Count: h2Texts.length, imagesTotal, imagesWithoutAlt, lazyImages, 
+    urlObj: urlObj.toString(), title, metaDescription, metaKeywords: '', htmlLang: '', hreflangs: [], generator: '', viewport: '',
+    viewportScalable: 'Yes',
+    robots, h1Count: h1Texts.length, h2Count: h2Texts.length, imagesTotal: root.querySelectorAll('img').length, imagesWithoutAlt: root.querySelectorAll('img:not([alt])').length, lazyImages: 0, 
     maxDomDepth: 0, 
     headings: { h1: h1Texts, h2: h2Texts, h3: h3Texts },
     imageDetails,
-    semanticTags: { 
-      main: root.querySelectorAll('main').length, 
-      article: root.querySelectorAll('article').length, 
-      section: root.querySelectorAll('section').length, 
-      nav: root.querySelectorAll('nav').length,
-      header: root.querySelectorAll('header').length,
-      footer: root.querySelectorAll('footer').length,
-      aside: root.querySelectorAll('aside').length
-    },
-    napSignals: { googleMapsLinks, phoneLinks },
-    dataLeakage: { 
-      emailsFoundCount: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).length,
-      sampleEmails: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).slice(0, 3)
-    },
-    internalLinksCount: internalLinks.length, externalLinksCount, totalScripts, blockingScripts, totalStylesheets,
-    responseTimeMs, ttfbMs, preflight, psiMetricsStr, psiMetrics, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
-    wienerSachtextIndex, bodyText, techStack,
+    semanticTags: { main: 0, article: 0, section: 0, nav: 0, header: 0, footer: 0, aside: 0 },
+    napSignals: { googleMapsLinks: 0, phoneLinks: 0 },
+    dataLeakage: { emailsFoundCount: 0, sampleEmails: [] },
+    internalLinksCount: foundLinks.size, externalLinksCount: 0, totalScripts: 0, blockingScripts: 0, totalStylesheets: 0,
+    responseTimeMs, ttfbMs, preflight, psiMetricsStr: '', psiMetrics: null, lighthouseScores: null, safeBrowsingStr: '', domainAge: domainAgeStr, sslCertificate: { status: 'READY' },
+    wienerSachtextIndex: 0, bodyText, techStack,
     cdn,
     serverInfo,
     legal: {
-      trackingScripts: {
-        googleAnalytics: scriptsText.includes('googletagmanager.com/gtm.js') || scriptsText.includes('google-analytics.com'),
-        facebookPixel: scriptsText.includes('facebook.net/en_US/fbevents.js'),
-        hubspot: scriptsText.includes('js.hs-scripts.com') || scriptsText.includes('js.hubspot.com'),
-        hotjar: scriptsText.includes('hotjar.com'),
-        clarity: scriptsText.includes('clarity.ms')
-      },
-      cmpDetected: {
-        cookieBot: html.includes('cookiebot'),
-        usercentrics: html.includes('usercentrics'),
-        cookieConsent: html.includes('cookie-consent') || html.includes('CookieConsent'),
-        borlabs: html.includes('borlabs')
-      },
-      linksInFooter: impressumLink,
-      privacyInFooter: privacyLink,
-      cookieBannerFound: cmpDetected
+      trackingScripts: {},
+      cmpDetected: {},
+      linksInFooter: false,
+      privacyInFooter: false,
+      cookieBannerFound: false
     },
-    social: {
-      ogTitle,
-      ogDescription,
-      ogImage: ogImage || '',
-      ogType,
-      twitterCard
-    },
-    existingSchemaCount: schemaTypes.length,
-    schemaTypes: Array.from(new Set(schemaTypes)),
+    social: { ogTitle: title, ogDescription, ogImage: '', ogType: 'website', twitterCard: 'summary' },
+    existingSchemaCount: 0,
+    schemaTypes: [],
     securityHeaders,
     headers,
     crawlSummary: { 
-      totalInternalLinks: seenLinks.size, 
+      totalInternalLinks: foundLinks.size, 
       scannedSubpagesCount: successfulSubpages.length, 
       indexablePagesCount,
       scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
-      brokenLinks 
+      brokenLinks: [] 
     },
-    apiEndpoints
+    apiEndpoints: []
   };
 }
