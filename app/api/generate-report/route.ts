@@ -297,36 +297,6 @@ export async function POST(req: NextRequest) {
             }
           },
           required: ["score", "insights", "recommendations", "detailedContent"]
-        },
-        contentStrategy: {
-          type: "object",
-          properties: {
-            score: { type: "integer" },
-            insights: { type: "array", items: { type: "string" } },
-            recommendations: { type: "array", items: { type: "string" } },
-            detailedContent: {
-              type: "object",
-              properties: {
-                topicClusters: { type: "array", items: { type: "string" } },
-                headingHierarchy: { type: "string" },
-                keywordCannibalization: { type: "string" },
-                readabilityAndTone: { type: "string" },
-                prioritizedTasks: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      priority: { type: "string" },
-                      task: { type: "string" },
-                      remediation: { type: "string" }
-                    }
-                  }
-                }
-              },
-              required: ["topicClusters", "headingHierarchy", "keywordCannibalization", "readabilityAndTone", "prioritizedTasks"]
-            }
-          },
-          required: ["score", "insights", "recommendations", "detailedContent"]
         }
       },
       required: ["businessIntelligence", "overallAssessment", "industryNews", "implementationPlan", "seo", "security", "performance", "accessibility", "compliance", "contentStrategy"]
