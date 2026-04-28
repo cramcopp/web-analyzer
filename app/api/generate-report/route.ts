@@ -337,19 +337,20 @@ export async function POST(req: NextRequest) {
 
     // Plan-based model selection (Tier-optimized with Gemini 2.0)
     let preferredModel = "gemini-2.0-flash"; 
-    if (plan === 'agency') preferredModel = "gemini-1.5-pro"; // 1.5 Pro is still superior for deep reasoning than 2.0 Flash
+    if (plan === 'agency') preferredModel = "gemini-1.5-pro"; 
     else if (plan === 'pro') preferredModel = "gemini-2.0-flash";
-    else if (plan === 'free') preferredModel = "gemini-1.5-flash-8b";
+    else if (plan === 'free') preferredModel = "gemini-1.5-flash";
 
-    const models = [preferredModel, "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"];
+    const models = [preferredModel, "gemini-1.5-flash", "gemini-1.5-pro"]; 
+
 
     for (const modelId of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           // Keep all critical data for deep analysis
           const trimmedScrapeData = { ...scrapeData };
-          if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 75000) {
-             trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 75000) + '...[TRUNCATED]';
+          if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 300000) {
+             trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 300000) + '...[TRUNCATED FOR ENTERPRISE DEPTH]';
           }
 
           const prompt = `Du bist ein hochgradig strenger, technischer SEO- und Security-Auditor auf Enterprise-Niveau. 

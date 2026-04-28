@@ -20,8 +20,8 @@ export type {
 export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
   const PLAN_LIMITS: Record<string, number> = {
     'free': 0,
-    'pro': 20,
-    'agency': 100
+    'pro': 25,
+    'agency': 500
   };
   // eslint-disable-next-line security/detect-object-injection
   const subpageLimit = PLAN_LIMITS[plan] || 0;
@@ -312,7 +312,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   // Batch Process Subpages to avoid rate-limits and high memory usage
   const subpageResults: SubpageResult[] = [];
-  const BATCH_SIZE = 5;
+  const BATCH_SIZE = 10; // Increased concurrency for faster deep-crawls
   for (let i = 0; i < subpagesToScan.length; i += BATCH_SIZE) {
     const batch = subpagesToScan.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(batch.map(url => scanSubpage(url)));
@@ -326,7 +326,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const title = root.querySelector('title')?.text.trim() || '';
   const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   const body = root.querySelector('body');
-  const bodyText = body ? body.text.replace(/\s+/g, ' ').trim().slice(0, 15000) : '';
+  const bodyText = body ? body.text.replace(/\s+/g, ' ').trim().slice(0, 500000) : ''; // 500k chars for Enterprise-level analysis
   const h1Texts = root.querySelectorAll('h1').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
