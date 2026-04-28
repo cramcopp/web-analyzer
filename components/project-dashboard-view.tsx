@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback, useMemo } from 'react';
 import { 
-  Zap, RefreshCw, LayoutDashboard, 
+  Zap, RefreshCw, LayoutDashboard, Search,
   ShieldCheck, TrendingUp, Network, Link, Trophy, 
   Wrench, History, Settings, Sparkles, ChevronRight, CheckCircle2
 } from 'lucide-react';
