@@ -25,7 +25,7 @@ export async function getSessionToken() {
 
     // If token is invalid (e.g. expired), try to refresh it
     if (refreshToken) {
-      console.log('ID Token expired, attempting refresh...');
+      console.warn('ID Token expired, attempting refresh...');
       const newData = await refreshIdToken(refreshToken);
       
       // Update cookies
@@ -157,7 +157,7 @@ export async function deleteUserAccount() {
 
     // Delete User Profile
     await deleteDocument('users', uid, token);
-  } catch (dbErr) {
+  } catch {
     console.error('Firestore cleanup failed during account deletion');
     // We continue with Auth deletion anyway to ensure the account is closed
   }
@@ -183,6 +183,7 @@ export async function deleteUserAccount() {
 
 
 export async function signInWithEmailRest(email: string, password: string) {
+  // eslint-disable-next-line no-secrets/no-secrets
   const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`;
   const resp = await fetch(url, {
     method: 'POST',

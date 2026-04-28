@@ -17,3 +17,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ act
   if (mainAction === 'sync') return syncPOST(req);
   return NextResponse.json({ error: 'Not Found' }, { status: 404 });
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ action: string[] }> }) {
+  const { action } = await params;
+  const mainAction = action[0];
+  if (mainAction === 'me') {
+    const { PATCH: mePATCH } = await import('./me');
+    return mePATCH(req);
+  }
+  return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, updateDocument, queryDocuments } from '@/lib/firestore-edge';
+import { updateDocument, queryDocuments } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 

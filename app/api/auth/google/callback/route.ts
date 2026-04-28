@@ -70,7 +70,6 @@ export async function GET(req: Request) {
     const firebaseData = await firebaseResp.json();
 
     // Store tokens in a secure, httpOnly cookie
-    const cookieStore = await cookies();
     
     // Primary app session (ID Token)
     cookieStore.set('wap_session', firebaseData.idToken, {
@@ -103,11 +102,12 @@ export async function GET(req: Request) {
 
 
     // Return a simple HTML page that communicates success to the opener and closes
+    const appUrl = process.env.APP_URL || origin;
     const html = `
       <html>
         <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff;">
           <script>
-            window.opener.postMessage({ type: 'GSC_AUTH_SUCCESS' }, window.location.origin);
+            window.opener.postMessage({ type: 'GSC_AUTH_SUCCESS' }, "${appUrl}");
             window.close();
           </script>
           <div style="text-align: center;">

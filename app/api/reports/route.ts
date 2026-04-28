@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { queryDocuments, addDocument, updateDocument, getDocument, incrementField } from '@/lib/firestore-edge';
+import { queryDocuments, addDocument, incrementField } from '@/lib/firestore-edge';
 import { reportSaveSchema } from '@/lib/validations';
 
 export const runtime = 'edge';

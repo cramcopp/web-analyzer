@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, PLAN_CONFIG, PlanType } from '@/lib/stripe';
 import { updateStripeSubscription } from '@/lib/firestore-edge';
 import Stripe from 'stripe';
 
@@ -29,18 +29,17 @@ export async function POST(req: Request) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const uid = session.client_reference_id || session.metadata?.uid;
-        const plan = session.metadata?.plan;
+        const plan = (session.metadata?.plan || 'free') as PlanType;
 
-        if (uid && plan) {
+        if (uid) {
           const subscription = await getStripe().subscriptions.retrieve(session.subscription as string);
-          
-          const maxScans = plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5;
+          const maxScans = PLAN_CONFIG[plan]?.maxScans || 5;
           
           await updateStripeSubscription(uid, {
-            plan: plan,
+            plan,
             subscriptionId: session.subscription as string,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-            maxScans: maxScans
+            maxScans
           });
         }
         break;
@@ -55,7 +54,7 @@ export async function POST(req: Request) {
             plan: 'free',
             subscriptionId: null,
             trialUntil: null,
-            maxScans: 5
+            maxScans: PLAN_CONFIG.free.maxScans
           });
         }
         break;
@@ -64,15 +63,15 @@ export async function POST(req: Request) {
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         const uid = subscription.metadata.uid;
-        const plan = subscription.metadata.plan;
+        const plan = (subscription.metadata.plan || 'free') as PlanType;
 
-        if (uid && plan) {
-          const maxScans = plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5;
+        if (uid) {
+          const maxScans = PLAN_CONFIG[plan]?.maxScans || 5;
           await updateStripeSubscription(uid, {
-            plan: plan,
+            plan,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             subscriptionId: subscription.id,
-            maxScans: maxScans
+            maxScans
           });
         }
         break;

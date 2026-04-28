@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, memo } from "react";
 import { useAuth } from "./auth-provider";
+import { usePathname } from "next/navigation";
 import {
   Menu,
   Zap,
@@ -43,6 +44,7 @@ export const Sidebar = memo(function Sidebar({
   setIsNotifOpen: (open: boolean) => void;
 }) {
   const { user, userData, loading } = useAuth();
+  const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(true);
 
   // Real DB States
@@ -122,7 +124,7 @@ export const Sidebar = memo(function Sidebar({
     };
 
     fetchData();
-  }, [user?.uid]);
+  }, [user, pathname]);
 
   if (isCollapsed) {
     return (

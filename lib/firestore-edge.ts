@@ -64,6 +64,7 @@ function valueToFirestore(value: unknown): FirestoreValue {
   if (typeof value === 'object') {
     const fields: Record<string, FirestoreValue> = {};
     for (const [k, v] of Object.entries(value)) {
+      // eslint-disable-next-line security/detect-object-injection
       fields[k] = valueToFirestore(v);
     }
     return { mapValue: { fields } };
@@ -83,6 +84,7 @@ function valueFromFirestore(value: FirestoreValue): any {
     const obj: Record<string, any> = {};
     const fields = value.mapValue.fields || {};
     for (const [k, v] of Object.entries(fields)) {
+      // eslint-disable-next-line security/detect-object-injection
       obj[k] = valueFromFirestore(v);
     }
     return obj;
@@ -105,6 +107,7 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
   const fields = data.fields || {};
   const result: Record<string, any> = {};
   for (const [k, v] of Object.entries(fields)) {
+    // eslint-disable-next-line security/detect-object-injection
     result[k] = valueFromFirestore(v);
   }
   return { id, ...result } as T;
@@ -114,6 +117,7 @@ export async function setDocument(collection: string, id: string, data: Record<s
   const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) {
+    // eslint-disable-next-line security/detect-object-injection
     fields[k] = valueToFirestore(v);
   }
   
@@ -137,6 +141,7 @@ export async function addDocument<T = Record<string, any>>(collection: string, d
   const url = `${BASE_URL}/${collection}?key=${API_KEY}`;
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) {
+    // eslint-disable-next-line security/detect-object-injection
     fields[k] = valueToFirestore(v);
   }
 
@@ -224,6 +229,7 @@ export async function queryDocuments<T = Record<string, any>>(
       const fields = doc.fields || {};
       const data: Record<string, any> = {};
       for (const [k, v] of Object.entries(fields)) {
+        // eslint-disable-next-line security/detect-object-injection
         data[k] = valueFromFirestore(v);
       }
       const nameParts = doc.name.split('/');
@@ -235,6 +241,7 @@ export async function updateDocument(collection: string, id: string, data: Recor
   const fields: Record<string, FirestoreValue> = {};
   const fieldPaths: string[] = [];
   for (const [k, v] of Object.entries(data)) {
+    // eslint-disable-next-line security/detect-object-injection
     fields[k] = valueToFirestore(v);
     fieldPaths.push(k);
   }

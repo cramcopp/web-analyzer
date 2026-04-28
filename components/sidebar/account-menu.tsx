@@ -27,10 +27,9 @@ export function SidebarAccountMenu({
 }: SidebarAccountMenuProps) {
   const { user, userData, logOut } = useAuth();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const { trialDaysLeft, showTrialBadge } = useTrial();
 
   if (!user) return null;
-
-  const { isInTrial, trialDaysLeft, showTrialBadge } = useTrial();
 
   return (
     <div className="border-t border-[#E5E5E5] dark:border-zinc-800 p-3 mt-auto shrink-0 bg-[#F5F5F3] dark:bg-zinc-950 relative">

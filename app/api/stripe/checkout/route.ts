@@ -7,12 +7,16 @@ export const runtime = 'edge';
 // Plan and Interval to Price ID mapping
 const PRICE_MATRIX: Record<string, Record<string, string>> = {
   'pro': {
-    'monthly': 'price_1TOWNMAiEzlpZspHdnioXyTY',
-    'yearly': 'price_1TOWNyAiEzlpZspH4FazLWo1'
+    // eslint-disable-next-line no-secrets/no-secrets
+    'monthly': process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_1TOWNMAiEzlpZspHdnioXyTY',
+    // eslint-disable-next-line no-secrets/no-secrets
+    'yearly': process.env.STRIPE_PRICE_PRO_YEARLY || 'price_1TOWNyAiEzlpZspH4FazLWo1'
   },
   'agency': {
-    'monthly': 'price_1TOWORAiEzlpZspH8oht4Gyz',
-    'yearly': 'price_1TOWOyAiEzlpZspH400JzRjm'
+    // eslint-disable-next-line no-secrets/no-secrets
+    'monthly': process.env.STRIPE_PRICE_AGENCY_MONTHLY || 'price_1TOWORAiEzlpZspH8oht4Gyz',
+    // eslint-disable-next-line no-secrets/no-secrets
+    'yearly': process.env.STRIPE_PRICE_AGENCY_YEARLY || 'price_1TOWOyAiEzlpZspH400JzRjm'
   }
 };
 

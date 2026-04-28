@@ -3,6 +3,7 @@ import { performAnalysis } from '@/lib/scanner';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, queryDocuments } from '@/lib/firestore-edge';
 import { analyzeSchema } from '@/lib/validations';
+import { PLAN_CONFIG } from '@/lib/stripe';
 
 export const runtime = 'edge';
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
       if (userData) {
         effectivePlan = userData.plan || 'free';
         const scanCount = userData.scanCount || 0;
-        const maxScans = userData.maxScans || 5;
+        const maxScans = userData.maxScans || PLAN_CONFIG.free.maxScans;
 
         if (scanCount >= maxScans) {
           return NextResponse.json({ 

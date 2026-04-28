@@ -95,95 +95,44 @@ export async function POST(req: Request) {
       - Führe eine technische SEO-Prüfung durch (Canonical, robots.txt, Sitemap, Hreflang).
       
       Spezifische Anforderungen für das Security-Modul:
-      - Analysiere Security Header (HSTS, CSP, X-Content-Type-Options, etc.). Bei Fehlen: massiver Abzug.
-      - Fülle "dataLeakageAssessment" aus: Bewerte Plaintext E-Mail-Adressen (Scraping-Gefahr). Rate zur Verschleierung.
-      - Bewerte Angriffsflächen für SQLi und XSS in Bezug auf gefundene Formulare und Software.
-
-      Spezifische Anforderungen für das Performance-Modul:
-      - Analysiere Ladegeschwindigkeit und Engpässe wie unoptimierte Bilder, blockierendes JS/CSS.
-      - Führe eine TIEFE Caching-Analyse durch (Cache-Control, Expires, CDN Nutzung).
-      - Exakte Übernahme der Core Web Vitals aus Google PageSpeed-Daten.
+      - Analysiere Security Header (${JSON.stringify(scrapeData.securityHeaders)}) extrem kritisch.
+      - Bewerte SSL/TLS Status (${JSON.stringify(scrapeData.sslCertificate)}) und Safe Browsing (${scrapeData.safeBrowsingStr}).
+      - Fülle "dataLeakageAssessment" aus: Bewerte Plaintext E-Mail-Adressen (${scrapeData.dataLeakage?.emailsFoundCount} gefunden).
+      - Prüfe auf Mixed Content und fehlende Security-Best-Practices (z.B. noopener bei externen Links).
 
       Spezifische Anforderungen für Accessibility & Compliance:
-      - Bewerte Kontraste, ARIA-Tags, fehlerhafte HTML-Semantik.
-      - DSGVO/Compliance Check: Werden Drittanbieter (Google Analytics etc.) direkt geladen OHNE Consent Banner? Sind Tracker vorhanden? AGBs und Datenschutz Links im Footer?
-
-      Spezifische Anforderungen für Realtime Industry News:
-      - Nutze das eingebundene Google Search Tool, um aktuelle Nachrichten, Trends, Sicherheitslücken oder Google-Updates zu suchen, die exakt zur Branche passen.
-      - Fasse 2-3 hochaktuelle Fakten in das Array "industryNews" zusammen.
-      
-      WICHTIGE REGEL ZU CODE-VORSCHLÄGEN:
-      - Es dürfen absolut KEINE Code-Vorschläge, Code-Beispiele, HTML, CSS, JavaScript oder JSON Snippets in den Lösungsansätzen, Empfehlungen oder Actionables enthalten sein.
-      - Gib rein strategische und inhaltliche Anweisungen in Fließtext.
-      
-      Spezifische Anforderung: Phasen-Plan & Developer Handover
-      - Erstelle am Ende des Berichts einen 3-Phasen-Plan (implementationPlan):
-        - Phase 1: Quick Wins & Kritische Fixes (Sofortige Wirkung).
-        - Phase 2: Strategische Optimierung (Mittelfristig).
-        - Phase 3: Exzellenz & Perfektion (High-End Tweaks).
-      - Generiere zusätzlich einen ausführlichen "developerPrompt": 
-        - Zeige ALLE identifizierten Probleme auf, nicht nur die kritischen!
-        - Unterteile das Briefing zwingend in 3 klare Gruppen: 1. SEO & Content, 2. Performance & Speed, 3. Security & Compliance.
-        - Das Briefing muss präzise, technisch fundiert und für einen Full-Stack Entwickler direkt umsetzbar sein.
-        - Es darf weiterhin absolut KEIN konkreter Code generiert werden, nur die exakten Anweisungen zur Umsetzung.
-      
-      Spezifische Anforderung: Business Intelligence & Wettbewerb
-      - Identifiziere zuerst exakt die Nische der Seite.
-      - Nutze Google Search für Wettbewerber-Benchmarking.
+      - DSGVO/Compliance Check: Werden Drittanbieter (${JSON.stringify(scrapeData.legal?.trackingScripts)}) direkt geladen? 
+      - Ist ein Consent Banner (CMP) erkannt worden (${JSON.stringify(scrapeData.legal?.cmpDetected)})?
+      - Legal Links Check: Impressum (${scrapeData.legal?.linksInFooter ? 'JA' : 'NEIN'}) und Datenschutz (${scrapeData.legal?.privacyInFooter ? 'JA' : 'NEIN'}) vorhanden?
+      - Bewerte rechtliche Risiken bei fehlenden Links oder direkt geladenen Trackern ohne Consent.
       
       URL: ${scrapeData.urlObj}
       Detected Tech-Stack: ${scrapeData.techStack?.join(', ') || 'None detected'}
       Schema.org Types Found: ${JSON.stringify(scrapeData.schemaTypes || [])}
-      Security Headers (Raw): ${JSON.stringify(scrapeData.securityHeaders || {})}
+      API Endpoints Found: ${JSON.stringify(scrapeData.apiEndpoints || [])}
       
       Title: ${scrapeData.title}
       Meta Description: ${scrapeData.metaDescription}
-      Meta Keywords: ${scrapeData.metaKeywords}
-      HTML Lang Attribute: ${scrapeData.htmlLang}
-      Generator (Software): ${scrapeData.generator}
-      Viewport: ${scrapeData.viewport}
-      Robots: ${scrapeData.robots}
-      Forms found: ${scrapeData.formsCount}
-      H1 count: ${scrapeData.h1Count}, H2 count: ${scrapeData.h2Count}
-      Images Total: ${scrapeData.imagesTotal}, Images missing ALT: ${scrapeData.imagesWithoutAlt}
-      
-      Technical SEO signals:
-      - Canonical: ${scrapeData.technicalSeo?.canonical || 'None'}
-      - Semantic DOM Depth: Max ${scrapeData.maxDomDepth} Levels
-      - Semantic Tags: ${JSON.stringify(scrapeData.semanticTags)}
-      - Domain Registration: ${scrapeData.domainAge || 'Unknown'}
-      
-      Security Audit:
-      - SSL Status: ${JSON.stringify(scrapeData.sslCertificate)}
-      - Data Leakage (Emails): ${scrapeData.dataLeakage?.emailsFoundCount} found
-      - Sample Risks: ${JSON.stringify(scrapeData.dataLeakage?.sampleEmails)}
-      - Google Safe Browsing: ${scrapeData.safeBrowsingStr}
+      HTML Lang: ${scrapeData.htmlLang}, Generator: ${scrapeData.generator}
+      H1: ${scrapeData.h1Count}, H2: ${scrapeData.h2Count}, DOM Depth: ${scrapeData.maxDomDepth}
+      Images: ${scrapeData.imagesTotal} total, ${scrapeData.imagesWithoutAlt} missing ALT
+      NAP Signals: ${JSON.stringify(scrapeData.napSignals)}
       
       Performance:
-      ${scrapeData.psiMetricsStr}
-      Server Response: ${scrapeData.responseTimeMs}ms
+      - PSI Metrics (Raw): ${JSON.stringify(scrapeData.psiMetrics)}
+      - Lighthouse Scores: ${JSON.stringify(scrapeData.lighthouseScores)}
+      - Summary: ${scrapeData.psiMetricsStr}
+      - Server Response: ${scrapeData.responseTimeMs}ms
       
-      Legal signals:
-      - Tracking Scripts: ${JSON.stringify(scrapeData.legal?.trackingScripts)}
-      - CMP / Consent: ${JSON.stringify(scrapeData.legal?.cmpDetected)}
-      - Legal Links: Impressum(${scrapeData.legal?.impressesumLink ? 'YES' : 'NO'}), Privacy(${scrapeData.legal?.privacyLink ? 'YES' : 'NO'})
-      
-      Content Quality:
-      - Wiener Sachtextformel: ${scrapeData.wienerSachtextIndex}
-      
-      Crawl Summary (Site-Wide):
+      Crawl Summary:
       - Subpages scanned: ${scrapeData.crawlSummary?.scannedSubpagesCount}
-      - Subpage Details: ${JSON.stringify(scrapeData.crawlSummary?.scannedSubpages)}
       - Broken Links: ${JSON.stringify(scrapeData.crawlSummary?.brokenLinks || [])}
 
-      Excerpt of Body Text (max 15000 chars):
+      Excerpt of Body Text:
       ${scrapeData.bodyText}
-      
-      Jina AI Fallback:
-      ${scrapeData.jinaRenderedContent || 'Not used'}
       `;
 
-    // Model fallback chain — confirmed stable models as of 2026-04-22 (ai.google.dev/gemini-api/docs/models)
+    // Model fallback chain — confirmed stable models as of 2026-04-22
     // 2.5-flash has the most generous free-tier limits — always use it first.
     // 2.5-pro has strict free-tier limits so it's only used as a last resort.
     const modelChain = (plan === 'pro' || plan === 'agency')

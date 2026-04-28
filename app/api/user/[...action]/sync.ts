@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, setDocument } from '@/lib/firestore-edge';
+import { PLAN_CONFIG } from '@/lib/stripe';
 
 export const runtime = 'edge';
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
         plan: 'free',
         reports: [],
         scanCount: 0,
-        maxScans: 5,
+        maxScans: PLAN_CONFIG.free.maxScans,
         lastScanReset: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };

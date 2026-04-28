@@ -4,9 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Check, 
   X, 
-  Zap, 
-  Shield, 
-  Globe, 
   Rocket, 
   Star, 
   Crown, 
@@ -15,11 +12,7 @@ import {
   CreditCard,
   ChevronDown,
   ChevronUp,
-  Info,
   Users,
-  FileText,
-  Search,
-  Activity,
   Award,
   Loader2
 } from 'lucide-react';
@@ -188,7 +181,7 @@ export default function PricingSection() {
 
             <ul className="flex-1 space-y-4 mb-10">
               <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Star className="w-4 h-4 text-[#D4AF37] fill-[#D4AF37]" /> 20 Unterseiten-Crawl
+                <Star className="w-4 h-4 text-[#D4AF37] fill-[#D4AF37]" /> 50 Unterseiten-Crawl
               </li>
               <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
                 <Check className="w-4 h-4 text-[#27AE60]" /> WAP v2 Intelligence
@@ -229,7 +222,7 @@ export default function PricingSection() {
 
             <ul className="flex-1 space-y-4 mb-10">
               <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Crown className="w-4 h-4 text-[#D4AF37] shadow-sm" /> 100+ Unterseiten
+                <Crown className="w-4 h-4 text-[#D4AF37] shadow-sm" /> 500 Unterseiten
               </li>
               <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
                 <Users className="w-4 h-4 text-[#D4AF37]" /> Team Workspace
@@ -272,7 +265,7 @@ export default function PricingSection() {
                 </div>
 
                 <FeatureRow label="Analyse & Crawling" isMain={true} free="" pro="" agency="" />
-                <FeatureRow label="Unterseiten pro Crawl" free="1" pro="20" agency="100+" />
+                <FeatureRow label="Unterseiten pro Crawl" free="5" pro="50" agency="500" />
                 <FeatureRow label="WAP Intelligence v." free="v1" pro="v2" agency="v3+" />
                 <FeatureRow label="Crawl-Häufigkeit" free="Manuell" pro="Täglich" agency="On-Demand+" />
                 <FeatureRow label="Automatisches Monitoring" free={false} pro={true} agency={true} />

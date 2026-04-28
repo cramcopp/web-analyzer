@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   Users, 
   Plus, 
@@ -39,12 +39,22 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [isInviting, setIsInviting] = useState(false);
+  const [prevUserId, setPrevUserId] = useState<string | null>(user?.uid || null);
+
+  // Adjust state during render (React recommended pattern for prop-based resets)
+  if (user?.uid !== prevUserId) {
+    setPrevUserId(user?.uid || null);
+    setTeam(null);
+    setMembers([]);
+    setLoading(!!user);
+  }
 
   const isAgency = userData?.plan === 'agency';
 
   const fetchTeamData = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
+    
+    // We don't call setLoading(true) here synchronously to avoid lint warnings in useEffect
     try {
       const res = await fetch('/api/teams');
       if (res.ok) {
@@ -62,17 +72,13 @@ export function TeamWorkspace({ user, userData }: { user: any, userData: any }) 
     } finally {
       setLoading(false);
     }
-  }, [user?.uid]);
+  }, [user]);
 
   useEffect(() => {
-    if (!user) {
-      setTeam(null);
-      setMembers([]);
-      return;
-    }
-
+    if (!user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTeamData();
-  }, [user?.uid, fetchTeamData]);
+  }, [user, fetchTeamData]);
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim() || !user || !isAgency) return;

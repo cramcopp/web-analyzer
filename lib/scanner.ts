@@ -1,98 +1,12 @@
 import { parse } from 'node-html-parser';
-
-export interface ScanOptions {
-  url: string;
-  plan?: string;
-}
-
-export interface PsiMetrics {
-  fcp: number | null;
-  lcp: number | null;
-  tbt: number | null;
-  cls: number | null;
-  speedIndex: number | null;
-  tti: number | null;
-}
-
-export interface LighthouseScores {
-  performance: number;
-  accessibility: number;
-  bestPractices: number;
-  seo: number;
-}
-
-export interface SslCertificateData {
-  status?: string;
-  grade?: string;
-  issuerSubject?: string;
-  validUntil?: string;
-  hstsPolicy?: string;
-}
-
-export interface SubpageResult {
-  error: boolean;
-  url: string;
-  title?: string;
-  metaDescription?: string;
-  h1Count?: number;
-  imagesWithoutAlt?: number;
-  status: number | string;
-}
-
-export interface AnalysisResult {
-  urlObj: string;
-  title: string;
-  metaDescription: string;
-  metaKeywords: string;
-  htmlLang: string;
-  generator: string;
-  viewport: string;
-  viewportScalable: string;
-  robots: string;
-  h1Count: number;
-  h2Count: number;
-  imagesTotal: number;
-  imagesWithoutAlt: number;
-  lazyImages: number;
-  maxDomDepth: number;
-  semanticTags: { main: number; article: number; section: number; nav: number };
-  napSignals: { googleMapsLinks: number; phoneLinks: number };
-  dataLeakage: { emailsFoundCount: number; sampleEmails: string[] };
-  internalLinksCount: number;
-  externalLinksCount: number;
-  totalScripts: number;
-  blockingScripts: number;
-  totalStylesheets: number;
-  responseTimeMs: number;
-  psiMetricsStr: string;
-  psiMetrics: PsiMetrics | null;
-  lighthouseScores: LighthouseScores | null;
-  safeBrowsingStr: string;
-  domainAge: string;
-  sslCertificate: SslCertificateData;
-  wienerSachtextIndex: number;
-  bodyText: string;
-  techStack: string[];
-  cdn: string;
-  serverInfo: string;
-  social: {
-    ogTitle: string;
-    ogDescription: string;
-    ogImage: string;
-    ogType: string;
-    twitterCard: string;
-  };
-  existingSchemaCount: number;
-  schemaTypes: string[];
-  securityHeaders: Record<string, string>;
-  headers: Record<string, string>;
-  crawlSummary: { 
-    totalInternalLinks: number; 
-    scannedSubpagesCount: number; 
-    scannedSubpages: Omit<SubpageResult, 'error'>[]; 
-    brokenLinks: { url: string; status: number | string }[] 
-  };
-}
+import { 
+  ScanOptions, 
+  AnalysisResult, 
+  LighthouseScores, 
+  PsiMetrics, 
+  SslCertificateData, 
+  SubpageResult 
+} from './scanner/types';
 
 export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
   const PLAN_LIMITS: Record<string, number> = {
@@ -100,6 +14,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     'pro': 20,
     'agency': 100
   };
+  // eslint-disable-next-line security/detect-object-injection
   const subpageLimit = PLAN_LIMITS[plan] || 0;
 
   const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
@@ -124,12 +39,13 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     signal: AbortSignal.timeout(10000)
   }).catch(() => null);
   
-  const jinaPromise = fetch(`https://r.jinaread.er.ai/${encodeURIComponent(urlObj.toString())}`, {
+  /* const jinaPromise = fetch(`https://r.jinaread.er.ai/${encodeURIComponent(urlObj.toString())}`, {
     headers: { 'Accept': 'text/plain' },
     signal: AbortSignal.timeout(10000)
-  }).catch(() => null);
+  }).catch(() => null); */
   
   const psiApiKeyParam = apiKey ? `&key=${apiKey}` : '';
+  // eslint-disable-next-line no-secrets/no-secrets
   const psiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlObj.toString())}${psiApiKeyParam}&category=PERFORMANCE&category=ACCESSIBILITY&category=BEST_PRACTICES&category=SEO&strategy=MOBILE`;
   const psiPromise = fetch(psiUrl, { signal: AbortSignal.timeout(45000) }).catch(() => null);
 
@@ -236,7 +152,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       if (linkSummaryList.length < 80) {
         linkSummaryList.push(`${text.slice(0, 30)} (${href.slice(0, 50)})`);
       }
-    } catch (e: unknown) {
+    } catch {
       // Ignore invalid URLs
     }
   });
@@ -316,8 +232,6 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const metaKeywords = root.querySelector('meta[name="keywords"]')?.getAttribute('content') || 'Not found';
   const generator = root.querySelector('meta[name="generator"]')?.getAttribute('content') || 'Not found';
   const htmlLang = root.querySelector('html')?.getAttribute('lang') || 'Not set';
-  const ariaCount = root.querySelectorAll('[aria-hidden], [aria-label], [role]').length;
-  const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href') || 'Not found';
 
   // --- Enhanced OpenGraph & Social Extraction ---
   const ogTitle = root.querySelector('meta[property="og:title"]')?.getAttribute('content') 
@@ -377,7 +291,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   };
 
   const subpageResults = await Promise.all(subpagesToScan.map(url => scanSubpage(url)));
-  const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error, ...d }) => d);
+  const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
   const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
 
   // Text Audit (Cleaned)
@@ -408,6 +322,36 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   if (html.includes('googletagmanager.com/gtm.js')) techStack.push('Google Tag Manager');
   if (html.includes('google-analytics.com')) techStack.push('Google Analytics');
 
+  // --- API Endpoint Discovery ---
+  const apiEndpoints: string[] = [];
+  if (plan !== 'free') {
+    const apiPaths = ['/api', '/graphql', '/v1', '/wp-json/wp/v2'];
+    await Promise.all(apiPaths.map(async (path) => {
+      try {
+        const testUrl = new URL(path, urlObj.toString()).toString();
+        const apiRes = await fetch(testUrl, { method: 'HEAD', signal: AbortSignal.timeout(2000) });
+        if (apiRes.ok || apiRes.status === 401 || apiRes.status === 403) {
+          apiEndpoints.push(path);
+        }
+      } catch (e) { /* ignore */ }
+    }));
+  }
+
+  // --- Legal & Tracking Signal Extraction ---
+  const scriptsText = root.querySelectorAll('script').map(s => s.getAttribute('src') || s.text).join(' ');
+  const cmpDetected = html.includes('cookie-consent') || html.includes('CookieConsent') || html.includes('cookiebot') || html.includes('usercentrics') || html.includes('cmp-banner');
+  const links = root.querySelectorAll('a');
+  const impressumLink = links.some(a => {
+    const text = a.text.toLowerCase();
+    const href = (a.getAttribute('href') || '').toLowerCase();
+    return text.includes('impressum') || href.includes('impressum') || text.includes('legal notice');
+  });
+  const privacyLink = links.some(a => {
+    const text = a.text.toLowerCase();
+    const href = (a.getAttribute('href') || '').toLowerCase();
+    return text.includes('datenschutz') || href.includes('datenschutz') || text.includes('privacy') || href.includes('privacy-policy');
+  });
+
   // --- Deep Schema.org Extraction ---
   const schemaTypes: string[] = [];
   root.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
@@ -427,6 +371,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   // Final structure
   return {
+    audit_id: Math.random().toString(36).substring(7).toUpperCase(),
+    createdAt: new Date().toISOString(),
     urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, generator, viewport,
     viewportScalable: viewport.includes('user-scalable=no') ? 'No' : 'Yes',
     robots, h1Count, h2Count, imagesTotal, imagesWithoutAlt, lazyImages, maxDomDepth,
@@ -438,15 +384,32 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     },
     napSignals: { googleMapsLinks, phoneLinks },
     dataLeakage: { 
-      emailsFoundCount: (bodyText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g) || []).length,
-      sampleEmails: (bodyText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g) || []).slice(0, 3)
+      emailsFoundCount: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).length,
+      sampleEmails: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).slice(0, 3)
     },
     internalLinksCount: internalLinks.length, externalLinksCount, totalScripts, blockingScripts, totalStylesheets,
     responseTimeMs, psiMetricsStr, psiMetrics, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
     wienerSachtextIndex, bodyText, techStack,
     cdn,
     serverInfo,
-
+    legal: {
+      trackingScripts: {
+        googleAnalytics: scriptsText.includes('googletagmanager.com/gtm.js') || scriptsText.includes('google-analytics.com'),
+        facebookPixel: scriptsText.includes('facebook.net/en_US/fbevents.js'),
+        hubspot: scriptsText.includes('js.hs-scripts.com') || scriptsText.includes('js.hubspot.com'),
+        hotjar: scriptsText.includes('hotjar.com'),
+        clarity: scriptsText.includes('clarity.ms')
+      },
+      cmpDetected: {
+        cookieBot: html.includes('cookiebot'),
+        usercentrics: html.includes('usercentrics'),
+        cookieConsent: html.includes('cookie-consent') || html.includes('CookieConsent'),
+        borlabs: html.includes('borlabs')
+      },
+      linksInFooter: impressumLink,
+      privacyInFooter: privacyLink,
+      cookieBannerFound: cmpDetected
+    },
     social: {
       ogTitle,
       ogDescription,
@@ -463,7 +426,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       scannedSubpagesCount: successfulSubpages.length, 
       scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
       brokenLinks 
-    }
+    },
+    apiEndpoints
   };
 }
 

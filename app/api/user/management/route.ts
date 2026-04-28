@@ -1,16 +1,35 @@
-import { NextResponse } from 'next/server';
-import { updateUserProfile, deleteUserAccount } from '@/lib/auth-server';
+import { NextResponse, NextRequest } from 'next/server';
+import { z } from 'zod';
+import { updateDocument } from '@/lib/firestore-edge';
+import { getSessionUser, getSessionToken, deleteUserAccount } from '@/lib/auth-server';
 
 export const runtime = 'edge';
 
-export async function PATCH(req: Request) {
+const userUpdateSchema = z.object({
+  displayName: z.string().max(100).optional(),
+  photoURL: z.string().url().optional(),
+  brandLogo: z.string().url().optional(),
+});
+
+export async function PATCH(req: NextRequest) {
+  const user = await getSessionUser();
+  const token = await getSessionToken();
+  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
-    const data = await req.json();
-    const result = await updateUserProfile(data);
-    return NextResponse.json({ success: true, user: result });
+    const body = await req.json();
+    const result = userUpdateSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json({ error: 'Ungültige Felder' }, { status: 400 });
+    }
+
+    // Only update validated fields to prevent privilege escalation
+    await updateDocument('users', user.uid, result.data, token);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Update User Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error('[PATCH /api/user/management] Update error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { queryDocuments, addDocument, updateDocument, getDocument, incrementField } from '@/lib/firestore-edge';
+import { queryDocuments, addDocument, updateDocument, incrementField } from '@/lib/firestore-edge';
 import { performAnalysis } from '@/lib/scanner';
 
 export const runtime = 'edge';

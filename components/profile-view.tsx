@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, memo } from 'react';
+import { useState, memo } from 'react';
 import Image from 'next/image';
 import { useAuth } from './auth-provider';
 
@@ -13,12 +13,15 @@ function ProfileView() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [success, setSuccess] = useState(false);
   const [brandLogo, setBrandLogo] = useState(userData?.brandLogo || '');
+  const [prevUserDataLogo, setPrevUserDataLogo] = useState(userData?.brandLogo);
 
-  useEffect(() => {
+  // Sync state during render if userData changes
+  if (userData?.brandLogo !== prevUserDataLogo) {
+    setPrevUserDataLogo(userData?.brandLogo);
     if (userData?.brandLogo && !brandLogo) {
       setBrandLogo(userData.brandLogo);
     }
-  }, [userData, brandLogo]);
+  }
 
   if (!user) return null;
 

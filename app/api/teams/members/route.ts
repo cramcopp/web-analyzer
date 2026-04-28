@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, updateDocument, queryDocuments } from '@/lib/firestore-edge';
+import { updateDocument, queryDocuments } from '@/lib/firestore-edge';
 import { teamInviteSchema, teamMemberSchema } from '@/lib/validations';
 
 export const runtime = 'edge';
@@ -29,6 +29,14 @@ export async function POST(req: Request) {
     
     if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     const team = teams[0];
+
+    // Security check: Only owners or admins can invite others.
+    const isOwner = team.ownerId === user.uid;
+    const isAdmin = team.admins?.includes(user.uid);
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Only owners and admins can invite members.' }, { status: 403 });
+    }
 
     // Find user by email
     const users = await queryDocuments('users', [

@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const data = await req.json();
     const existingProject = await getDocument('projects', id, token);
 
-    if (!existingProject || existingProject.userId !== user.uid) {
+    if (!existingProject || (existingProject.userId !== user.uid && !existingProject.members?.includes(user.uid))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
@@ -35,7 +35,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const existingProject = await getDocument('projects', id, token);
 
-    if (!existingProject || existingProject.userId !== user.uid) {
+    if (!existingProject || (existingProject.userId !== user.uid && !existingProject.members?.includes(user.uid))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
