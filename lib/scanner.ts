@@ -8,6 +8,15 @@ import {
   SubpageResult 
 } from './scanner/types';
 
+export type { 
+  ScanOptions, 
+  AnalysisResult, 
+  LighthouseScores, 
+  PsiMetrics, 
+  SslCertificateData, 
+  SubpageResult 
+};
+
 export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
   const PLAN_LIMITS: Record<string, number> = {
     'free': 0,
