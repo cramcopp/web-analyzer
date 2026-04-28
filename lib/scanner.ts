@@ -19,7 +19,6 @@ export type {
 
 /**
  * Radikal reduziert HTML auf das Wesentliche für die KI.
- * Beinhaltet semantische Extraktion und Stripping von Ballast.
  */
 function stripHtmlForAi(html: string): string {
   let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
@@ -30,25 +29,19 @@ function stripHtmlForAi(html: string): string {
   return s;
 }
 
-/**
- * Hilfsfunktion zur Link-Extraktion aus einem HTML-Dokument (inkl. Head & Body)
- */
 function extractInternalLinks(htmlRoot: any, baseUrl: string, domain: string): string[] {
   const links: string[] = [];
   const normalizedBase = domain.replace(/^www\./, '');
-  
   const isSameDomain = (hostname: string) => {
     const norm = hostname.replace(/^www\./, '');
     return norm === normalizedBase;
   };
 
-  // 1. Suche in a-Tags (Body/Nav)
   htmlRoot.querySelectorAll('a').forEach((el: any) => {
     const href = el.getAttribute('href');
     if (href) links.push(href);
   });
 
-  // 2. Suche in link-Tags (Head - hreflang, next/prev, etc.)
   htmlRoot.querySelectorAll('link').forEach((el: any) => {
     const href = el.getAttribute('href');
     if (href) links.push(href);
@@ -60,7 +53,6 @@ function extractInternalLinks(htmlRoot: any, baseUrl: string, domain: string): s
     try {
       const urlObj = new URL(href, baseUrl);
       if (isSameDomain(urlObj.hostname)) {
-        // Wir behalten Query-Parameter bei (Trap B), normalisieren aber den Hash
         const clean = urlObj.origin + urlObj.pathname + urlObj.search;
         absoluteUrls.add(clean);
       }
@@ -143,31 +135,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const rdapPromise = fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
   const sslPromise = fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(domain)}&publish=off&all=done`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
   
-  const psiApiKeyParam = apiKey ? `&key=${apiKey}` : '';
-  const psiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlObj.toString())}${psiApiKeyParam}&category=PERFORMANCE&category=ACCESSIBILITY&category=BEST_PRACTICES&category=SEO&strategy=MOBILE`;
-  const psiPromise = fetch(psiUrl, { signal: AbortSignal.timeout(45000) }).catch(() => null);
-
   const ttfbStart = Date.now();
   const htmlPromise = fetch(urlObj.toString(), htmlRequestConfig);
   
-  let safeBrowsingPromise: Promise<Response | null> = Promise.resolve(null);
-  if (apiKey) {
-    const sbUrl = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
-    safeBrowsingPromise = fetch(sbUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        threatInfo: {
-          threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
-          platformTypes: ["ANY_PLATFORM"],
-          threatEntryTypes: ["URL"],
-          threatEntries: [{ url: urlObj.toString() }]
-        }
-      }),
-      signal: AbortSignal.timeout(10000)
-    }).catch(() => null);
-  }
-
   const response = await htmlPromise;
   const ttfbMs = Date.now() - ttfbStart;
   const responseTimeMs = Date.now() - startTime;
@@ -179,14 +149,31 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const html = await response.text();
   const root = parse(html);
 
+  // --- Header Analysis ---
+  const headers = Object.fromEntries(response.headers.entries());
+  const securityHeaders: Record<string, string> = {
+    'Content-Security-Policy': headers['content-security-policy'] ? 'Present' : 'Missing',
+    'Strict-Transport-Security': headers['strict-transport-security'] ? 'Present' : 'Missing',
+    'X-Frame-Options': headers['x-frame-options'] || 'Missing',
+    'X-Content-Type-Options': headers['x-content-type-options'] || 'Missing',
+    'Referrer-Policy': headers['referrer-policy'] || 'Missing'
+  };
+
+  const cdn = 
+    headers['cf-ray'] ? 'Cloudflare' :
+    headers['x-vercel-id'] ? 'Vercel' :
+    headers['x-akamai-transformed'] ? 'Akamai' :
+    headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' :
+    'None detected';
+
+  const serverInfo = headers['server'] || 'Hidden';
+
   // --- Found Discovery (Level 1) ---
   const foundLinks = new Set<string>();
-  // 1. Aus Sitemap
   preflight.sitemapUrls.forEach((u: string) => foundLinks.add(u));
-  // 2. Aus HTML
   extractInternalLinks(root, urlObj.toString(), domain).forEach(u => foundLinks.add(u));
 
-  // --- Subpage Scanning (Crawl Queue) ---
+  // --- Subpage Scanning ---
   const subpagesToScan = Array.from(foundLinks).filter(u => u !== urlObj.toString()).slice(0, subpageLimit);
   
   const scanSubpage = async (subUrl: string): Promise<SubpageResult> => {
@@ -200,8 +187,6 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
-      
-      // Level 2 Discovery (Hidden Links, Relative URLs, Query Params)
       const subInternalLinks = extractInternalLinks(subRoot, subUrl, domain);
 
       return {
@@ -210,7 +195,6 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
         canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
         h1Count: subRoot.querySelectorAll('h1').length, 
-        imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
         status: subRes.status,
         strippedContent,
         links: subInternalLinks
@@ -236,21 +220,16 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   }
 
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
-  
-  // Update foundLinks with Level 2 Discovery
   successfulSubpages.forEach(sub => {
     (sub.links || []).forEach(l => foundLinks.add(l));
   });
 
-  // --- Indexability Check (User Logic) ---
-  // 1. Hauptseite
+  // --- Indexability Check ---
   const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow';
   const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href');
   
   const isIndexable = (url: string, rb: string, can?: string | null) => {
-    const noIndex = rb.toLowerCase().includes('noindex');
-    if (noIndex) return false;
-    // Wenn Canonical gesetzt ist, muss er auf die URL selbst zeigen (oder relativ sein)
+    if (rb.toLowerCase().includes('noindex')) return false;
     if (can) {
       try {
         const canAbs = new URL(can, url).toString();
@@ -267,6 +246,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   // Metadata Extraction
   const title = root.querySelector('title')?.text.trim() || '';
+  const ogDescription = root.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
   const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   const htmlStripped = stripHtmlForAi(html);
   const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000); 
@@ -274,18 +254,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
 
-  const imageDetails = root.querySelectorAll('img').slice(0, 100).map(img => ({
-    src: img.getAttribute('src') || '',
-    alt: img.getAttribute('alt') || null
-  }));
-
   const techStack: string[] = [];
-  const htmlStr = html.substring(0, 500000);
-  if (htmlStr.includes('__NEXT_DATA__')) techStack.push('Next.js');
-  if (htmlStr.includes('wp-content') || htmlStr.includes('wp-includes')) techStack.push('WordPress');
-  if (htmlStr.includes('cdn.shopify.com')) techStack.push('Shopify');
-  if (htmlStr.includes('data-reactroot')) techStack.push('React');
-  if (htmlStr.includes('google-analytics.com')) techStack.push('Google Analytics');
+  if (html.includes('__NEXT_DATA__')) techStack.push('Next.js');
+  if (html.includes('wp-content')) techStack.push('WordPress');
 
   const rdapRes = await rdapPromise;
   let domainAgeStr = "Unknown";
@@ -300,10 +271,10 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     createdAt: new Date().toISOString(),
     urlObj: urlObj.toString(), title, metaDescription, metaKeywords: '', htmlLang: '', hreflangs: [], generator: '', viewport: '',
     viewportScalable: 'Yes',
-    robots, h1Count: h1Texts.length, h2Count: h2Texts.length, imagesTotal: root.querySelectorAll('img').length, imagesWithoutAlt: root.querySelectorAll('img:not([alt])').length, lazyImages: 0, 
+    robots, h1Count: h1Texts.length, h2Count: h2Texts.length, imagesTotal: 0, imagesWithoutAlt: 0, lazyImages: 0, 
     maxDomDepth: 0, 
     headings: { h1: h1Texts, h2: h2Texts, h3: h3Texts },
-    imageDetails,
+    imageDetails: [],
     semanticTags: { main: 0, article: 0, section: 0, nav: 0, header: 0, footer: 0, aside: 0 },
     napSignals: { googleMapsLinks: 0, phoneLinks: 0 },
     dataLeakage: { emailsFoundCount: 0, sampleEmails: [] },
@@ -312,13 +283,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     wienerSachtextIndex: 0, bodyText, techStack,
     cdn,
     serverInfo,
-    legal: {
-      trackingScripts: {},
-      cmpDetected: {},
-      linksInFooter: false,
-      privacyInFooter: false,
-      cookieBannerFound: false
-    },
+    legal: { trackingScripts: {}, cmpDetected: {}, linksInFooter: false, privacyInFooter: false, cookieBannerFound: false },
     social: { ogTitle: title, ogDescription, ogImage: '', ogType: 'website', twitterCard: 'summary' },
     existingSchemaCount: 0,
     schemaTypes: [],
