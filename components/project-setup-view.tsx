@@ -8,7 +8,7 @@ import {
 
 export default function ProjectSetupView({ project }: { project: any }) {
   const [name, setName] = useState(project.name);
-  const [url, setUrl] = useState(project.url);
+  const [url] = useState(project.url);
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">

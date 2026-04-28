@@ -111,20 +111,25 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   const serverInfo = headers['server'] || 'Hidden';
 
-  // Optimized O(N) DOM depth calculation with safety limit
+  // Optimized DOM depth calculation (iterative, limited)
   let maxDomDepth = 0;
-  const MAX_DEPTH = 100;
+  const MAX_DEPTH = 50; // Reduced from 100 to save CPU
+  const MAX_NODES_TO_CHECK = 1000; // Hard limit to avoid scanning massive DOMs
+  let nodesChecked = 0;
+
   function calculateDepth(element: any, currentDepth: number) {
     if (currentDepth > maxDomDepth) maxDomDepth = currentDepth;
-    if (currentDepth >= MAX_DEPTH) return; 
+    if (currentDepth >= MAX_DEPTH || nodesChecked >= MAX_NODES_TO_CHECK) return; 
     
+    nodesChecked++;
     const children = element.childNodes.filter((node: any) => node.nodeType === 1);
-    children.forEach((child: any) => {
+    for (const child of children) {
       calculateDepth(child, currentDepth + 1);
-    });
+    }
   }
   const htmlEl = root.querySelector('html');
   if (htmlEl) calculateDepth(htmlEl, 1);
+
 
   // Unified Link Extraction
   const internalLinks: string[] = [];
@@ -301,7 +306,15 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     }
   };
 
-  const subpageResults = await Promise.all(subpagesToScan.map(url => scanSubpage(url)));
+  // Batch Process Subpages to avoid rate-limits and high memory usage
+  const subpageResults: SubpageResult[] = [];
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < subpagesToScan.length; i += BATCH_SIZE) {
+    const batch = subpagesToScan.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map(url => scanSubpage(url)));
+    subpageResults.push(...results);
+  }
+
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
   const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
 
@@ -320,18 +333,20 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const avgSyllablesPerWord = words.reduce((acc, w) => acc + countSyllables(w), 0) / (words.length || 1);
   const wienerSachtextIndex = Math.round((0.26 * avgSentenceLength + 0.27 * (avgSyllablesPerWord * 6) - 1.69) * 10) / 10;
 
-  // --- Enhanced Tech Stack Detection ---
+  // --- Enhanced Tech Stack Detection (Optimized) ---
   const techStack: string[] = [];
-  if (html.includes('__NEXT_DATA__')) techStack.push('Next.js');
-  if (html.includes('wp-content') || html.includes('wp-includes')) techStack.push('WordPress');
-  if (html.includes('cdn.shopify.com')) techStack.push('Shopify');
-  if (html.includes('id="_nuxt"') || html.includes('window.__NUXT__')) techStack.push('Nuxt.js');
-  if (html.includes('data-reactroot')) techStack.push('React');
-  if (html.includes('wix-config') || html.includes('wix.com')) techStack.push('Wix');
-  if (html.includes('static1.squarespace.com')) techStack.push('Squarespace');
-  if (html.includes('hubspot.com')) techStack.push('HubSpot');
-  if (html.includes('googletagmanager.com/gtm.js')) techStack.push('Google Tag Manager');
-  if (html.includes('google-analytics.com')) techStack.push('Google Analytics');
+  const htmlStr = html.substring(0, 100000); // Check only the first 100KB for common signatures to save CPU
+  if (htmlStr.includes('__NEXT_DATA__')) techStack.push('Next.js');
+  if (htmlStr.includes('wp-content') || htmlStr.includes('wp-includes')) techStack.push('WordPress');
+  if (htmlStr.includes('cdn.shopify.com')) techStack.push('Shopify');
+  if (htmlStr.includes('id="_nuxt"') || htmlStr.includes('window.__NUXT__')) techStack.push('Nuxt.js');
+  if (htmlStr.includes('data-reactroot')) techStack.push('React');
+  if (htmlStr.includes('wix-config') || htmlStr.includes('wix.com')) techStack.push('Wix');
+  if (htmlStr.includes('static1.squarespace.com')) techStack.push('Squarespace');
+  if (htmlStr.includes('hubspot.com')) techStack.push('HubSpot');
+  if (htmlStr.includes('googletagmanager.com/gtm.js')) techStack.push('Google Tag Manager');
+  if (htmlStr.includes('google-analytics.com')) techStack.push('Google Analytics');
+
 
   // --- API Endpoint Discovery ---
   const apiEndpoints: string[] = [];
@@ -344,8 +359,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         if (apiRes.ok || apiRes.status === 401 || apiRes.status === 403) {
           apiEndpoints.push(path);
         }
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */ }
     }));
+
   }
 
   // --- Legal & Tracking Signal Extraction ---

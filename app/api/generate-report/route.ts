@@ -281,9 +281,16 @@ export async function POST(req: NextRequest) {
     for (const modelId of models) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
+          // Trim the payload to save LLM tokens and costs
+          const { headers, securityHeaders, apiEndpoints, ...trimmedScrapeData } = scrapeData;
+          if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 5000) {
+             trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 5000) + '...[TRUNCATED]';
+          }
+
           const prompt = `Analysiere die folgenden Website-Daten für ${url} und erstelle einen detaillierten SEO-Bericht in deutscher Sprache. Nutze die Daten für Wettbewerber-Benchmarking, Keyword-Lücken-Analyse und einen konkreten Umsetzungsplan für Entwickler.
           
-          Daten: ${JSON.stringify(scrapeData)}`;
+          Daten: ${JSON.stringify(trimmedScrapeData)}`;
+
 
           const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
           

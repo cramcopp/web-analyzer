@@ -42,14 +42,25 @@ export default function ProjectRankingsView({ report }: { report: AnalysisResult
   const keywords = useMemo(() => {
     if (!report || !report.businessIntelligence) return [];
     
-    // Mix AI suggested keywords with some mock ranking data
-    return report.businessIntelligence.keywordGapAnalysis.map((kw: string, i: number) => ({
-      keyword: kw,
-      pos: Math.floor(Math.random() * 50) + 1,
-      change: Math.floor(Math.random() * 10) - 5,
-      volume: (Math.floor(Math.random() * 20) + 1) * 100,
-      difficulty: Math.floor(Math.random() * 40) + 30
-    })).sort((a: any, b: any) => a.pos - b.pos);
+    // Deterministic hash function for stable mock data
+    const hashCode = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
+      return Math.abs(hash);
+    };
+
+    // Mix AI suggested keywords with some deterministic mock ranking data
+    return report.businessIntelligence.keywordGapAnalysis.map((kw: string) => {
+      const hash = hashCode(kw);
+      return {
+        keyword: kw,
+        pos: (hash % 50) + 1,
+        change: (hash % 10) - 5,
+        volume: ((hash % 20) + 1) * 100,
+        difficulty: (hash % 40) + 30
+      };
+    }).sort((a: any, b: any) => a.pos - b.pos);
+
   }, [report]);
 
   if (!report) {

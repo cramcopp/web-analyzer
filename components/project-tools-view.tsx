@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { 
-  Wrench, FileCode, Search, Copy, CheckCircle2, 
-  Terminal, Eye, Settings, RefreshCw 
+  Wrench, FileCode, Terminal, Eye, Settings, Copy 
 } from 'lucide-react';
 
 export default function ProjectToolsView({ project }: { project: any }) {
