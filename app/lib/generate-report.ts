@@ -24,7 +24,7 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...scrapeData, plan }),
+        body: JSON.stringify({ scrapeData, url: scrapeData.urlObj, plan }),
       });
 
       if (!response.ok) {
