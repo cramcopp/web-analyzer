@@ -51,7 +51,6 @@ async function getPreflightData(baseUrl: string): Promise<any> {
       const text = await res.text();
       robotsTxt.content = text;
       
-      // Einfaches Parsing
       const lines = text.split('\n');
       for (const line of lines) {
         const lowerLine = line.toLowerCase().trim();
@@ -63,16 +62,32 @@ async function getPreflightData(baseUrl: string): Promise<any> {
         }
       }
     }
-  } catch (e) {
-    console.warn("Preflight: robots.txt fetch failed", e);
-  }
+  } catch (e) { /* ignore */ }
 
-  // Fallback Sitemap-Suche
+  // Fallback Sitemap
   if (robotsTxt.sitemaps.length === 0) {
     robotsTxt.sitemaps.push(`${url.origin}/sitemap.xml`);
   }
 
-  return { robotsTxt };
+  // Fetch URLs from sitemaps
+  const sitemapUrls: string[] = [];
+  for (const sUrl of robotsTxt.sitemaps) {
+    try {
+      const sRes = await fetch(sUrl, { signal: AbortSignal.timeout(5000) });
+      if (sRes.ok) {
+        const sXml = await sRes.text();
+        const locMatches = sXml.match(/<loc>(.*?)<\/loc>/gi);
+        if (locMatches) {
+          locMatches.forEach(m => {
+            const inner = m.replace(/<\/?loc>/gi, '').trim();
+            if (inner.startsWith('http')) sitemapUrls.push(inner);
+          });
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  return { robotsTxt, sitemapUrls };
 }
 
 export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
@@ -197,6 +212,27 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const linkSummaryList: string[] = [];
   const baseDomain = urlObj.hostname;
 
+  // --- Enhanced Link Discovery & Normalization ---
+  const normalizedBase = baseDomain.replace(/^www\./, '');
+  const isSameDomain = (hostname: string) => {
+    const norm = hostname.replace(/^www\./, '');
+    return norm === normalizedBase;
+  };
+
+  // Add sitemap URLs to seen links initially
+  preflight.sitemapUrls.forEach(sUrl => {
+    try {
+      const sObj = new URL(sUrl);
+      if (isSameDomain(sObj.hostname)) {
+        const clean = sObj.origin + sObj.pathname;
+        if (!seenLinks.has(clean)) {
+          seenLinks.add(clean);
+          internalLinks.push(clean);
+        }
+      }
+    } catch { /* ignore */ }
+  });
+
   root.querySelectorAll('a').forEach((el) => {
     const href = el.getAttribute('href') || '';
     const text = el.text.trim();
@@ -210,7 +246,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     
     try {
       const absoluteUrl = new URL(href, urlObj.toString());
-      if (absoluteUrl.hostname === baseDomain) {
+      if (isSameDomain(absoluteUrl.hostname)) {
         const cleanUrl = absoluteUrl.origin + absoluteUrl.pathname;
         if (!seenLinks.has(cleanUrl) && cleanUrl !== urlObj.origin + urlObj.pathname) {
           seenLinks.add(cleanUrl);
