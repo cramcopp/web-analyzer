@@ -1,7 +1,6 @@
 
 
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 export const runtime = 'edge';
 
@@ -13,48 +12,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No scrape data provided' }, { status: 400 });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY is missing');
+    }
+
     // Define the schema for the AI response
-    const schema: any = {
+    const responseSchema = {
       description: "SEO Analysis Report",
-      type: SchemaType.OBJECT,
+      type: "object",
       properties: {
         businessIntelligence: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            businessNiche: { type: SchemaType.STRING },
-            keywordGapAnalysis: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            targetAudienceProfile: { type: SchemaType.STRING },
-            uniqueSellingPropositions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
+            businessNiche: { type: "string" },
+            keywordGapAnalysis: { type: "array", items: { type: "string" } },
+            targetAudienceProfile: { type: "string" },
+            uniqueSellingPropositions: { type: "array", items: { type: "string" } }
           },
           required: ["businessNiche", "keywordGapAnalysis", "targetAudienceProfile", "uniqueSellingPropositions"]
         },
-        overallAssessment: { type: SchemaType.STRING },
-        industryNews: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        overallAssessment: { type: "string" },
+        industryNews: { type: "array", items: { type: "string" } },
         implementationPlan: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            phase1: { type: SchemaType.OBJECT, properties: { title: { type: SchemaType.STRING }, tasks: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } } }, required: ["title", "tasks"] },
-            phase2: { type: SchemaType.OBJECT, properties: { title: { type: SchemaType.STRING }, tasks: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } } }, required: ["title", "tasks"] },
-            phase3: { type: SchemaType.OBJECT, properties: { title: { type: SchemaType.STRING }, tasks: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } } }, required: ["title", "tasks"] },
-            developerPrompt: { type: SchemaType.STRING }
+            phase1: { type: "object", properties: { title: { type: "string" }, tasks: { type: "array", items: { type: "string" } } }, required: ["title", "tasks"] },
+            phase2: { type: "object", properties: { title: { type: "string" }, tasks: { type: "array", items: { type: "string" } } }, required: ["title", "tasks"] },
+            phase3: { type: "object", properties: { title: { type: "string" }, tasks: { type: "array", items: { type: "string" } } }, required: ["title", "tasks"] },
+            developerPrompt: { type: "string" }
           },
           required: ["phase1", "phase2", "phase3", "developerPrompt"]
         },
         competitorBenchmarking: {
-          type: SchemaType.ARRAY,
+          type: "array",
           items: {
-            type: SchemaType.OBJECT,
+            type: "object",
             properties: {
-              name: { type: SchemaType.STRING },
-              url: { type: SchemaType.STRING },
+              name: { type: "string" },
+              url: { type: "string" },
               estimatedScores: {
-                type: SchemaType.OBJECT,
+                type: "object",
                 properties: {
-                  seo: { type: SchemaType.INTEGER },
-                  security: { type: SchemaType.INTEGER },
-                  performance: { type: SchemaType.INTEGER }
+                  seo: { type: "integer" },
+                  security: { type: "integer" },
+                  performance: { type: "integer" }
                 },
                 required: ["seo", "security", "performance"]
               }
@@ -63,47 +65,47 @@ export async function POST(req: NextRequest) {
           }
         },
         seo: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            score: { type: SchemaType.INTEGER },
-            insights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
             detailedSeo: {
-              type: SchemaType.OBJECT,
+              type: "object",
               properties: {
-                keywordAnalysis: { type: SchemaType.STRING },
-                metaTagsAssessment: { type: SchemaType.STRING },
-                linkStructure: { type: SchemaType.STRING },
-                mobileFriendly: { type: SchemaType.STRING },
-                localSeoNap: { type: SchemaType.STRING },
-                semanticStructure: { type: SchemaType.STRING },
-                ctaAnalysis: { type: SchemaType.STRING },
+                keywordAnalysis: { type: "string" },
+                metaTagsAssessment: { type: "string" },
+                linkStructure: { type: "string" },
+                mobileFriendly: { type: "string" },
+                localSeoNap: { type: "string" },
+                semanticStructure: { type: "string" },
+                ctaAnalysis: { type: "string" },
                 contentQuality: {
-                  type: SchemaType.OBJECT,
+                  type: "object",
                   properties: {
-                    readabilityAssessment: { type: SchemaType.STRING },
-                    duplicateContentIssues: { type: SchemaType.STRING }
+                    readabilityAssessment: { type: "string" },
+                    duplicateContentIssues: { type: "string" }
                   },
                   required: ["readabilityAssessment", "duplicateContentIssues"]
                 },
                 technicalSeo: {
-                  type: SchemaType.OBJECT,
+                  type: "object",
                   properties: {
-                    sitemapStatus: { type: SchemaType.STRING },
-                    robotsTxtStatus: { type: SchemaType.STRING },
-                    canonicalStatus: { type: SchemaType.STRING },
-                    hreflangStatus: { type: SchemaType.STRING }
+                    sitemapStatus: { type: "string" },
+                    robotsTxtStatus: { type: "string" },
+                    canonicalStatus: { type: "string" },
+                    hreflangStatus: { type: "string" }
                   },
                   required: ["sitemapStatus", "robotsTxtStatus", "canonicalStatus", "hreflangStatus"]
                 },
                 prioritizedTasks: {
-                  type: SchemaType.ARRAY,
+                  type: "array",
                   items: {
-                    type: SchemaType.OBJECT,
+                    type: "object",
                     properties: {
-                      priority: { type: SchemaType.STRING, description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
-                      task: { type: SchemaType.STRING },
-                      remediation: { type: SchemaType.STRING }
+                      priority: { type: "string", description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
                     }
                   }
                 }
@@ -114,27 +116,27 @@ export async function POST(req: NextRequest) {
           required: ["score", "insights", "recommendations", "detailedSeo"]
         },
         security: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            score: { type: SchemaType.INTEGER },
-            insights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
             detailedSecurity: {
-              type: SchemaType.OBJECT,
+              type: "object",
               properties: {
-                sqlXssAssessment: { type: SchemaType.STRING },
-                headerAnalysis: { type: SchemaType.STRING },
-                softwareConfig: { type: SchemaType.STRING },
-                dataLeakageAssessment: { type: SchemaType.STRING },
-                googleSafeBrowsingStatus: { type: SchemaType.STRING },
+                sqlXssAssessment: { type: "string" },
+                headerAnalysis: { type: "string" },
+                softwareConfig: { type: "string" },
+                dataLeakageAssessment: { type: "string" },
+                googleSafeBrowsingStatus: { type: "string" },
                 prioritizedTasks: {
-                  type: SchemaType.ARRAY,
+                  type: "array",
                   items: {
-                    type: SchemaType.OBJECT,
+                    type: "object",
                     properties: {
-                      priority: { type: SchemaType.STRING, description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
-                      task: { type: SchemaType.STRING },
-                      remediation: { type: SchemaType.STRING }
+                      priority: { type: "string", description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
                     }
                   }
                 }
@@ -145,61 +147,61 @@ export async function POST(req: NextRequest) {
           required: ["score", "insights", "recommendations", "detailedSecurity"]
         },
         performance: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            score: { type: SchemaType.INTEGER },
-            insights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
             detailedPerformance: {
-              type: SchemaType.OBJECT,
+              type: "object",
               properties: {
-                coreVitalsAssessment: { type: SchemaType.STRING },
-                resourceOptimization: { type: SchemaType.STRING },
-                serverAndCache: { type: SchemaType.STRING },
-                domComplexity: { type: SchemaType.STRING },
-                perfectionistTweaks: { type: SchemaType.STRING, description: "Sehr spezifische Tipps für Perfektionisten (z.B. Font-Loading Optimierung, spezifische DOM-Nodes)." },
+                coreVitalsAssessment: { type: "string" },
+                resourceOptimization: { type: "string" },
+                serverAndCache: { type: "string" },
+                domComplexity: { type: "string" },
+                perfectionistTweaks: { type: "string", description: "Sehr spezifische Tipps für Perfektionisten (z.B. Font-Loading Optimierung, spezifische DOM-Nodes)." },
                 lighthouseMetrics: {
-                  type: SchemaType.OBJECT,
+                  type: "object",
                   properties: {
-                    performance: { type: SchemaType.INTEGER },
-                    accessibility: { type: SchemaType.INTEGER },
-                    bestPractices: { type: SchemaType.INTEGER },
-                    seo: { type: SchemaType.INTEGER }
+                    performance: { type: "integer" },
+                    accessibility: { type: "integer" },
+                    bestPractices: { type: "integer" },
+                    seo: { type: "integer" }
                   },
                   required: ["performance", "accessibility", "bestPractices", "seo"]
                 },
                 coreWebVitals: {
-                  type: SchemaType.OBJECT,
+                  type: "object",
                   properties: {
-                    fcp: { type: SchemaType.OBJECT, properties: { value: { type: SchemaType.STRING }, numericValue: { type: SchemaType.NUMBER }, status: { type: SchemaType.STRING }, recommendation: { type: SchemaType.STRING } } },
-                    lcp: { type: SchemaType.OBJECT, properties: { value: { type: SchemaType.STRING }, numericValue: { type: SchemaType.NUMBER }, status: { type: SchemaType.STRING }, recommendation: { type: SchemaType.STRING } } },
-                    cls: { type: SchemaType.OBJECT, properties: { value: { type: SchemaType.STRING }, numericValue: { type: SchemaType.NUMBER }, status: { type: SchemaType.STRING }, recommendation: { type: SchemaType.STRING } } }
+                    fcp: { type: "object", properties: { value: { type: "string" }, numericValue: { type: "number" }, status: { type: "string" }, recommendation: { type: "string" } } },
+                    lcp: { type: "object", properties: { value: { type: "string" }, numericValue: { type: "number" }, status: { type: "string" }, recommendation: { type: "string" } } },
+                    cls: { type: "object", properties: { value: { type: "string" }, numericValue: { type: "number" }, status: { type: "string" }, recommendation: { type: "string" } } }
                   }
                 },
                 cachingAnalysis: {
-                  type: SchemaType.OBJECT,
+                  type: "object",
                   properties: {
-                    browserCaching: { type: SchemaType.STRING },
-                    serverCaching: { type: SchemaType.STRING },
-                    cdnStatus: { type: SchemaType.STRING }
+                    browserCaching: { type: "string" },
+                    serverCaching: { type: "string" },
+                    cdnStatus: { type: "string" }
                   }
                 },
                 chartData: {
-                  type: SchemaType.OBJECT,
+                  type: "object",
                   properties: {
-                    vitals: { type: SchemaType.ARRAY, items: { type: SchemaType.OBJECT, properties: { metric: { type: SchemaType.STRING }, value: { type: SchemaType.NUMBER } } } },
-                    resources: { type: SchemaType.ARRAY, items: { type: SchemaType.OBJECT, properties: { name: { type: SchemaType.STRING }, count: { type: SchemaType.INTEGER } } } }
+                    vitals: { type: "array", items: { type: "object", properties: { metric: { type: "string" }, value: { type: "number" } } } },
+                    resources: { type: "array", items: { type: "object", properties: { name: { type: "string" }, count: { type: "integer" } } } }
                   },
                   required: ["vitals", "resources"]
                 },
                 prioritizedTasks: {
-                  type: SchemaType.ARRAY,
+                  type: "array",
                   items: {
-                    type: SchemaType.OBJECT,
+                    type: "object",
                     properties: {
-                      priority: { type: SchemaType.STRING, description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
-                      task: { type: SchemaType.STRING },
-                      remediation: { type: SchemaType.STRING }
+                      priority: { type: "string", description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
                     }
                   }
                 }
@@ -210,24 +212,24 @@ export async function POST(req: NextRequest) {
           required: ["score", "insights", "recommendations", "detailedPerformance"]
         },
         accessibility: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            score: { type: SchemaType.INTEGER },
-            insights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
             detailedAccessibility: {
-              type: SchemaType.OBJECT,
+              type: "object",
               properties: {
-                visualAndContrast: { type: SchemaType.STRING },
-                navigationAndSemantics: { type: SchemaType.STRING },
+                visualAndContrast: { type: "string" },
+                navigationAndSemantics: { type: "string" },
                 prioritizedTasks: {
-                  type: SchemaType.ARRAY,
+                  type: "array",
                   items: {
-                    type: SchemaType.OBJECT,
+                    type: "object",
                     properties: {
-                      priority: { type: SchemaType.STRING, description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
-                      task: { type: SchemaType.STRING },
-                      remediation: { type: SchemaType.STRING }
+                      priority: { type: "string", description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
                     }
                   }
                 }
@@ -238,25 +240,25 @@ export async function POST(req: NextRequest) {
           required: ["score", "insights", "recommendations", "detailedAccessibility"]
         },
         compliance: {
-          type: SchemaType.OBJECT,
+          type: "object",
           properties: {
-            score: { type: SchemaType.INTEGER },
-            insights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            score: { type: "integer" },
+            insights: { type: "array", items: { type: "string" } },
+            recommendations: { type: "array", items: { type: "string" } },
             detailedCompliance: {
-              type: SchemaType.OBJECT,
+              type: "object",
               properties: {
-                gdprAssessment: { type: SchemaType.STRING },
-                cookieBannerStatus: { type: SchemaType.STRING },
-                policyLinksStatus: { type: SchemaType.STRING },
+                gdprAssessment: { type: "string" },
+                cookieBannerStatus: { type: "string" },
+                policyLinksStatus: { type: "string" },
                 prioritizedTasks: {
-                  type: SchemaType.ARRAY,
+                  type: "array",
                   items: {
-                    type: SchemaType.OBJECT,
+                    type: "object",
                     properties: {
-                      priority: { type: SchemaType.STRING, description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
-                      task: { type: SchemaType.STRING },
-                      remediation: { type: SchemaType.STRING }
+                      priority: { type: "string", description: "Muss einer dieser Werte sein: CRITICAL, IMPORTANT, PERFECTION" },
+                      task: { type: "string" },
+                      remediation: { type: "string" }
                     }
                   }
                 }
@@ -277,23 +279,41 @@ export async function POST(req: NextRequest) {
     const models = ["gemini-1.5-flash", "gemini-1.5-pro"];
 
     for (const modelId of models) {
-      const model = genAI.getGenerativeModel({
-        model: modelId,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-          temperature: 0.2,
-        },
-      });
-
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const prompt = `Analysiere die folgenden Website-Daten für ${url} und erstelle einen detaillierten SEO-Bericht in deutscher Sprache. Nutze die Daten für Wettbewerber-Benchmarking, Keyword-Lücken-Analyse und einen konkreten Umsetzungsplan für Entwickler.
           
           Daten: ${JSON.stringify(scrapeData)}`;
 
-          const result = await model.generateContent(prompt);
-          aiResponse = JSON.parse(result.response.text());
+          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+          
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{ text: prompt }]
+              }],
+              generationConfig: {
+                response_mime_type: "application/json",
+                response_schema: responseSchema,
+                temperature: 0.2,
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+          }
+
+          const result = await response.json();
+          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!text) throw new Error('No response text from Gemini');
+          
+          aiResponse = JSON.parse(text);
           success = true;
           break;
         } catch (err) {
@@ -314,3 +334,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+
