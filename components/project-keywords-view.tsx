@@ -7,6 +7,7 @@ import {
   ArrowRight, Info, Zap
 } from 'lucide-react';
 import { AnalysisResult } from '@/lib/scanner/types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function ProjectKeywordsView({ report }: { report: AnalysisResult | null }) {
   const [researchInput, setResearchInput] = useState('');
@@ -74,37 +75,47 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
           </div>
           
           <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 space-y-6">
-            <div className="flex items-center justify-between text-[#888] text-[10px] font-black uppercase tracking-widest border-b border-[#EEE] dark:border-zinc-800 pb-4">
-              <span>Gefundene Begriffe</span>
-              <span>Häufigkeit</span>
-            </div>
-            <div className="space-y-4">
-              {topKeywordsFromPage.map((item, i) => (
-                <div key={i} className="flex items-center justify-between group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] opacity-40 group-hover:opacity-100 transition-opacity" />
-                    <span className="text-[14px] font-bold text-[#1A1A1A] dark:text-zinc-100">{item.kw}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-32 h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-[#D4AF37]" 
-                        style={{ width: `${Math.min(100, (item.count / topKeywordsFromPage[0].count) * 100)}%` }} 
+            {topKeywordsFromPage.length > 0 ? (
+              <>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topKeywordsFromPage} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#EEE" />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="kw" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#888', fontWeight: 'bold' }} width={80} />
+                      <RechartsTooltip 
+                        cursor={{ fill: 'transparent' }}
+                        contentStyle={{ backgroundColor: '#1A1A1A', border: 'none', borderRadius: '0px' }}
+                        itemStyle={{ color: '#D4AF37', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}
+                        labelStyle={{ display: 'none' }}
+                        formatter={(value: any) => [`${value}x gefunden`, '']}
                       />
-                    </div>
-                    <span className="text-[12px] font-black text-[#888] min-w-[24px] text-right">{item.count}</span>
-                  </div>
+                      <Bar dataKey="count" fill="#D4AF37" radius={[0, 4, 4, 0]} barSize={12} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
-            <div className="mt-8 pt-6 border-t border-[#EEE] dark:border-zinc-800">
-               <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-950 p-4 border border-[#EEE] dark:border-zinc-800">
-                  <Info className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-[#888] font-medium leading-relaxed">
-                    Diese Begriffe wurden am häufigsten im Textkörper gefunden. Achte darauf, dass dein Hauptkeyword in den H1- und H2-Tags sowie in den ersten 100 Wörtern erscheint.
+                <div className="mt-8 pt-6 border-t border-[#EEE] dark:border-zinc-800">
+                   <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-950 p-4 border border-[#EEE] dark:border-zinc-800">
+                      <Info className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-[#888] font-medium leading-relaxed">
+                        Diese Begriffe wurden am häufigsten im Textkörper gefunden. Achte darauf, dass dein Hauptkeyword in den H1- und H2-Tags sowie in den ersten 100 Wörtern erscheint.
+                      </p>
+                   </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-center gap-4">
+                <div className="w-12 h-12 bg-zinc-50 dark:bg-zinc-950 rounded-full flex items-center justify-center text-zinc-300 dark:text-zinc-800">
+                  <FileSearch className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">Keine Daten</h4>
+                  <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest max-w-[200px] mx-auto">
+                    Es konnte kein Text auf der Seite gefunden werden. Bitte Deep-Scan durchführen.
                   </p>
-               </div>
-            </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

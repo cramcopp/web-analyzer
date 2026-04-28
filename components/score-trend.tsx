@@ -33,8 +33,8 @@ function ScoreTrend({ url }: { url: string }) {
   if (loading || history.length < 2) return null;
 
   return (
-    <div className="mt-12 bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 p-8 break-inside-avoid animate-in fade-in duration-700">
-      <div className="flex items-center justify-between mb-8">
+    <div className="w-full h-full flex flex-col break-inside-avoid animate-in fade-in duration-700">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex flex-col gap-1">
            <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-[#D4AF37]" />
@@ -48,7 +48,7 @@ function ScoreTrend({ url }: { url: string }) {
         </div>
       </div>
 
-      <div className="h-[200px] w-full">
+      <div className="flex-1 w-full min-h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={history}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEE" />

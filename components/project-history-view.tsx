@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Calendar, BarChart3, ChevronRight, Zap, Search, ShieldCheck } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function ProjectHistoryView({ url, onSelectReport }: { url: string, onSelectReport: (report: any) => void }) {
   const [reports, setReports] = useState<any[]>([]);
@@ -56,6 +57,41 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
         <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Scan-Verlauf</h3>
         <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest">{reports.length} Einträge gefunden</span>
       </div>
+
+      {reports.length >= 2 && (
+        <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 mb-8">
+           <h4 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 mb-6">Projektentwicklung</h4>
+           <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                 <LineChart data={[...reports].reverse()}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEE" />
+                    <XAxis 
+                      dataKey="createdAt" 
+                      tickFormatter={(val) => new Date(val).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 9, fill: '#888', fontWeight: 'bold' }} 
+                    />
+                    <YAxis 
+                      hide 
+                      domain={[0, 100]} 
+                    />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: '#1A1A1A', border: 'none', borderRadius: '0px' }}
+                      itemStyle={{ fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}
+                      labelStyle={{ color: '#888', fontSize: '9px', marginBottom: '4px' }}
+                      labelFormatter={(val) => new Date(val).toLocaleDateString('de-DE')}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: '#888' }} />
+                    <Line type="monotone" name="Global Score" dataKey="score" stroke="#1A1A1A" strokeWidth={4} dot={{ r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" name="SEO" dataKey="seo.score" stroke="#D4AF37" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
+                    <Line type="monotone" name="Performance" dataKey="performance.score" stroke="#27AE60" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
+                    <Line type="monotone" name="Security" dataKey="security.score" stroke="#2D9CDB" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
+                 </LineChart>
+              </ResponsiveContainer>
+           </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3">
         {reports.map((report, index) => {

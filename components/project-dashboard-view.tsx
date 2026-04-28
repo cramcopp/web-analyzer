@@ -112,11 +112,14 @@ function ProjectDashboardView({
                     </div>
                     <div className="mt-6 flex gap-2">
                       {['SEO', 'Performance', 'Security', 'Accessibility'].map((label, i) => (
-                        <div key={i} className="flex-1 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-[#D4AF37]" 
-                            style={{ width: `${(activeReport?.[label.toLowerCase() as keyof AnalysisResult] as any)?.score || 70}%` }} 
-                          />
+                        <div key={i} className="flex-1 flex flex-col gap-1">
+                          <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-[#D4AF37]" 
+                              style={{ width: `${(activeReport?.[label.toLowerCase() as keyof AnalysisResult] as any)?.score || 70}%` }} 
+                            />
+                          </div>
+                          <span className="text-[7px] font-black uppercase tracking-widest text-[#888] text-center truncate">{label}</span>
                         </div>
                       ))}
                     </div>
@@ -170,7 +173,7 @@ function ProjectDashboardView({
                       <h4 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">Performance Trend</h4>
                       <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest">Letzte 30 Tage</span>
                    </div>
-                   <div className="p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 h-[240px]">
+                   <div className="p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 h-auto min-h-[300px] flex flex-col">
                       <ScoreTrend url={project.url} />
                    </div>
                 </div>
@@ -180,23 +183,36 @@ function ProjectDashboardView({
                       <h4 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">Top Prioritäten</h4>
                       <Sparkles className="w-4 h-4 text-[#D4AF37]" />
                    </div>
-                   <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 divide-y divide-[#EEE] dark:divide-zinc-800">
-                      {(activeReport?.seo?.detailedSeo?.prioritizedTasks || []).slice(0, 3).map((task: PrioritizedTask, i: number) => (
-                        <div key={i} className="p-4 flex items-start gap-3 hover:bg-black/[0.02] transition-colors group cursor-pointer" onClick={() => setActiveTab('ai_plan')}>
-                           <div className="w-6 h-6 shrink-0 bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center text-[10px] font-black rounded-sm group-hover:bg-[#D4AF37] group-hover:text-white transition-all">
-                              {i + 1}
-                           </div>
-                           <p className="text-[11px] font-bold text-[#1A1A1A] dark:text-zinc-100 leading-tight group-hover:translate-x-1 transition-transform">
-                              {task.task}
-                           </p>
+                   <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex flex-col">
+                      {activeReport?.seo?.detailedSeo?.prioritizedTasks && activeReport.seo.detailedSeo.prioritizedTasks.length > 0 ? (
+                        <div className="divide-y divide-[#EEE] dark:divide-zinc-800">
+                          {activeReport.seo.detailedSeo.prioritizedTasks.slice(0, 3).map((task: PrioritizedTask, i: number) => (
+                            <div key={i} className="p-4 flex items-start gap-3 hover:bg-black/[0.02] transition-colors group cursor-pointer" onClick={() => setActiveTab('ai_plan')}>
+                               <div className="w-6 h-6 shrink-0 bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center text-[10px] font-black rounded-sm group-hover:bg-[#D4AF37] group-hover:text-white transition-all">
+                                  {i + 1}
+                               </div>
+                               <p className="text-[11px] font-bold text-[#1A1A1A] dark:text-zinc-100 leading-tight group-hover:translate-x-1 transition-transform">
+                                  {task.task}
+                               </p>
+                            </div>
+                          ))}
+                          <button 
+                            onClick={() => setActiveTab('ai_plan')}
+                            className="w-full p-4 text-[9px] font-black uppercase tracking-widest text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all"
+                          >
+                            Vollständigen Aktionsplan öffnen
+                          </button>
                         </div>
-                      ))}
-                      <button 
-                        onClick={() => setActiveTab('ai_plan')}
-                        className="w-full p-4 text-[9px] font-black uppercase tracking-widest text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all"
-                      >
-                        Vollständigen Aktionsplan öffnen
-                      </button>
+                      ) : (
+                        <div className="p-8 flex flex-col items-center justify-center text-center gap-3 h-full">
+                          <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-950 rounded-full flex items-center justify-center text-zinc-300 dark:text-zinc-800">
+                             <Sparkles className="w-5 h-5" />
+                          </div>
+                          <p className="text-[10px] text-[#888] font-bold uppercase tracking-widest leading-relaxed">
+                            Führen Sie zuerst einen Deep-Scan durch, um KI-generierte Prioritäten zu sehen.
+                          </p>
+                        </div>
+                      )}
                    </div>
                 </div>
              </div>
