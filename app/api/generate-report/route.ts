@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
+export const runtime = 'edge';
+
 export async function POST(req: NextRequest) {
   try {
     const { scrapeData, url } = await req.json();
