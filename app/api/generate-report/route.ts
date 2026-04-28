@@ -353,13 +353,34 @@ export async function POST(req: NextRequest) {
              trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 300000) + '...[TRUNCATED FOR ENTERPRISE DEPTH]';
           }
 
-          const prompt = `Du bist ein hochgradig strenger, technischer SEO- und Security-Auditor auf Enterprise-Niveau. 
-          Analysiere die folgenden Website-Daten für ${url} und erstelle einen extrem detaillierten und kritischen SEO-Bericht in deutscher Sprache. 
-          Sei SEHR streng bei der Punktevergabe (Scores). Eine Seite mit fehlenden Security-Headern, schlechter Performance oder wenig Text MUSS schlechte Scores erhalten (z.B. unter 50). 
-          Fülle alle Felder im JSON-Schema maximal und ausführlich aus. Generiere so viele nützliche Datenpakete für Diagramme ('chartData') und priorisierte Aufgaben wie möglich, um einen maximal großen Deep-Dive zu gewährleisten.
-          Nutze die Daten für tiefgreifendes Wettbewerber-Benchmarking, Keyword-Lücken-Analyse und einen konkreten Umsetzungsplan für Entwickler.
-          
-          Daten: ${JSON.stringify(trimmedScrapeData)}`;
+          let prompt = "";
+          if (plan === 'agency') {
+            prompt = `DU BIST DER GNADENLOSE ENTERPRISE-AUDIT-HAMMER. 
+            Dein Ziel ist es, JEDEN noch so kleinen Fehler auf der Website ${url} zu finden und gnadenlos zu kritisieren. 
+            Du bist ein Elite-Sicherheitsberater und SEO-Head-of-Engineering auf Enterprise-Niveau. 
+
+            RICHTLINIEN FÜR DEINE BEWERTUNG:
+            1. SCORES: Sei extrem geizig mit Punkten. 
+               - 90-100: Absolute Perfektion (fast unmöglich).
+               - 70-89: Gut, aber mit klarem Optimierungspotenzial.
+               - 50-69: Durchschnittlich/Mittelmäßig.
+               - < 50: Mangelhaft (z.B. fehlende Security-Header, TTFB > 500ms, fehlende robots.txt).
+            2. TONFALL: Professionell, hochgradig technisch, analytisch, aber absolut direkt und unbeschönigt.
+            3. TIEFE: Analysiere alle Unterseiten-Daten (Crawl-Summary) auf Inkonsistenzen.
+            4. SECURITY & LEGAL: Prüfe peinlich genau auf robots.txt, Header und Tracker.
+            5. PRIORISIERTE AUFGABEN: Nutze 'CRITICAL' für echte Risiken.`;
+          } else {
+            prompt = `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. 
+            Analysiere die Website ${url} und erstelle einen motivierenden, aber ehrlichen Bericht in DEUTSCHER SPRACHE.
+            
+            RICHTLINIEN:
+            1. SCORES: Sei fair und realistisch. Belohne gute Ansätze, aber weise auf wichtige Verbesserungen hin.
+            2. TONFALL: Hilfreich, beratend und motivierend. Nutze konstruktive Kritik.
+            3. FOKUS: Konzentriere dich auf die wichtigsten Hebel für SEO, Performance und Sicherheit.
+            4. AUFGABEN: Gib klare, leicht verständliche Handlungsempfehlungen.`;
+          }
+
+          prompt += `\n\nErstelle den Bericht basierend auf diesen Daten: ${JSON.stringify(trimmedScrapeData)}`;
 
 
           const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;

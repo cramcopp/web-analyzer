@@ -17,6 +17,64 @@ export type {
   SubpageResult 
 };
 
+/**
+ * Radikal reduziert HTML auf das Wesentliche für die KI.
+ * Entfernt Scripts, Styles, SVGs und unnötigen Ballast.
+ */
+function stripHtmlForAi(html: string): string {
+  // Entferne Scripte und Styles komplett
+  let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  s = s.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  
+  // Entferne SVGs und Kommentare
+  s = s.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '[SVG]');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  
+  // Entferne sehr lange Data-URIs (Base64)
+  s = s.replace(/data:[^;]+;base64,[^"']{100,}/g, '[BASE64_BLOB]');
+
+  // Behalte nur wichtige Attribute für SEO/Security (id, class, href, alt, name, type, action)
+  // Das ist komplex per Regex, daher nutzen wir node-html-parser später für gezielte Extraktion.
+  return s;
+}
+
+async function getPreflightData(baseUrl: string): Promise<any> {
+  const url = new URL(baseUrl);
+  const robotsUrl = `${url.origin}/robots.txt`;
+  
+  let robotsTxt = { status: 404, content: '', allowed: true, sitemaps: [] as string[], crawlDelay: 0 };
+  
+  try {
+    const res = await fetch(robotsUrl, { signal: AbortSignal.timeout(5000) });
+    robotsTxt.status = res.status;
+    if (res.ok) {
+      const text = await res.text();
+      robotsTxt.content = text;
+      
+      // Einfaches Parsing
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const lowerLine = line.toLowerCase().trim();
+        if (lowerLine.startsWith('sitemap:')) {
+          robotsTxt.sitemaps.push(line.split(/sitemap:/i)[1].trim());
+        }
+        if (lowerLine.startsWith('crawl-delay:')) {
+          robotsTxt.crawlDelay = parseInt(line.split(/crawl-delay:/i)[1].trim()) || 0;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Preflight: robots.txt fetch failed", e);
+  }
+
+  // Fallback Sitemap-Suche
+  if (robotsTxt.sitemaps.length === 0) {
+    robotsTxt.sitemaps.push(`${url.origin}/sitemap.xml`);
+  }
+
+  return { robotsTxt };
+}
+
 export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
   const PLAN_LIMITS: Record<string, number> = {
     'free': 0,
@@ -29,6 +87,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
   const domain = urlObj.hostname;
   const apiKey = process.env.GOOGLE_API_KEY;
+
+  const preflight = await getPreflightData(urlObj.origin);
+  const crawlDelayMs = (preflight.robotsTxt.crawlDelay || 0) * 1000;
 
   const startTime = Date.now();
   
@@ -48,16 +109,11 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     signal: AbortSignal.timeout(10000)
   }).catch(() => null);
   
-  /* const jinaPromise = fetch(`https://r.jinaread.er.ai/${encodeURIComponent(urlObj.toString())}`, {
-    headers: { 'Accept': 'text/plain' },
-    signal: AbortSignal.timeout(10000)
-  }).catch(() => null); */
-  
   const psiApiKeyParam = apiKey ? `&key=${apiKey}` : '';
-  // eslint-disable-next-line no-secrets/no-secrets
   const psiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(urlObj.toString())}${psiApiKeyParam}&category=PERFORMANCE&category=ACCESSIBILITY&category=BEST_PRACTICES&category=SEO&strategy=MOBILE`;
   const psiPromise = fetch(psiUrl, { signal: AbortSignal.timeout(45000) }).catch(() => null);
 
+  const ttfbStart = Date.now();
   const htmlPromise = fetch(urlObj.toString(), htmlRequestConfig);
   
   let safeBrowsingPromise: Promise<Response | null> = Promise.resolve(null);
@@ -80,6 +136,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   }
 
   const response = await htmlPromise;
+  const ttfbMs = Date.now() - ttfbStart;
   const responseTimeMs = Date.now() - startTime;
 
   if (!response.ok) {
@@ -295,6 +352,10 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
+      
+      // Extreme Stripping for subpages to keep context window manageable
+      const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
+
       return {
         error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
         metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
@@ -302,7 +363,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
         h1Count: subRoot.querySelectorAll('h1').length, 
         imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
-        status: subRes.status
+        status: subRes.status,
+        strippedContent
       };
     } catch (e) { 
       console.warn(`Subpage scan failed for ${subUrl}`, e);
@@ -310,13 +372,26 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     }
   };
 
-  // Batch Process Subpages to avoid rate-limits and high memory usage
+  // Smart Queue Manager for Subpages
   const subpageResults: SubpageResult[] = [];
-  const BATCH_SIZE = 10; // Increased concurrency for faster deep-crawls
-  for (let i = 0; i < subpagesToScan.length; i += BATCH_SIZE) {
-    const batch = subpagesToScan.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(batch.map(url => scanSubpage(url)));
-    subpageResults.push(...results);
+  
+  if (crawlDelayMs > 0) {
+    // Strict Sequential Mode for Politeness
+    for (const subUrl of subpagesToScan) {
+      const result = await scanSubpage(subUrl);
+      subpageResults.push(result);
+      await new Promise(resolve => setTimeout(resolve, Math.min(crawlDelayMs, 3000))); // Cap at 3s to avoid Worker timeout
+    }
+  } else {
+    // Batch Mode for Speed
+    const BATCH_SIZE = 8; 
+    for (let i = 0; i < subpagesToScan.length; i += BATCH_SIZE) {
+      const batch = subpagesToScan.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(url => scanSubpage(url)));
+      subpageResults.push(...results);
+      // Small break even without delay to be "nice"
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
 
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
@@ -325,8 +400,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   // Text Audit (Cleaned)
   const title = root.querySelector('title')?.text.trim() || '';
   const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
-  const body = root.querySelector('body');
-  const bodyText = body ? body.text.replace(/\s+/g, ' ').trim().slice(0, 500000) : ''; // 500k chars for Enterprise-level analysis
+  const htmlStripped = stripHtmlForAi(html);
+  const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000); 
   const h1Texts = root.querySelectorAll('h1').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
@@ -432,7 +507,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       sampleEmails: (bodyText.match(/\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || []).slice(0, 3)
     },
     internalLinksCount: internalLinks.length, externalLinksCount, totalScripts, blockingScripts, totalStylesheets,
-    responseTimeMs, psiMetricsStr, psiMetrics, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
+    responseTimeMs, ttfbMs, preflight, psiMetricsStr, psiMetrics, lighthouseScores, safeBrowsingStr, domainAge: domainAgeStr, sslCertificate: sslCertificateData,
     wienerSachtextIndex, bodyText, techStack,
     cdn,
     serverInfo,

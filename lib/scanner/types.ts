@@ -37,6 +37,7 @@ export interface SubpageResult {
   h1Count?: number;
   imagesWithoutAlt?: number;
   status: number | string;
+  strippedContent?: string;
 }
 
 export interface PrioritizedTask {
@@ -76,6 +77,21 @@ export interface CompetitorBenchmarking {
   };
 }
 
+export interface PreflightData {
+  robotsTxt: {
+    status: number;
+    content: string;
+    allowed: boolean;
+    crawlDelay?: number;
+    sitemaps: string[];
+  };
+  sitemap: {
+    status: number;
+    url: string | null;
+    urlsFound: number;
+  };
+}
+
 export interface AnalysisResult {
   // Technical Scrape Data
   audit_id: string;
@@ -107,6 +123,8 @@ export interface AnalysisResult {
   blockingScripts: number;
   totalStylesheets: number;
   responseTimeMs: number;
+  ttfbMs?: number;
+  preflight?: PreflightData;
   psiMetricsStr: string;
   psiMetrics: PsiMetrics | null;
   lighthouseScores: LighthouseScores | null;
