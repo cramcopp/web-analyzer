@@ -25,6 +25,14 @@ const isValidUrl = (urlString: string) => {
   }
 };
 
+const getDomain = (urlString: string) => {
+  try {
+    return new URL(urlString.startsWith('http') ? urlString : `https://${urlString}`).hostname;
+  } catch {
+    return urlString;
+  }
+};
+
 export function SidebarProjects({
   projects,
   setProjects,
@@ -240,7 +248,7 @@ export function SidebarProjects({
                 <span className="w-6 h-6 rounded bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 flex items-center justify-center shrink-0 overflow-hidden">
                   {proj.url ? (
                     <img 
-                      src={`https://www.google.com/s2/favicons?domain=${proj.url}&sz=32`} 
+                      src={`https://www.google.com/s2/favicons?domain=${getDomain(proj.url)}&sz=32`} 
                       alt=""
                       className="w-4 h-4 object-contain"
                     />

@@ -82,6 +82,14 @@ function ProjectDashboardView({
 
   const activeReport = useMemo(() => viewingHistoricalReport || report, [viewingHistoricalReport, report]);
 
+  const faviconDomain = useMemo(() => {
+    try {
+      return new URL(project.url.startsWith('http') ? project.url : `https://${project.url}`).hostname;
+    } catch {
+      return project.url;
+    }
+  }, [project.url]);
+
   const renderContent = () => {
     if (isLoading) return <LoadingDisplay plan={plan} />;
 
@@ -102,13 +110,15 @@ function ProjectDashboardView({
                         {activeReport?.seo?.score || project.lastScore || 'N/A'}
                         <span className="text-[20px] opacity-20 ml-2">%</span>
                       </h3>
-                      <div className="mb-2">
-                        <div className="flex items-center gap-1 text-[#27AE60] text-[12px] font-black">
-                          <TrendingUp className="w-4 h-4" />
-                          +2.4%
+                      {activeReport && (
+                        <div className="mb-2">
+                          <div className="flex items-center gap-1 text-[#27AE60] text-[12px] font-black">
+                            <TrendingUp className="w-4 h-4" />
+                            +2.4%
+                          </div>
+                          <span className="text-[9px] font-bold text-[#888] uppercase tracking-widest">vs. Vorwoche</span>
                         </div>
-                        <span className="text-[9px] font-bold text-[#888] uppercase tracking-widest">vs. Vorwoche</span>
-                      </div>
+                      )}
                     </div>
                     <div className="mt-6 flex gap-2">
                       {['SEO', 'Performance', 'Security', 'Accessibility'].map((label, i) => (
@@ -116,7 +126,7 @@ function ProjectDashboardView({
                           <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-[#D4AF37]" 
-                              style={{ width: `${(activeReport?.[label.toLowerCase() as keyof AnalysisResult] as any)?.score || 70}%` }} 
+                              style={{ width: `${activeReport ? (activeReport?.[label.toLowerCase() as keyof AnalysisResult] as any)?.score || 0 : 0}%` }} 
                             />
                           </div>
                           <span className="text-[7px] font-black uppercase tracking-widest text-[#888] text-center truncate">{label}</span>
@@ -305,7 +315,7 @@ function ProjectDashboardView({
           <div className="flex items-center gap-4 mb-3">
              <div className="w-12 h-12 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex items-center justify-center rounded-sm shadow-xl shadow-black/5 overflow-hidden shrink-0">
                <img 
-                 src={`https://www.google.com/s2/favicons?domain=${project.url}&sz=128`} 
+                 src={`https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=128`} 
                  alt={`${project.name} Favicon`}
                  className="w-8 h-8 object-contain"
                />
