@@ -13,20 +13,23 @@ export async function POST(req: Request) {
   try {
     const existingUserData = await getDocument('users', user.uid, token);
 
-    if (!existingUserData) {
+    if (!existingUserData || !existingUserData.plan) {
       const newUser = {
+        ...existingUserData,
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
-        role: 'user',
-        plan: 'free',
-        reports: [],
-        scanCount: 0,
-        maxScans: PLAN_CONFIG.free.maxScans,
-        lastScanReset: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+        role: existingUserData?.role || 'user',
+        plan: existingUserData?.plan || 'free',
+        reports: existingUserData?.reports || [],
+        scanCount: existingUserData?.scanCount || 0,
+        maxScans: existingUserData?.maxScans || PLAN_CONFIG.free.maxScans,
+        lastScanReset: existingUserData?.lastScanReset || new Date().toISOString(),
+        createdAt: existingUserData?.createdAt || new Date().toISOString()
       };
+      // Merging is handled internally if setDocument uses {merge:true}, 
+      // but passing the full object ensures everything is written.
       await setDocument('users', user.uid, newUser, token);
       return NextResponse.json({ success: true, user: newUser });
     }
