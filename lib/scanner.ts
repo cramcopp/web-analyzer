@@ -171,6 +171,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     return norm === normalizedBase;
   };
 
+  // Pre-fill seenLinks with start URL
+  seenLinks.add(urlObj.origin + urlObj.pathname);
+
   preflight.sitemapUrls.forEach((sUrl: string) => {
     try {
       const sObj = new URL(sUrl);
@@ -197,7 +200,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       const absoluteUrl = new URL(href, urlObj.toString());
       if (isSameDomain(absoluteUrl.hostname)) {
         const cleanUrl = absoluteUrl.origin + absoluteUrl.pathname;
-        if (!seenLinks.has(cleanUrl) && cleanUrl !== urlObj.origin + urlObj.pathname) {
+        if (!seenLinks.has(cleanUrl)) {
           seenLinks.add(cleanUrl);
           internalLinks.push(cleanUrl);
         }
@@ -322,6 +325,19 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
+      
+      // Level 2 Discovery
+      const subLinks: string[] = [];
+      subRoot.querySelectorAll('a').forEach(a => {
+        const h = a.getAttribute('href');
+        if (h && !h.startsWith('#') && !h.startsWith('javascript:')) {
+          try {
+            const abs = new URL(h, subUrl).toString();
+            subLinks.push(abs);
+          } catch { /* ignore */ }
+        }
+      });
+
       return {
         error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
         metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
@@ -330,7 +346,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         h1Count: subRoot.querySelectorAll('h1').length, 
         imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
         status: subRes.status,
-        strippedContent
+        strippedContent,
+        links: subLinks
       };
     } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
   };
@@ -354,6 +371,22 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
   const brokenLinks = subpageResults.filter(r => r.error).map(r => ({ url: r.url, status: r.status }));
+
+  // Recursive Discovery
+  successfulSubpages.forEach(sub => {
+    (sub.links || []).forEach(l => {
+      try {
+        const lObj = new URL(l);
+        if (isSameDomain(lObj.hostname)) {
+          const clean = lObj.origin + lObj.pathname;
+          if (!seenLinks.has(clean)) {
+            seenLinks.add(clean);
+            internalLinks.push(clean);
+          }
+        }
+      } catch { /* ignore */ }
+    });
+  });
 
   const title = root.querySelector('title')?.text.trim() || '';
   const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || '';
@@ -437,7 +470,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     urlObj: urlObj.toString(), title, metaDescription, metaKeywords, htmlLang, hreflangs, generator, viewport,
     viewportScalable: viewport.includes('user-scalable=no') ? 'No' : 'Yes',
     robots, h1Count: h1Texts.length, h2Count: h2Texts.length, imagesTotal, imagesWithoutAlt, lazyImages, 
-    maxDomDepth: 0, // Simplified for stability
+    maxDomDepth: 0, 
     headings: { h1: h1Texts, h2: h2Texts, h3: h3Texts },
     imageDetails,
     semanticTags: { 
@@ -489,7 +522,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     securityHeaders,
     headers,
     crawlSummary: { 
-      totalInternalLinks: internalLinks.length, 
+      totalInternalLinks: seenLinks.size, 
       scannedSubpagesCount: successfulSubpages.length, 
       indexablePagesCount,
       scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 

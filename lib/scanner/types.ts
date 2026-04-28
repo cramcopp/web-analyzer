@@ -38,6 +38,7 @@ export interface SubpageResult {
   imagesWithoutAlt?: number;
   status: number | string;
   strippedContent?: string;
+  links?: string[];
 }
 
 export interface PrioritizedTask {
