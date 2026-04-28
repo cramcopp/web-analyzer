@@ -47,10 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         setUser(data.user);
         
-        if (data.userData) {
+        if (data.userData && data.userData.plan) {
           setUserData(data.userData);
         } else {
-          // Sync/Create profile if it doesn't exist
+          // Sync/Create profile if it doesn't exist or is missing core fields
           const syncRes = await fetch('/api/user/sync', { method: 'POST' });
           if (syncRes.ok) {
             const syncData = await syncRes.json();
