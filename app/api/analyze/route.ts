@@ -3,7 +3,7 @@ import { performAnalysis } from '@/lib/scanner';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, queryDocuments } from '@/lib/firestore-edge';
 import { analyzeSchema } from '@/lib/validations';
-import { PLAN_CONFIG } from '@/lib/stripe';
+import { PLAN_CONFIG } from '@/lib/plans';
 
 export const runtime = 'edge';
 
