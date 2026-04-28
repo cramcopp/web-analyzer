@@ -139,21 +139,15 @@ export const Sidebar = memo(function Sidebar({
 
         <div className="flex flex-col gap-5 items-center mt-auto pb-8 w-full relative">
           {!loading && user && (
-            <div className="mb-2">
-              {user.photoURL ? (
-                <Image
-                  src={user.photoURL}
-                  alt="Avatar"
-                  width={32}
-                  height={32}
-                  className="w-8 h-8 rounded-full shadow-sm border border-black/10 dark:border-white/10"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center font-bold text-[12px]">
-                  {user.email?.charAt(0).toUpperCase()}
-                </div>
-              )}
-            </div>
+            <SidebarAccountMenu 
+              onOpenProfile={onOpenProfile}
+              onOpenSettings={onOpenSettings}
+              onOpenTeam={onOpenTeam}
+              onOpenPricing={onOpenPricing}
+              onLogout={onLogout}
+              onItemClick={onItemClick}
+              isCollapsed={true}
+            />
           )}
 
           <SidebarNotifications 
