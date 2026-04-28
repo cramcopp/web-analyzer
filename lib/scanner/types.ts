@@ -157,6 +157,7 @@ export interface AnalysisResult {
   crawlSummary: { 
     totalInternalLinks: number; 
     scannedSubpagesCount: number; 
+    indexablePagesCount: number;
     scannedSubpages: Omit<SubpageResult, 'error'>[]; 
     brokenLinks: { url: string; status: number | string }[] 
   };

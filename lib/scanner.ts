@@ -171,7 +171,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     return norm === normalizedBase;
   };
 
-  preflight.sitemapUrls.forEach(sUrl => {
+  preflight.sitemapUrls.forEach((sUrl: string) => {
     try {
       const sObj = new URL(sUrl);
       if (isSameDomain(sObj.hostname)) {
