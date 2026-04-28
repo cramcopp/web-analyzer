@@ -289,6 +289,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       return {
         error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
         metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+        robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
+        canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
         h1Count: subRoot.querySelectorAll('h1').length, 
         imagesWithoutAlt: subRoot.querySelectorAll('img:not([alt])').length,
         status: subRes.status

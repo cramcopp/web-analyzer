@@ -44,7 +44,7 @@ export type DetailedPerformance = {
   resourceOptimization: string;
   serverAndCache: string;
   domComplexity: string;
-  perfectionistTweaks: string;
+  perfectionistTweaks?: string;
   lighthouseMetrics?: {
     performance: number;
     accessibility?: number;
@@ -127,13 +127,13 @@ export type ReportData = {
     phase3: { title: string, tasks: string[] };
     developerPrompt: string;
   };
-  overallAssessment: string;
+  overallAssessment?: string;
   industryNews?: string[];
-  seo: SeoReportSection;
-  security: SecurityReportSection;
-  performance: PerformanceReportSection;
-  accessibility: AccessibilityReportSection;
-  compliance: ComplianceReportSection;
+  seo?: SeoReportSection;
+  security?: SecurityReportSection;
+  performance?: PerformanceReportSection;
+  accessibility?: AccessibilityReportSection;
+  compliance?: ComplianceReportSection;
 };
 
 export interface GscData {

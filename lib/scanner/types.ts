@@ -32,12 +32,52 @@ export interface SubpageResult {
   url: string;
   title?: string;
   metaDescription?: string;
+  robots?: string;
+  canonical?: string;
   h1Count?: number;
   imagesWithoutAlt?: number;
   status: number | string;
 }
 
+export interface PrioritizedTask {
+  priority: 'CRITICAL' | 'IMPORTANT' | 'PERFECTION';
+  task: string;
+  remediation?: string;
+}
+
+export interface AISection {
+  score: number;
+  insights: string[];
+  recommendations: string[];
+  prioritizedTasks?: PrioritizedTask[];
+}
+
+export interface BusinessIntelligence {
+  businessNiche: string;
+  keywordGapAnalysis: string[];
+  targetAudienceProfile: string;
+  uniqueSellingPropositions: string[];
+}
+
+export interface ImplementationPlan {
+  phase1: { title: string; tasks: string[] };
+  phase2: { title: string; tasks: string[] };
+  phase3: { title: string; tasks: string[] };
+  developerPrompt: string;
+}
+
+export interface CompetitorBenchmarking {
+  name: string;
+  url: string;
+  estimatedScores: {
+    seo: number;
+    security: number;
+    performance: number;
+  };
+}
+
 export interface AnalysisResult {
+  // Technical Scrape Data
   audit_id: string;
   createdAt: string;
   urlObj: string;
@@ -100,4 +140,69 @@ export interface AnalysisResult {
     brokenLinks: { url: string; status: number | string }[] 
   };
   apiEndpoints: string[];
+
+  // AI Generated Sections
+  businessIntelligence?: BusinessIntelligence;
+  overallAssessment?: string;
+  industryNews?: string[];
+  implementationPlan?: ImplementationPlan;
+  competitorBenchmarking?: CompetitorBenchmarking[];
+  
+  seo?: AISection & {
+    detailedSeo: {
+      keywordAnalysis: string;
+      metaTagsAssessment: string;
+      linkStructure: string;
+      mobileFriendly: string;
+      localSeoNap: string;
+      semanticStructure: string;
+      ctaAnalysis: string;
+      contentQuality: { readabilityAssessment: string; duplicateContentIssues: string };
+      technicalSeo: { sitemapStatus: string; robotsTxtStatus: string; canonicalStatus: string; hreflangStatus: string };
+      prioritizedTasks: PrioritizedTask[];
+    }
+  };
+  
+  security?: AISection & {
+    detailedSecurity: {
+      sqlXssAssessment: string;
+      headerAnalysis: string;
+      softwareConfig: string;
+      dataLeakageAssessment: string;
+      googleSafeBrowsingStatus: string;
+      prioritizedTasks: PrioritizedTask[];
+    }
+  };
+  
+  performance?: AISection & {
+    detailedPerformance: {
+      coreVitalsAssessment: string;
+      resourceOptimization: string;
+      serverAndCache: string;
+      domComplexity: string;
+      perfectionistTweaks?: string;
+      lighthouseMetrics: LighthouseScores;
+      coreWebVitals: any;
+      cachingAnalysis: any;
+      chartData: any;
+      prioritizedTasks: PrioritizedTask[];
+    }
+  };
+  
+  accessibility?: AISection & {
+    detailedAccessibility: {
+      visualAndContrast: string;
+      navigationAndSemantics: string;
+      prioritizedTasks: PrioritizedTask[];
+    }
+  };
+  
+  compliance?: AISection & {
+    detailedCompliance: {
+      gdprAssessment: string;
+      cookieBannerStatus: string;
+      policyLinksStatus: string;
+      prioritizedTasks: PrioritizedTask[];
+    }
+  };
 }
