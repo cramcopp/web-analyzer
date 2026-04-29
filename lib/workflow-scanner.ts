@@ -219,8 +219,8 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
         // 3. One single, aggregated AI Call
         const modelName = plan === 'agency' || plan === 'pro' 
-          ? 'gemini-3-flash-preview' 
-          : 'gemini-3.1-flash-lite-preview';
+          ? 'gemini-3-flash' 
+          : 'gemini-3.1-flash-lite';
           
         const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, modelName);
 

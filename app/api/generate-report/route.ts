@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
     // Tier-based model selection based on YOUR exact AI Studio quotas
     const TIER_MAPPING: Record<string, string[]> = {
       'agency': ['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'],
-      'pro': ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash'],
+      'pro': ['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'],
       'free': ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-1.5-flash-8b']
     };
 
