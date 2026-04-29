@@ -33,6 +33,7 @@ export interface SslCertificateData {
 export interface SubpageResult {
   error: boolean;
   url: string;
+  urlObj?: string;
   title?: string;
   metaDescription?: string;
   robots?: string;
@@ -108,6 +109,7 @@ export interface AnalysisResult {
   audit_id: string;
   userId: string;
   createdAt: string;
+  url: string;
   urlObj: string;
   title: string;
   metaDescription: string;

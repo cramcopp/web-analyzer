@@ -21,179 +21,95 @@ export type {
 
 const STEALTH_CONFIG = {
   headers: {
-    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
-  },
-  redirect: 'manual' as const
+  }
 };
 
-export function normalizeUrl(url: string, baseUrl: string): string | null {
+function normalizeUrl(url: string, base: string): string | null {
   try {
-    const urlObj = new URL(url, baseUrl);
-    urlObj.hash = ''; 
-    const junkParams = ['utm_source', 'utm_medium', 'utm_campaign', 'fbclid', 'gclid', 'ref'];
-    junkParams.forEach(p => urlObj.searchParams.delete(p));
-    return urlObj.href.replace(/\/$/, '');
-  } catch {
-    return null;
-  }
+    const absolute = new URL(url, base);
+    absolute.hash = ''; // Remove fragments
+    return absolute.toString();
+  } catch { return null; }
 }
 
-export function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
-  const normHost = hostname.replace(/^www\./, '').toLowerCase();
-  const normBase = baseDomain.replace(/^www\./, '').toLowerCase();
-  return normHost === normBase;
+function isSameBaseDomain(host1: string, host2: string): boolean {
+  const getBase = (h: string) => h.replace(/^www\./, '').toLowerCase();
+  return getBase(host1) === getBase(host2);
 }
 
-export function stripHtmlForAi(html: string): string {
-  let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  s = s.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-  s = s.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '[SVG]');
-  s = s.replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '');
-  s = s.replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '');
-  s = s.replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '');
-  s = s.replace(/<!--[\s\S]*?-->/g, '');
-  s = s.replace(/data:[^;]+;base64,[^"']{100,}/g, '[BASE64_BLOB]');
-  return s;
+function stripHtmlForAi(html: string): string {
+  // Simple regex strip for Edge runtime (DOMParser not available)
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-// --- CRAWL CORE LOGIC ---
-
-export function extractRawData(root: any, currentUrl: string, rawHtml: string): string[] {
-  const discoveredUrls = new Set<string>();
-  const baseTag = root.querySelector('base');
-  const baseUrl = baseTag?.getAttribute('href') ? new URL(baseTag.getAttribute('href'), currentUrl).toString() : currentUrl;
-  const baseDomain = new URL(baseUrl).hostname.replace(/^www\./, '').toLowerCase();
-
-  const processUrl = (href: string | undefined | null) => {
-    if (!href || href.startsWith('#') || /^(mailto|tel|javascript):/i.test(href)) return;
-    const normalized = normalizeUrl(href.split('#')[0].trim(), baseUrl);
-    if (normalized) {
-      try {
-        const targetDomain = new URL(normalized).hostname.replace(/^www\./, '').toLowerCase();
-        if (targetDomain === baseDomain) discoveredUrls.add(normalized);
-      } catch {}
+async function getAllUrlsBeforeCrawl(origin: string, robotsTxt: string): Promise<string[]> {
+  const sitemaps: string[] = [];
+  robotsTxt.split('\n').forEach(line => {
+    if (line.toLowerCase().startsWith('sitemap:')) {
+      sitemaps.push(line.split(/sitemap:/i)[1].trim());
     }
-  };
-
-  root.querySelectorAll('a[href]').forEach((el: any) => processUrl(el.getAttribute('href')));
-  root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => processUrl(el.getAttribute('href')));
-
-  const patterns = [/(https?:\/\/[^\s"'<>]+)/g, /(?<=href=["'])([^"']+)(?=["'])/g];
-  patterns.forEach(regex => {
-    const matches = rawHtml.match(regex);
-    if (matches) matches.forEach(m => processUrl(m));
   });
 
-  return Array.from(discoveredUrls);
-}
+  if (sitemaps.length === 0) sitemaps.push(`${origin}/sitemap.xml`);
 
-export async function getAllUrlsBeforeCrawl(baseUrl: string, robotsTxt?: string): Promise<string[]> {
-    const allUrls = new Set<string>();
-    allUrls.add(baseUrl);
-    const cleanBase = baseUrl.replace(/\/$/, '');
-    const sitemapsToVisit: string[] = [
-        `${cleanBase}/sitemap.xml`, 
-        `${cleanBase}/wp-sitemap.xml`,
-        `${cleanBase}/sitemap_index.xml`
-    ];
-    
-    if (robotsTxt) {
-      const sitemapMatches = robotsTxt.match(/^Sitemap:\s*(.*)$/gmi);
-      if (sitemapMatches) {
-        sitemapMatches.forEach(match => {
-          const url = match.replace(/Sitemap:\s*/i, '').trim();
-          if (!sitemapsToVisit.includes(url)) sitemapsToVisit.push(url);
+  const urls = new Set<string>();
+  for (const sm of sitemaps) {
+    try {
+      const res = await fetch(sm, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const text = await res.text();
+        const matches = text.match(/<loc>(.*?)<\/loc>/g);
+        matches?.forEach(m => {
+          const u = m.replace(/<\/?loc>/g, '').trim();
+          urls.add(u);
         });
       }
-    }
-
-    const visitedSitemaps = new Set<string>();
-    while (sitemapsToVisit.length > 0) {
-        const currentSitemap = sitemapsToVisit.pop()!;
-        if (visitedSitemaps.has(currentSitemap)) continue;
-        visitedSitemaps.add(currentSitemap);
-
-        try {
-            const res = await fetch(currentSitemap, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(8000) });
-            if (res.status !== 200) continue;
-            const xmlText = await res.text();
-            const locRegex = /<(?:[a-z0-9]+:)?loc>\s*(.*?)\s*<\/(?:[a-z0-9]+:)?loc>/gi;
-            let match;
-            while ((match = locRegex.exec(xmlText)) !== null) {
-                const url = match[1].trim();
-                if (!url) continue;
-                if (url.endsWith('.xml') || url.includes('sitemap')) {
-                    if (!visitedSitemaps.has(url)) sitemapsToVisit.push(url);
-                } else {
-                    const norm = normalizeUrl(url, baseUrl);
-                    if (norm) allUrls.add(norm);
-                }
-            }
-        } catch (e) {}
-    }
-    return Array.from(allUrls);
+    } catch {}
+  }
+  return Array.from(urls);
 }
 
-function isAllowedByRobots(robotsContent: string, path: string): boolean {
-  if (!robotsContent) return true;
-  const lines = robotsContent.split('\n');
-  let currentUserAgentActive = false;
-  const disallows: string[] = [];
-  const allows: string[] = [];
-
+function isAllowedByRobots(robotsTxt: string, path: string): boolean {
+  // Minimal robots.txt logic
+  const lines = robotsTxt.split('\n');
+  let userAgentApplies = true;
   for (const line of lines) {
-    const [key, ...valueParts] = line.split(':');
-    const value = valueParts.join(':').trim();
-    if (!key || !value) continue;
-    const lowerKey = key.toLowerCase().trim();
-    if (lowerKey === 'user-agent') {
-      currentUserAgentActive = (value === '*' || value.toLowerCase().includes('googlebot'));
-    } else if (currentUserAgentActive) {
-      if (lowerKey === 'disallow') disallows.push(value);
-      if (lowerKey === 'allow') allows.push(value);
+    const l = line.toLowerCase().trim();
+    if (l.startsWith('user-agent:')) {
+      const ua = l.split(':')[1].trim();
+      userAgentApplies = (ua === '*' || ua === 'webanalyzer');
     }
-  }
-
-  for (const pattern of allows) {
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '\\?') + '($|/)');
-    if (regex.test(path)) return true;
-  }
-  for (const pattern of disallows) {
-    if (!pattern) continue; 
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '\\?') + '($|/)');
-    if (regex.test(path)) return false;
+    if (userAgentApplies && l.startsWith('disallow:')) {
+      const dis = l.split(':')[1].trim();
+      if (dis && path.startsWith(dis)) return false;
+    }
   }
   return true;
 }
 
-// --- INDEXABILITY ENGINE ---
-
 function isSoft404(text: string): boolean {
-  const wordCount = text.trim().split(/\s+/).length;
-  if (wordCount < 5) return true; 
-  const soft404Keywords = ['nicht gefunden', 'nothing found', 'error 404', 'seite nicht vorhanden'];
-  const lowerText = text.toLowerCase();
-  return soft404Keywords.some(kw => lowerText.includes(kw));
+  const indicators = ['page not found', 'seite nicht gefunden', '404 -', 'error 404'];
+  const low = text.toLowerCase();
+  return indicators.some(i => low.includes(i)) && text.length < 1000;
 }
 
-export function checkIndexability(
-  url: string, status: number | string, rb: string, xRobots: string, 
-  contentType: string, text: string, robotsTxtContent: string, 
-  can?: string | null, hasNextPrev?: boolean
-): { isIndexable: boolean; reason: string } {
-  if (status !== 200) return { isIndexable: false, reason: `Status ${status}` };
-  if (contentType && !contentType.toLowerCase().includes('text/html')) return { isIndexable: false, reason: `Content-Type (${contentType})` };
-
-  const xRobotsLower = xRobots.toLowerCase();
-  const metaRobotsLower = rb.toLowerCase();
-  if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none') ||
-      metaRobotsLower.includes('noindex') || metaRobotsLower.includes('none')) {
-    return { isIndexable: false, reason: "Noindex detected" };
-  }
+export function checkIndexability(url: string, status: number, robotsMeta: string, xRobots: string, contentType: string, text: string, robotsTxtContent: string, can: string | null, hasNextPrev: boolean = false) {
+  if (status >= 400) return { isIndexable: false, reason: `HTTP ${status}` };
+  if (contentType && !contentType.includes('text/html')) return { isIndexable: false, reason: "Non-HTML Content" };
+  
+  const robots = (robotsMeta + ',' + xRobots).toLowerCase();
+  if (robots.includes('noindex')) return { isIndexable: false, reason: "Meta Noindex" };
 
   try {
     const urlObj = new URL(url);
@@ -219,19 +135,17 @@ export function checkIndexability(
 
 // --- MAIN ANALYZER ---
 
-
-
 export const scanSubpage = async (subUrl: string, domain: string, robotsTxtContent: string = ''): Promise<SubpageResult & { isIndexable?: boolean }> => {
     try {
       const subRes = await fetch(subUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(10000) });
       if (subRes.status >= 300 && subRes.status < 400) {
-        return { error: false, url: subUrl, status: subRes.status, links: [], xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', redirectLocation: subRes.headers.get('location') || '' };
+        return { error: false, url: subUrl, urlObj: subUrl, status: subRes.status, links: [], xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', redirectLocation: subRes.headers.get('location') || '' };
       }
       if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
       
       const subContentType = subRes.headers.get('content-type') || '';
       if (subContentType && !subContentType.toLowerCase().includes('text/html')) {
-        return { error: false, url: subUrl, status: subRes.status, contentType: subContentType, title: 'Media/Document', links: [], strippedContent: '', xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', hasNextPrev: false };
+        return { error: false, url: subUrl, urlObj: subUrl, status: subRes.status, contentType: subContentType, title: 'Media/Document', links: [], strippedContent: '', xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', hasNextPrev: false };
       }
 
       const subHtml = await subRes.text();
@@ -240,7 +154,10 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
 
       const subResult: SubpageResult = {
-        error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
+        error: false, 
+        url: subUrl, 
+        urlObj: subUrl,
+        title: subRoot.querySelector('title')?.text.trim() || '',
         metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
         robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
         canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
@@ -253,8 +170,6 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
           h2: subRoot.querySelectorAll('h2').map(el => el.text.trim()),
           h3: subRoot.querySelectorAll('h3').map(el => el.text.trim())
         },
-        url: subUrl,
-        urlObj: subUrl,
         images: subRoot.querySelectorAll('img').map(img => ({
           src: img.getAttribute('src') || '',
           alt: img.getAttribute('alt') || ''
@@ -386,7 +301,9 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
     alt: img.getAttribute('alt') || null
   }));
   const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
-  const lazyImages = allImages.filter((img: any) => img.getAttribute('loading') === 'lazy' || img.getAttribute('data-src')).length;
+  const lazyImages = allImages.filter((img: any) => img.getAttribute('loading') === 'lazy').length;
+
+  const mainIndex = checkIndexability(mainUrlNormalized, 200, root.querySelector('meta[name=\"robots\"]')?.getAttribute('content') || '', headers['x-robots-tag'] || '', headers['content-type'] || 'text/html', html, robotsTxt.content, root.querySelector('link[rel=\"canonical\"]')?.getAttribute('href') || '');
 
   // Links
   const allLinks = root.querySelectorAll('a[href]');
@@ -414,7 +331,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const scripts = root.querySelectorAll('script');
   const totalScripts = scripts.length;
   const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
-  const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
+  const totalStylesheets = root.querySelectorAll('link[rel=\"stylesheet\"]').length;
 
   // DOM Depth
   const calculateMaxDepth = (node: any): number => {
@@ -471,7 +388,6 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
 
     if (!result.error && result.links) {
       result.links.forEach(l => {
-        internalLinks.add(l); // Using consistent internalLinks set
         if (!processed.has(l)) queue.add(l);
       });
     }
@@ -485,7 +401,6 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const htmlStripped = stripHtmlForAi(html);
   const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000);
 
-  const mainIndex = checkIndexability(urlObj.toString(), 200, root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow', headers['x-robots-tag'] || '', headers['content-type'] || '', bodyText, robotsTxt.content, root.querySelector('link[rel="canonical"]')?.getAttribute('href'), !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]')));
   
   const indexableSubpages = successfulSubpages.filter(p => p.isIndexable);
 
@@ -495,10 +410,10 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const scores = calculateHeuristicScores(root, mainIndex);
 
   const rdapRes = await rdapPromise;
-  let domainAge = "Unknown";
+  let domainAge = \"Unknown\";
   if (rdapRes?.ok) {
     const data = await rdapRes.json();
-    domainAge = data.events?.find((e: any) => e.eventAction === 'registration')?.eventDate.split('T')[0] || "Unknown";
+    domainAge = data.events?.find((e: any) => e.eventAction === 'registration')?.eventDate.split('T')[0] || \"Unknown\";
   }
 
   return {
@@ -508,7 +423,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
     url: mainUrlNormalized,
     urlObj: mainUrlNormalized,
     title: root.querySelector('title')?.text.trim() || '',
-    metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+    metaDescription: root.querySelector('meta[name=\"description\"]').getAttribute('content') || '',
     metaKeywords: '', htmlLang: '', hreflangs: [], generator: '', viewport: '', viewportScalable: 'Yes',
     robots: mainIndex.isIndexable ? 'index, follow' : 'noindex',
     h1Count: root.querySelectorAll('h1').length, h2Count: root.querySelectorAll('h2').length,
@@ -529,7 +444,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
       scannedSubpagesCount: successfulSubpages.length, 
       indexablePagesCount: indexableUrls.length,
       crawledUrls, indexableUrls,
-      scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
+      scannedSubpages: successfulSubpages as any[], 
       brokenLinks: [] 
     },
     // AI Section Placeholders with Heuristic Scores
@@ -540,4 +455,20 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
     compliance: { score: scores.compliance, insights: [], recommendations: [], detailedCompliance: {} as any },
     apiEndpoints: []
   };
+}
+
+function extractRawData(root: any, url: string, html: string): string[] {
+  const links = root.querySelectorAll('a[href]');
+  const internal = new Set<string>();
+  const origin = new URL(url).origin;
+  const domain = new URL(url).hostname;
+
+  links.forEach((l: any) => {
+    const href = l.getAttribute('href');
+    const norm = normalizeUrl(href, origin);
+    if (norm && isSameBaseDomain(new URL(norm).hostname, domain)) {
+      internal.add(norm);
+    }
+  });
+  return Array.from(internal);
 }
