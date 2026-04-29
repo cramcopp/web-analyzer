@@ -9,5 +9,7 @@ binding = "SCAN_WORKFLOW"
 class_name = "ScanWorkflow"
 
 [vars]
-# Copy vars from main project if needed
-# FIREBASE_PROJECT_ID = "..."
+FIREBASE_PROJECT_ID = "..."
+FIREBASE_DATABASE_ID = "(default)"
+FIREBASE_API_KEY = "..."
+INTERNAL_SECRET = "..."
