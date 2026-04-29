@@ -1,25 +1,27 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-// FIX 1: incrementField importieren!
 import { getDocument, setDocument, incrementField } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-const getEnv = () => {
+// FIX: Wir übergeben req an getEnv, um die Cloudflare-Variablen zu greifen!
+const getEnv = (req: Request) => {
+  const cfEnv = (req as any).context?.env || process.env;
+  
   return {
-    INTERNAL_SECRET: process.env.INTERNAL_SECRET,
-    // FIX 2: Richtiger Name für das Workflow-Binding gemäß wrangler.toml
-    SCAN_WORKFLOW_SERVICE: (process.env as any).SCAN_WORKFLOW_SERVICE,
-    FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
-    FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
-    FIREBASE_DATABASE_ID: process.env.FIREBASE_DATABASE_ID || '(default)'
+    INTERNAL_SECRET: cfEnv.INTERNAL_SECRET,
+    SCAN_WORKFLOW_SERVICE: cfEnv.SCAN_WORKFLOW_SERVICE, 
+    FIREBASE_PROJECT_ID: cfEnv.FIREBASE_PROJECT_ID,
+    FIREBASE_API_KEY: cfEnv.FIREBASE_API_KEY,
+    FIREBASE_DATABASE_ID: cfEnv.FIREBASE_DATABASE_ID || '(default)'
   };
 };
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const env = getEnv();
-    const { url } = await request.json();
+    // FIX: req übergeben
+    const env = getEnv(req);
+    const { url } = await req.json(); // req.json() statt request.json()
     const token = await getSessionToken();
     const user = await getSessionUser();
 
@@ -29,9 +31,6 @@ export async function POST(request: Request) {
 
     // 1. Check Quota & Plan
     const userData = await getDocument('users', user.uid, token, env);
-    
-    // HINWEIS: Falls dein Plan in Stripe unter "subscription.plan" gespeichert ist,
-    // musst du das hier zu userData?.subscription?.plan ändern!
     const plan = (userData?.plan || 'free').toLowerCase();
     const scanCount = userData?.scanCount || 0;
     const maxScans = userData?.maxScans || (plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5);
@@ -43,10 +42,10 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
-    // FIX 3: Den Counter in Firestore VOR dem Scan hochzählen!
+    // 2. Counter hochzählen
     await incrementField('users', user.uid, 'scanCount', 1, token, env);
 
-    // 2. Setup Audit Placeholder
+    // 3. Setup Audit Placeholder
     const audit_id = Math.random().toString(36).substring(7).toUpperCase();
     
     await setDocument('reports', audit_id, {
@@ -57,13 +56,12 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
       status: 'scanning',
       progress: 0,
-      planUsed: plan, // Zur Kontrolle mit abspeichern
+      planUsed: plan,
       adminSecret: env.INTERNAL_SECRET
     }, null, null, env);
 
-    // 3. TRIGGER CLOUDFLARE WORKFLOW
+    // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
-      // Cloudflare Workflows MÜSSEN mit .create({ params: {...} }) gestartet werden
       await env.SCAN_WORKFLOW_SERVICE.create({ 
         params: {
           url, 
@@ -80,11 +78,9 @@ export async function POST(request: Request) {
         status: 'processing'
       });
     } else {
-      // Notfall-Fallback, falls lokal kein Workflow verbunden ist
       console.warn("Achtung: Workflow nicht gebunden! Nutze langsamen Direct-Scan.");
       const { performAnalysis } = await import('@/lib/scanner');
       
-      // Starte Scan im Hintergrund (ohne await), damit die API direkt antwortet
       performAnalysis({ url, plan }).then(async (result) => {
         await setDocument('reports', audit_id, {
           ...result,
