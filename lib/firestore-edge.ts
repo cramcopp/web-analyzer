@@ -163,6 +163,19 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
   const { projectId, databaseId, apiKey } = getFirestoreConfig(env);
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery?key=${apiKey}`;
   
+  const mapOp = (op: string) => {
+    switch (op) {
+      case '==': case 'EQUAL': return 'EQUAL';
+      case '>': case 'GREATER_THAN': return 'GREATER_THAN';
+      case '<': case 'LESS_THAN': return 'LESS_THAN';
+      case '>=': case 'GREATER_THAN_OR_EQUAL': return 'GREATER_THAN_OR_EQUAL';
+      case '<=': case 'LESS_THAN_OR_EQUAL': return 'LESS_THAN_OR_EQUAL';
+      case 'array-contains': case 'ARRAY_CONTAINS': return 'ARRAY_CONTAINS';
+      case 'in': case 'IN': return 'IN';
+      default: return op;
+    }
+  };
+
   const query = {
     structuredQuery: {
       from: [{ collectionId: collection }],
@@ -170,7 +183,7 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
         compositeFilter: {
           op: compositeOp,
           filters: filters.map(f => ({
-            fieldFilter: { field: { fieldPath: f.field }, op: f.op, value: valueToFirestore(f.value) }
+            fieldFilter: { field: { fieldPath: f.field }, op: mapOp(f.op), value: valueToFirestore(f.value) }
           }))
         }
       }
