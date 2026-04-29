@@ -2,6 +2,7 @@ export interface ScanOptions {
   url: string;
   plan?: string;
   userId?: string;
+  token?: string;
 }
 
 export interface PsiMetrics {

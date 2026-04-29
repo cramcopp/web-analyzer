@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     const workflowService = env.SCAN_WORKFLOW_SERVICE;
 
     if (workflowService) {
-      await workflowService.startScan({ url, plan: effectivePlan, userId: user.uid });
+      await workflowService.startScan({ url, plan: effectivePlan, userId: user.uid, token });
       
       return NextResponse.json({ 
         audit_id, 
