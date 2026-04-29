@@ -47,6 +47,8 @@ export interface SubpageResult {
   redirectLocation?: string;
   hasNextPrev?: boolean;
   isIndexable?: boolean;
+  headings?: { h1: string[]; h2: string[]; h3: string[] };
+  images?: { src: string; alt: string }[];
 }
 
 export interface PrioritizedTask {

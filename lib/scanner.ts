@@ -247,7 +247,16 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
         h1Count: subRoot.querySelectorAll('h1').length, status: subRes.status,
         contentType: subContentType, strippedContent, links: subLinks,
         xRobotsTag: subRes.headers.get('X-Robots-Tag') || '',
-        hasNextPrev: !!(subRoot.querySelector('link[rel="next"]') || subRoot.querySelector('link[rel="prev"]'))
+        hasNextPrev: !!(subRoot.querySelector('link[rel="next"]') || subRoot.querySelector('link[rel="prev"]')),
+        headings: {
+          h1: subRoot.querySelectorAll('h1').map(el => el.text.trim()),
+          h2: subRoot.querySelectorAll('h2').map(el => el.text.trim()),
+          h3: subRoot.querySelectorAll('h3').map(el => el.text.trim())
+        },
+        images: subRoot.querySelectorAll('img').map(img => ({
+          src: img.getAttribute('src') || '',
+          alt: img.getAttribute('alt') || ''
+        }))
       };
 
       const indexCheck = checkIndexability(subUrl, subRes.status, subResult.robots || '', subResult.xRobotsTag || '', subContentType, strippedContent, robotsTxtContent, subResult.canonical, subResult.hasNextPrev);
@@ -467,7 +476,10 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   }
 
   // Final Evaluation
-  const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
+  const successfulSubpages = subpageResults.filter(r => !r.error).map(r => {
+    const { error, strippedContent, ...rest } = r;
+    return rest;
+  });
   const htmlStripped = stripHtmlForAi(html);
   const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000);
 
