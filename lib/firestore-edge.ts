@@ -1,6 +1,20 @@
-import { fetchWithRetry } from './utils';
-
 export const runtime = 'edge';
+
+async function fetchWithRetry(url: string, options: any, retries = 3, backoff = 500): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.status === 429 || res.status >= 500) {
+        throw new Error(`Status ${res.status}`);
+      }
+      return res;
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, backoff * Math.pow(2, i)));
+    }
+  }
+  throw new Error('Fetch failed after retries');
+}
 
 type FirestoreValue = 
   | { stringValue: string }
