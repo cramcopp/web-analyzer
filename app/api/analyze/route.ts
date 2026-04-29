@@ -1,11 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
+import { getDocument, setDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-export async function POST(request: Request, { params }: { params: any }, env?: any) {
+// Helper to get environment variables in Edge runtime
+const getEnv = () => {
+  return {
+    INTERNAL_SECRET: process.env.INTERNAL_SECRET,
+    SCAN_WORKFLOW_SERVICE: (process.env as any).SCAN_WORKFLOW_SERVICE,
+    FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+    FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
+    FIREBASE_DATABASE_ID: process.env.FIREBASE_DATABASE_ID || '(default)'
+  };
+};
+
+export async function POST(request: Request) {
   try {
+    const env = getEnv();
     const { url } = await request.json();
     const token = await getSessionToken();
     const user = await getSessionUser();
@@ -14,7 +26,7 @@ export async function POST(request: Request, { params }: { params: any }, env?: 
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
 
-    // 1. Check Quota (BIZ-01)
+    // 1. Check Quota
     const userData = await getDocument('users', user.uid, token, env);
     const plan = userData?.plan || 'free';
     const scanCount = userData?.scanCount || 0;
@@ -70,6 +82,7 @@ export async function POST(request: Request, { params }: { params: any }, env?: 
       
       // Fallback to workflow if direct scan fails or times out
       if (env.SCAN_WORKFLOW_SERVICE) {
+        // Cloudflare Workflow Service Binding call
         await env.SCAN_WORKFLOW_SERVICE.startScan({ 
           url, 
           plan, 
