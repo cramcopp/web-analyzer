@@ -1,117 +1,35 @@
+import { 
+  FirestoreValue, 
+  FirestoreFilter, 
+  FirestoreConfig, 
+  getFirestoreConfig,
+  valueToFirestore,
+  valueFromFirestore,
+  documentFromFirestore,
+  objectToFirestoreFields
+} from './firestore-types';
 
-/**
- * Lightweight Firestore REST client for Edge runtime.
- * Avoids the heavy overhead of the standard Firebase SDK.
- */
-
-const DEFAULT_DATABASE_ID = '(default)';
-
-function getFirestoreConfig(env?: any) {
-  const projectId = env?.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
-  const databaseId = env?.FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || DEFAULT_DATABASE_ID;
-  const apiKey = env?.FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
-  
-  if (!projectId || !apiKey) {
-    const missing = [];
-    if (!projectId) missing.push('FIREBASE_PROJECT_ID');
-    if (!apiKey) missing.push('FIREBASE_API_KEY');
-    throw new Error(`Firestore configuration missing: ${missing.join(', ')}. Bitte prüfe die Environment-Variablen in Cloudflare.`);
-  }
-
-  return {
-    projectId,
-    databaseId,
-    apiKey,
-    baseUrl: `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`
-  };
-}
-
-/**
- * Helper for fetch with exponential backoff retry.
- * Handles transient network issues and Google API rate limits.
- */
-export async function fetchWithRetry(url: string, options: RequestInit, retries = 3, backoff = 500): Promise<Response> {
-  try {
-    const res = await fetch(url, options);
-    
-    // Retry on 429 (Too Many Requests), 503 (Service Unavailable), or 502 (Bad Gateway)
-    if (retries > 0 && [429, 502, 503].includes(res.status)) {
-      await new Promise(resolve => setTimeout(resolve, backoff));
-      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.status === 429 || res.status >= 500) {
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
     }
-    
-    return res;
-  } catch (error) {
-    // Retry on network errors (DNS, Timeout)
-    if (retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, backoff));
-      return fetchWithRetry(url, options, retries - 1, backoff * 2);
-    }
-    throw error;
   }
-}
-
-
-type FirestoreValue = 
-  | { stringValue: string }
-  | { integerValue: string }
-  | { doubleValue: number }
-  | { booleanValue: boolean }
-  | { timestampValue: string }
-  | { nullValue: null }
-  | { arrayValue: { values?: FirestoreValue[] } }
-  | { mapValue: { fields?: Record<string, FirestoreValue> } };
-
-export interface FirestoreFilter {
-  field: string;
-  op: 'EQUAL' | 'GREATER_THAN' | 'LESS_THAN' | 'ARRAY_CONTAINS' | 'IN';
-  value: unknown;
-}
-
-function valueToFirestore(value: unknown): FirestoreValue {
-  if (value === null || value === undefined) return { nullValue: null };
-  if (typeof value === 'boolean') return { booleanValue: value };
-  if (typeof value === 'number') {
-    if (Number.isInteger(value)) return { integerValue: value.toString() };
-    return { doubleValue: value };
-  }
-  if (typeof value === 'string') return { stringValue: value };
-  if (value instanceof Date) return { timestampValue: value.toISOString() };
-  if (Array.isArray(value)) return { arrayValue: { values: value.map(valueToFirestore) } };
-  if (typeof value === 'object') {
-    const fields: Record<string, FirestoreValue> = {};
-    for (const [k, v] of Object.entries(value)) {
-      // eslint-disable-next-line security/detect-object-injection
-      fields[k] = valueToFirestore(v);
-    }
-    return { mapValue: { fields } };
-  }
-  return { stringValue: String(value) };
-}
-
-function valueFromFirestore(value: FirestoreValue): any {
-  if ('nullValue' in value) return null;
-  if ('booleanValue' in value) return value.booleanValue;
-  if ('integerValue' in value) return parseInt(value.integerValue, 10);
-  if ('doubleValue' in value) return value.doubleValue;
-  if ('stringValue' in value) return value.stringValue;
-  if ('timestampValue' in value) return new Date(value.timestampValue);
-  if ('arrayValue' in value) return (value.arrayValue.values || []).map(valueFromFirestore);
-  if ('mapValue' in value) {
-    const obj: Record<string, any> = {};
-    const fields = value.mapValue.fields || {};
-    for (const [k, v] of Object.entries(fields)) {
-      // eslint-disable-next-line security/detect-object-injection
-      obj[k] = valueFromFirestore(v);
-    }
-    return obj;
-  }
-  return null;
+  return fetch(url, options);
 }
 
 export async function getDocument<T = Record<string, any>>(collection: string, id: string, token?: string, env?: any): Promise<T | null> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
   const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
+  
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -123,27 +41,25 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
       const err = await res.json() as { error?: { message?: string } };
       errMessage = err.error?.message || errMessage;
     } catch {}
-    console.error(`[Firestore Error] Status: ${res.status}, Message: ${errMessage}`);
     throw new Error(errMessage);
   }
-  const data = await res.json() as { fields?: Record<string, FirestoreValue> };
-  const fields = data.fields || {};
-  const result: Record<string, any> = {};
-  for (const [k, v] of Object.entries(fields)) {
-    // eslint-disable-next-line security/detect-object-injection
-    result[k] = valueFromFirestore(v);
-  }
-  return { id, ...result } as T;
+  
+  return documentFromFirestore(await res.json()) as T;
 }
 
 export async function setDocument(collection: string, id: string, data: Record<string, any>, token?: string | null, env?: any): Promise<any> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
-  const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
   const fields: Record<string, FirestoreValue> = {};
+  const fieldPaths: string[] = [];
+  
   for (const [k, v] of Object.entries(data)) {
-    // eslint-disable-next-line security/detect-object-injection
     fields[k] = valueToFirestore(v);
+    fieldPaths.push(k);
   }
+  
+  // CRITICAL: We MUST use updateMask, otherwise Firestore deletes all fields NOT in this request!
+  const mask = fieldPaths.map(p => `updateMask.fieldPaths=${p}`).join('&');
+  const url = `${baseUrl}/${collection}/${id}?${mask}&key=${apiKey}`;
   
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -169,9 +85,9 @@ export async function setDocument(collection: string, id: string, data: Record<s
 export async function addDocument<T = Record<string, any>>(collection: string, data: Record<string, any>, token?: string, env?: any): Promise<T & { id: string }> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
   const url = `${baseUrl}/${collection}?key=${apiKey}`;
+  
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) {
-    // eslint-disable-next-line security/detect-object-injection
     fields[k] = valueToFirestore(v);
   }
 
@@ -192,9 +108,10 @@ export async function addDocument<T = Record<string, any>>(collection: string, d
     } catch {}
     throw new Error(errMessage);
   }
-  const result = await res.json() as { name: string };
-  const nameParts = result.name.split('/');
-  return { id: nameParts[nameParts.length - 1], ...data } as T & { id: string };
+  
+  const result = documentFromFirestore(await res.json());
+  const id = (result as any).name?.split('/').pop() || '';
+  return { id, ...result } as T & { id: string };
 }
 
 export async function queryDocuments<T = Record<string, any>>(
@@ -273,7 +190,6 @@ export async function queryDocuments<T = Record<string, any>>(
       const fields = doc.fields || {};
       const data: Record<string, any> = {};
       for (const [k, v] of Object.entries(fields)) {
-        // eslint-disable-next-line security/detect-object-injection
         data[k] = valueFromFirestore(v as FirestoreValue);
       }
       const nameParts = doc.name.split('/');
@@ -286,7 +202,6 @@ export async function updateDocument(collection: string, id: string, data: Recor
   const fields: Record<string, FirestoreValue> = {};
   const fieldPaths: string[] = [];
   for (const [k, v] of Object.entries(data)) {
-    // eslint-disable-next-line security/detect-object-injection
     fields[k] = valueToFirestore(v);
     fieldPaths.push(k);
   }
@@ -337,23 +252,18 @@ export async function deleteDocument(collection: string, id: string, token?: str
 }
 
 export async function updateStripeSubscription(uid: string, data: Record<string, any>): Promise<any> {
-  // Webhooks use internal secret bypass to allow updating sensitive plan fields
   return updateDocument('users', uid, { 
     ...data, 
     adminSecret: process.env.INTERNAL_SECRET 
   });
 }
 
-/**
- * BIZ-02: Atomic increment to prevent race conditions.
- */
 export async function incrementField(collection: string, id: string, field: string, amount: number, token?: string, env?: any): Promise<any> {
   const { projectId, databaseId, apiKey } = getFirestoreConfig(env);
   if (!projectId) {
     throw new Error('FIREBASE_PROJECT_ID is not defined in environment variables.');
   }
 
-  // We use the commit endpoint for transformations
   const commitUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:commit?key=${apiKey}`;
   
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -391,6 +301,3 @@ export async function incrementField(collection: string, id: string, field: stri
   }
   return await res.json();
 }
-
-
-

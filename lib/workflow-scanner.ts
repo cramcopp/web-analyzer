@@ -151,10 +151,11 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
         const cdn = preflightData.headers['cf-ray'] ? 'Cloudflare' : preflightData.headers['x-vercel-id'] ? 'Vercel' : preflightData.headers['x-akamai-transformed'] ? 'Akamai' : preflightData.headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' : 'None detected';
 
-        // AGGRESSIVE PRUNING to stay under 1MB Firestore limit
+        // AGGRESSIVE but SMART pruning
         const storageResults = currentState.results.map((r: any) => {
-          // Remove huge arrays from subpage results in the summary
-          const { strippedContent, links, images, headings, ...rest } = r;
+          // We ONLY remove the massive strippedContent (HTML dump), 
+          // but we KEEP links, images, and headings for the dashboard!
+          const { strippedContent, ...rest } = r;
           return rest;
         });
 
