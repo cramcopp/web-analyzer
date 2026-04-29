@@ -100,10 +100,10 @@ export async function POST(req: Request) {
         adminSecret: env.INTERNAL_SECRET // Bypass rules check
       }, token, env);
     } catch (e: any) {
-      console.error("Failed to create placeholder report:", e.message);
+      const errorMsg = `Initialisierung fehlgeschlagen: ${e.message}`;
+      console.error(errorMsg);
       return NextResponse.json({ 
-        error: 'Initialisierung der Analyse fehlgeschlagen.', 
-        details: e.message 
+        error: errorMsg 
       }, { status: 500 });
     }
 
