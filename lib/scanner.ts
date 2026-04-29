@@ -67,29 +67,24 @@ function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: 
   const baseDomain = new URL(baseUrl).hostname.replace(/^www\./, '').toLowerCase();
 
   root.querySelectorAll('a[href]').forEach((el: any) => {
-    let href = el.getAttribute('href');
+    // DER FIX: .trim() entfernt unsichtbare Leerzeichen aus schlampigem HTML
+    let href = el.getAttribute('href')?.trim();
     
-    // Ignoriere leere Links, Anker, Mails und Telefonnummern
-    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+    if (!href || href.startsWith('#') || href.toLowerCase().startsWith('mailto:') || href.toLowerCase().startsWith('tel:') || href.toLowerCase().startsWith('javascript:')) {
       return;
     }
 
-    // Schneide Hash-Fragmente ab (aus /kontakt#formular wird /kontakt)
     href = href.split('#')[0];
+    if (!href) return; // Falls es nur ein "#" war
 
     try {
-      // Mach aus relativen Links (z.B. /speisekarte) absolute Links
       const urlObj = new URL(href, baseUrl);
-      const absoluteUrl = urlObj.href;
       const targetDomain = urlObj.hostname.replace(/^www\./, '').toLowerCase();
 
-      // Pack es in die Queue, wenn es zur Domain gehört
       if (targetDomain === baseDomain) {
-        discoveredUrls.add(absoluteUrl);
+        discoveredUrls.add(urlObj.href);
       }
-    } catch (e) {
-      // Kaputte Links im href einfach ignorieren
-    }
+    } catch (e) {}
   });
 
   // Task 3.2: Harvest Head links (canonical, next, prev)
@@ -166,19 +161,17 @@ export async function getAllUrlsBeforeCrawl(baseUrl: string): Promise<string[]> 
             
             const xmlText = await res.text();
             
-            // Regex, um alle <loc> Tags rasend schnell zu finden
-            const locRegex = /<loc>(.*?)<\/loc>/g;
+            // DER FIX: Dieser Regex ignoriert Namespaces (wie <sitemap:loc> oder <image:loc>)
+            const locRegex = /<(?:[a-z0-9]+:)?loc>\s*(.*?)\s*<\/(?:[a-z0-9]+:)?loc>/gi;
             let match;
             
             while ((match = locRegex.exec(xmlText)) !== null) {
                 const url = match[1].trim();
+                if (!url) continue;
                 
-                // Wenn die URL auf ".xml" endet, ist es ein Sitemap-Index!
                 if (url.endsWith('.xml') || url.includes('sitemap')) {
                     if (!visitedSitemaps.has(url)) sitemapsToVisit.push(url);
-                } 
-                // Wenn es keine XML ist, ist es eine echte versteckte Webseite!
-                else {
+                } else {
                     allUrls.add(url);
                 }
             }
@@ -435,47 +428,32 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const xRobotsTag = response.headers.get('x-robots-tag') || '';
 
 function isSoft404(text: string): boolean {
+  // Das 50-Wörter-Limit war der Tod für lokale Seiten! Drastisch reduziert.
   const wordCount = text.trim().split(/\s+/).length;
-  if (wordCount < 50) return true;
+  if (wordCount < 5) return true; 
   
   const soft404Keywords = [
-    'nicht gefunden', 'nothing found', '404', 'seite nicht vorhanden', 
-    'page not found', 'content not available', 'error 404'
+    'nicht gefunden', 'nothing found', 'error 404', 'seite nicht vorhanden'
   ];
   const lowerText = text.toLowerCase();
   return soft404Keywords.some(kw => lowerText.includes(kw));
 }
 
 const checkIndexability = (
-  url: string, 
-  status: number | string, 
-  rb: string, 
-  xRobots: string, 
-  contentType: string,
-  text: string,
-  robotsTxtContent: string,
-  can?: string | null,
-  hasNextPrev?: boolean
+  url: string, status: number | string, rb: string, xRobots: string, 
+  contentType: string, text: string, robotsTxtContent: string, 
+  can?: string | null, hasNextPrev?: boolean
 ): { isIndexable: boolean; reason: string } => {
-  // Regel 1: Muss Status 200 sein
-  if (status !== 200) {
-    return { isIndexable: false, reason: `Status ${status}` };
-  }
+  if (status !== 200) return { isIndexable: false, reason: `Status ${status}` };
+  if (contentType && !contentType.toLowerCase().includes('text/html')) return { isIndexable: false, reason: `Content-Type (${contentType})` };
 
-  // 0. Content-Type Check (Zusatz-Sicherheit)
-  if (contentType && !contentType.toLowerCase().includes('text/html')) {
-    return { isIndexable: false, reason: `Content-Type (${contentType})` };
-  }
-
-  // Regel 2: Darf kein noindex oder none haben
   const xRobotsLower = xRobots.toLowerCase();
   const metaRobotsLower = rb.toLowerCase();
   if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none') ||
       metaRobotsLower.includes('noindex') || metaRobotsLower.includes('none')) {
-    return { isIndexable: false, reason: "Noindex detected (Meta or Header)" };
+    return { isIndexable: false, reason: "Noindex detected" };
   }
 
-  // Robots.txt Check (Bleibt als Sicherheitsnetz drin)
   try {
     const urlObj = new URL(url);
     if (!isAllowedByRobots(robotsTxtContent, urlObj.pathname + urlObj.search)) {
@@ -483,33 +461,22 @@ const checkIndexability = (
     }
   } catch {}
 
-  // Soft-404 Check (Bleibt als Qualitäts-Check drin)
-  if (isSoft404(text)) {
-    return { isIndexable: false, reason: "Soft-404 Detection" };
-  }
+  if (isSoft404(text)) return { isIndexable: false, reason: "Soft-404 Detection" };
 
-  // Regel 3: Canonical Prüfung (Der Fehler-Fix!)
-  if (!can || can.trim() === '') {
-    // Wenn es kein Canonical gibt, ist die Seite automatisch indexierbar!
-    return { isIndexable: true, reason: "OK (No Canonical)" };
-  } else {
-    try {
-      // Vergleiche nackte URLs (ohne Slash am Ende und ohne Parameter)
-      const cleanUrl = (u: string) => u.split('?')[0].replace(/\/$/, '');
-      const absoluteCanonical = new URL(can, url).href;
-      
-      if (cleanUrl(url) === cleanUrl(absoluteCanonical)) {
-        return { isIndexable: true, reason: "OK (Canonical Match)" };
-      } else {
-        // Sonderfall: Pagination mit next/prev wird toleriert
-        if (url.includes('?') && hasNextPrev) {
-          return { isIndexable: true, reason: "OK (Pagination Exception)" };
-        }
-        return { isIndexable: false, reason: `Canonical Mismatch (Ist: ${url} | Soll: ${absoluteCanonical})` };
-      }
-    } catch (e) {
-      return { isIndexable: true, reason: "OK (Broken Canonical fallback)" };
-    }
+  if (!can || can.trim() === '') return { isIndexable: true, reason: "OK (No Canonical)" };
+
+  try {
+    // DER FIX: Schneidet JETZT http(s):// und www. weg, um saubere Vergleiche zu machen!
+    const cleanUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').split('?')[0].replace(/\/$/, '');
+    const absoluteCanonical = new URL(can, url).href;
+    
+    if (cleanUrl(url) === cleanUrl(absoluteCanonical)) return { isIndexable: true, reason: "OK (Canonical Match)" };
+    
+    if (url.includes('?') && hasNextPrev) return { isIndexable: true, reason: "OK (Pagination Exception)" };
+    
+    return { isIndexable: false, reason: `Canonical Mismatch` };
+  } catch (e) {
+    return { isIndexable: true, reason: "OK (Broken Canonical fallback)" };
   }
 };
 
