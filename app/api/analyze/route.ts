@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     // 1. Check Quota
     const userData = await getDocument('users', user.uid, token, env);
-    const plan = userData?.plan || 'free';
+    const plan = (userData?.plan || 'free').toLowerCase();
     const scanCount = userData?.scanCount || 0;
     const maxScans = userData?.maxScans || (plan === 'agency' ? 100 : plan === 'pro' ? 25 : 5);
 
