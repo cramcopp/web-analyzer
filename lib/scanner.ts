@@ -79,10 +79,15 @@ function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: 
 
     try {
       const urlObj = new URL(href, baseUrl);
-      const targetDomain = urlObj.hostname.replace(/^www\./, '').toLowerCase();
+      
+      // NORMALISIERUNG: Parameter und Anker entfernen, Trailing-Slash vereinheitlichen
+      urlObj.hash = '';
+      // Wichtig: Wir normalisieren den Pfad für die Queue, um Duplikate zu vermeiden
+      let normalizedUrl = urlObj.href.replace(/\/$/, ''); 
 
+      const targetDomain = urlObj.hostname.replace(/^www\./, '').toLowerCase();
       if (targetDomain === baseDomain) {
-        discoveredUrls.add(urlObj.href);
+        discoveredUrls.add(normalizedUrl);
       }
     } catch (e) {}
   });
@@ -130,7 +135,11 @@ export async function getAllUrlsBeforeCrawl(baseUrl: string): Promise<string[]> 
     allUrls.add(baseUrl); // Startseite ist immer drin
 
     const cleanBase = baseUrl.replace(/\/$/, '');
-    const sitemapsToVisit: string[] = [`${cleanBase}/sitemap.xml`, `${cleanBase}/wp-sitemap.xml`];
+    const sitemapsToVisit: string[] = [
+        `${cleanBase}/sitemap.xml`, 
+        `${cleanBase}/wp-sitemap.xml`,
+        `${cleanBase}/sitemap_index.xml` // Der fehlende Standard für Yoast SEO!
+    ];
     
     // 1. Suche nach versteckten Sitemaps in der robots.txt
     try {
@@ -364,6 +373,21 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
       const subContentType = subRes.headers.get('content-type') || '';
+      
+      // NEU: Wenn es kein HTML ist (PDF, JPG), zählen wir es, parsen es aber nicht!
+      if (subContentType && !subContentType.toLowerCase().includes('text/html')) {
+        return {
+          error: false, 
+          url: subUrl, 
+          status: subRes.status, 
+          contentType: subContentType, 
+          title: 'Media/Document', // Verhindert Absturz beim Parsen
+          links: [], 
+          strippedContent: '',
+          xRobotsTag: subRes.headers.get('X-Robots-Tag') || '',
+          hasNextPrev: false
+        };
+      }
       const hasNextPrev = !!(subRoot.querySelector('link[rel="next"]') || subRoot.querySelector('link[rel="prev"]'));
       
       // Task 3: Raw Data Extraction (MUST happen on untouched HTML)
