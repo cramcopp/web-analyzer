@@ -82,7 +82,16 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         });
 
         const remainingQueue = currentState.queue.filter((u: string) => !currentBatch.includes(u));
+        const newResultsCount = currentState.results.length + validResults.length;
         
+        // Update real progress in Firestore
+        const progress = Math.min(10 + Math.round((newResultsCount / preflightData.subpageLimit) * 80), 90);
+        await setDocument('reports', auditId!, { 
+          progress, 
+          status: 'scanning',
+          adminSecret: this.env.INTERNAL_SECRET 
+        }, event.payload.token, this.env);
+
         return {
           results: [...currentState.results, ...validResults],
           processed: Array.from(new Set([...newProcessed, ...newDiscovered])),
@@ -93,149 +102,163 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
     // STEP 3: Scoring & Final Report
     const finalReport = await step.do('finalize report', async () => {
-      const root = parse(preflightData.html);
-      const allImages = root.querySelectorAll('img');
-      const imagesTotal = allImages.length;
-      const imageDetails = allImages.map((img: any) => ({
-        src: img.getAttribute('src') || '',
-        alt: img.getAttribute('alt') || null
-      }));
-      const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
-      
-      const scripts = root.querySelectorAll('script');
-      const totalScripts = scripts.length;
-      const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
-      const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
+      try {
+        const root = parse(preflightData.html);
+        const allImages = root.querySelectorAll('img');
+        const imagesTotal = allImages.length;
+        const imageDetails = allImages.map((img: any) => ({
+          src: img.getAttribute('src') || '',
+          alt: img.getAttribute('alt') || null
+        }));
+        const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
+        
+        const scripts = root.querySelectorAll('script');
+        const totalScripts = scripts.length;
+        const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
+        const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
 
-      const calculateMaxDepth = (node: any): number => {
-        if (!node.childNodes || node.childNodes.length === 0) return 1;
-        let max = 0;
-        node.childNodes.forEach((child: any) => {
-          if (child.nodeType === 1) max = Math.max(max, calculateMaxDepth(child));
+        const calculateMaxDepth = (node: any): number => {
+          if (!node.childNodes || node.childNodes.length === 0) return 1;
+          let max = 0;
+          node.childNodes.forEach((child: any) => {
+            if (child.nodeType === 1) max = Math.max(max, calculateMaxDepth(child));
+          });
+          return 1 + max;
+        };
+        const maxDomDepth = calculateMaxDepth(root);
+
+        const scores = calculateHeuristicScores(root, mainIndex);
+        
+        const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
+
+        const semanticTags = {
+          main: root.querySelectorAll('main').length,
+          article: root.querySelectorAll('article').length,
+          section: root.querySelectorAll('section').length,
+          nav: root.querySelectorAll('nav').length,
+          header: root.querySelectorAll('header').length,
+          footer: root.querySelectorAll('footer').length,
+          aside: root.querySelectorAll('aside').length
+        };
+
+        const securityHeaders: Record<string, string> = {
+          'Content-Security-Policy': preflightData.headers['content-security-policy'] ? 'Present' : 'Missing',
+          'Strict-Transport-Security': preflightData.headers['strict-transport-security'] ? 'Present' : 'Missing',
+          'X-Frame-Options': preflightData.headers['x-frame-options'] || 'Missing',
+          'X-Content-Type-Options': preflightData.headers['x-content-type-options'] || 'Missing',
+          'Referrer-Policy': preflightData.headers['referrer-policy'] || 'Missing'
+        };
+
+        const cdn = preflightData.headers['cf-ray'] ? 'Cloudflare' : preflightData.headers['x-vercel-id'] ? 'Vercel' : preflightData.headers['x-akamai-transformed'] ? 'Akamai' : preflightData.headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' : 'None detected';
+
+        // AGGRESSIVE PRUNING to stay under 1MB Firestore limit
+        const storageResults = currentState.results.map((r: any) => {
+          // Remove huge arrays from subpage results in the summary
+          const { strippedContent, links, images, headings, ...rest } = r;
+          return rest;
         });
-        return 1 + max;
-      };
-      const maxDomDepth = calculateMaxDepth(root);
 
-      const scores = calculateHeuristicScores(root, mainIndex);
-      
-      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
+        const report: AnalysisResult = {
+          audit_id: auditId || Math.random().toString(36).substring(7).toUpperCase(),
+          userId: event.payload.userId || '',
+          createdAt: new Date().toISOString(),
+          urlObj: preflightData.mainUrlNormalized,
+          title: root.querySelector('title')?.text.trim() || '',
+          metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+          metaKeywords: '',
+          htmlLang: root.querySelector('html')?.getAttribute('lang') || '',
+          generator: root.querySelector('meta[name="generator"]')?.getAttribute('content') || '',
+          viewport: root.querySelector('meta[name="viewport"]')?.getAttribute('content') || '',
+          viewportScalable: 'Yes',
+          robots: mainIndex.isIndexable ? 'index, follow' : 'noindex',
+          status: 'completed',
+          progress: 100,
+          h1Count: root.querySelectorAll('h1').length,
+          h2Count: root.querySelectorAll('h2').length,
+          imagesTotal,
+          imagesWithoutAlt,
+          lazyImages: allImages.filter((img: any) => img.getAttribute('loading') === 'lazy' || img.getAttribute('data-src')).length,
+          maxDomDepth,
+          semanticTags,
+          headings: {
+              h1: root.querySelectorAll('h1').map((el: any) => el.text.trim()),
+              h2: root.querySelectorAll('h2').map((el: any) => el.text.trim()),
+              h3: root.querySelectorAll('h3').map((el: any) => el.text.trim())
+          },
+          imageDetails,
+          hreflangs: [],
+          napSignals: { googleMapsLinks: 0, phoneLinks: 0 },
+          dataLeakage: { emailsFoundCount: 0, sampleEmails: [] },
+          internalLinksCount: currentState.processed.length,
+          externalLinksCount: 0,
+          totalScripts,
+          blockingScripts,
+          totalStylesheets,
+          responseTimeMs: 0,
+          ttfbMs: 0,
+          preflight: {
+              robotsTxt: preflightData.robotsTxt,
+              sitemap: { status: 200, url: null, urlsFound: preflightData.sitemapUrls.length }
+          },
+          psiMetricsStr: '',
+          psiMetrics: null,
+          lighthouseScores: null,
+          safeBrowsingStr: '',
+          domainAge: 'Unknown',
+          sslCertificate: { status: 'READY' },
+          wienerSachtextIndex: 0,
+          bodyText: '', 
+          techStack: preflightData.html.includes('wp-content') ? ['WordPress'] : preflightData.html.includes('__NEXT_DATA__') ? ['Next.js'] : [],
+          cdn,
+          serverInfo: preflightData.headers['server'] || 'Hidden',
+          legal: {
+              trackingScripts: {},
+              cmpDetected: {},
+              linksInFooter: false,
+              privacyInFooter: false,
+              cookieBannerFound: false
+          },
+          social: {
+              ogTitle: root.querySelector('meta[property="og:title"]')?.getAttribute('content') || '',
+              ogDescription: root.querySelector('meta[property="og:description"]')?.getAttribute('content') || '',
+              ogImage: root.querySelector('meta[property="og:image"]')?.getAttribute('content') || '',
+              ogType: 'website',
+              twitterCard: 'summary'
+          },
+          existingSchemaCount: 0,
+          schemaTypes: [],
+          securityHeaders,
+          headers: preflightData.headers as Record<string, string>,
+          crawlSummary: {
+            totalInternalLinks: currentState.processed.length, 
+            scannedSubpagesCount: currentState.results.length,
+            indexablePagesCount: indexableUrls.length,
+            crawledUrls: currentState.processed,
+            indexableUrls: indexableUrls,
+            scannedSubpages: storageResults as any,
+            brokenLinks: []
+          },
+          apiEndpoints: [],
+          seo: { score: scores.seo, insights: [], recommendations: [], detailedSeo: {} as any },
+          performance: { score: scores.performance, insights: [], recommendations: [], detailedPerformance: {} as any },
+          security: { score: scores.security, insights: [], recommendations: [], detailedSecurity: {} as any },
+          accessibility: { score: scores.accessibility, insights: [], recommendations: [], detailedAccessibility: {} as any },
+          compliance: { score: scores.compliance, insights: [], recommendations: [], detailedCompliance: {} as any },
+          adminSecret: this.env.INTERNAL_SECRET // Bypass rules check
+        };
 
-      const semanticTags = {
-        main: root.querySelectorAll('main').length,
-        article: root.querySelectorAll('article').length,
-        section: root.querySelectorAll('section').length,
-        nav: root.querySelectorAll('nav').length,
-        header: root.querySelectorAll('header').length,
-        footer: root.querySelectorAll('footer').length,
-        aside: root.querySelectorAll('aside').length
-      };
-
-      const securityHeaders: Record<string, string> = {
-        'Content-Security-Policy': preflightData.headers['content-security-policy'] ? 'Present' : 'Missing',
-        'Strict-Transport-Security': preflightData.headers['strict-transport-security'] ? 'Present' : 'Missing',
-        'X-Frame-Options': preflightData.headers['x-frame-options'] || 'Missing',
-        'X-Content-Type-Options': preflightData.headers['x-content-type-options'] || 'Missing',
-        'Referrer-Policy': preflightData.headers['referrer-policy'] || 'Missing'
-      };
-
-      const cdn = preflightData.headers['cf-ray'] ? 'Cloudflare' : preflightData.headers['x-vercel-id'] ? 'Vercel' : preflightData.headers['x-akamai-transformed'] ? 'Akamai' : preflightData.headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' : 'None detected';
-
-      // Prune large fields to stay under Firestore limits (1MB)
-      const storageResults = currentState.results.map((r: any) => {
-        const { strippedContent, ...rest } = r;
-        return rest;
-      });
-
-      const report: AnalysisResult = {
-        audit_id: auditId || Math.random().toString(36).substring(7).toUpperCase(),
-        userId: event.payload.userId || '',
-        createdAt: new Date().toISOString(),
-        urlObj: preflightData.mainUrlNormalized,
-        title: root.querySelector('title')?.text.trim() || '',
-        metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
-        metaKeywords: '',
-        htmlLang: root.querySelector('html')?.getAttribute('lang') || '',
-        generator: root.querySelector('meta[name="generator"]')?.getAttribute('content') || '',
-        viewport: root.querySelector('meta[name="viewport"]')?.getAttribute('content') || '',
-        viewportScalable: 'Yes',
-        robots: mainIndex.isIndexable ? 'index, follow' : 'noindex',
-        h1Count: root.querySelectorAll('h1').length,
-        h2Count: root.querySelectorAll('h2').length,
-        imagesTotal,
-        imagesWithoutAlt,
-        lazyImages: allImages.filter((img: any) => img.getAttribute('loading') === 'lazy' || img.getAttribute('data-src')).length,
-        maxDomDepth,
-        semanticTags,
-        headings: {
-            h1: root.querySelectorAll('h1').map((el: any) => el.text.trim()),
-            h2: root.querySelectorAll('h2').map((el: any) => el.text.trim()),
-            h3: root.querySelectorAll('h3').map((el: any) => el.text.trim())
-        },
-        imageDetails,
-        hreflangs: [],
-        napSignals: { googleMapsLinks: 0, phoneLinks: 0 },
-        dataLeakage: { emailsFoundCount: 0, sampleEmails: [] },
-        internalLinksCount: currentState.processed.length,
-        externalLinksCount: 0,
-        totalScripts,
-        blockingScripts,
-        totalStylesheets,
-        responseTimeMs: 0,
-        ttfbMs: 0,
-        preflight: {
-            robotsTxt: preflightData.robotsTxt,
-            sitemap: { status: 200, url: null, urlsFound: preflightData.sitemapUrls.length }
-        },
-        psiMetricsStr: '',
-        psiMetrics: null,
-        lighthouseScores: null,
-        safeBrowsingStr: '',
-        domainAge: 'Unknown',
-        sslCertificate: { status: 'READY' },
-        wienerSachtextIndex: 0,
-        bodyText: '', 
-        techStack: preflightData.html.includes('wp-content') ? ['WordPress'] : preflightData.html.includes('__NEXT_DATA__') ? ['Next.js'] : [],
-        cdn,
-        serverInfo: preflightData.headers['server'] || 'Hidden',
-        legal: {
-            trackingScripts: {},
-            cmpDetected: {},
-            linksInFooter: false,
-            privacyInFooter: false,
-            cookieBannerFound: false
-        },
-        social: {
-            ogTitle: root.querySelector('meta[property="og:title"]')?.getAttribute('content') || '',
-            ogDescription: root.querySelector('meta[property="og:description"]')?.getAttribute('content') || '',
-            ogImage: root.querySelector('meta[property="og:image"]')?.getAttribute('content') || '',
-            ogType: 'website',
-            twitterCard: 'summary'
-        },
-        existingSchemaCount: 0,
-        schemaTypes: [],
-        securityHeaders,
-        headers: preflightData.headers as Record<string, string>,
-        crawlSummary: {
-          totalInternalLinks: currentState.processed.length, 
-          scannedSubpagesCount: currentState.results.length,
-          indexablePagesCount: indexableUrls.length,
-          crawledUrls: currentState.processed,
-          indexableUrls: indexableUrls,
-          scannedSubpages: storageResults as any,
-          brokenLinks: []
-        },
-        apiEndpoints: [],
-        seo: { score: scores.seo, insights: [], recommendations: [], detailedSeo: {} as any },
-        performance: { score: scores.performance, insights: [], recommendations: [], detailedPerformance: {} as any },
-        security: { score: scores.security, insights: [], recommendations: [], detailedSecurity: {} as any },
-        accessibility: { score: scores.accessibility, insights: [], recommendations: [], detailedAccessibility: {} as any },
-        compliance: { score: scores.compliance, insights: [], recommendations: [], detailedCompliance: {} as any },
-        adminSecret: this.env.INTERNAL_SECRET // Bypass rules check
-      };
-
-      await setDocument('reports', report.audit_id!, report as any, event.payload.token, this.env);
-      return report;
+        await setDocument('reports', report.audit_id!, report as any, event.payload.token, this.env);
+        return report;
+      } catch (err: any) {
+        console.error("Workflow Finalize Error:", err);
+        // Log error to Firestore placeholder
+        await setDocument('reports', auditId!, { 
+          status: 'error', 
+          error: `Finalisierung fehlgeschlagen: ${err.message}`,
+          adminSecret: this.env.INTERNAL_SECRET 
+        }, event.payload.token, this.env);
+        throw err;
+      }
     });
 
     return finalReport;
