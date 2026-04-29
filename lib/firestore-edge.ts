@@ -101,6 +101,7 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
   if (res.status === 404) return null;
   if (!res.ok) {
     const err = await res.json() as { error?: { message?: string } };
+    console.error(`[Firestore Error] Status: ${res.status}, Message: ${err.error?.message || 'Unknown'}`);
     throw new Error(err.error?.message || `Firestore Error ${res.status}`);
   }
   const data = await res.json() as { fields?: Record<string, FirestoreValue> };
@@ -132,6 +133,7 @@ export async function setDocument(collection: string, id: string, data: Record<s
 
   if (!res.ok) {
     const err = await res.json() as { error?: { message?: string } };
+    console.error(`[Firestore setDocument Error] Status: ${res.status}, ID: ${id}, Message: ${err.error?.message || 'Unknown'}`);
     throw new Error(err.error?.message || `Firestore Error ${res.status}`);
   }
   return await res.json();
