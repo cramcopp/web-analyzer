@@ -24,7 +24,8 @@ const STEALTH_CONFIG = {
     'Accept-Language': 'en-US,en;q=0.9',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
-  }
+  },
+  redirect: 'manual' as const
 };
 
 /**
@@ -270,10 +271,23 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
       const subRes = await fetch(subUrl, { 
-        signal: controller.signal, 
-        headers: STEALTH_CONFIG.headers 
+        ...STEALTH_CONFIG,
+        signal: controller.signal
       });
       clearTimeout(timeout);
+
+      // Task 1.2: 3xx-Status abfangen
+      if (subRes.status >= 300 && subRes.status < 400) {
+        return { 
+          error: false, 
+          url: subUrl, 
+          status: subRes.status, 
+          links: [],
+          xRobotsTag: subRes.headers.get('X-Robots-Tag') || '',
+          redirectLocation: subRes.headers.get('location') || ''
+        };
+      }
+
       if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
       
       const subHtml = await subRes.text();
@@ -293,7 +307,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         h1Count: subRoot.querySelectorAll('h1').length, 
         status: subRes.status,
         strippedContent,
-        links: subInternalLinks
+        links: subInternalLinks,
+        xRobotsTag: subRes.headers.get('X-Robots-Tag') || ''
       };
     } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
   };
@@ -311,6 +326,16 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     const result = await scanSubpage(currentUrl);
     subpageResults.push(result);
 
+    // Task 1.2: Redirect processing
+    if (typeof result.status === 'number' && result.status >= 300 && result.status < 400 && result.redirectLocation) {
+      try {
+        const targetUrl = new URL(result.redirectLocation, currentUrl);
+        if (isSameBaseDomain(targetUrl.hostname, domain) && !processed.has(targetUrl.toString())) {
+          queue.add(targetUrl.toString());
+        }
+      } catch { /* Invalid URL */ }
+    }
+
     // Feed found links back into queue
     if (!result.error && result.links) {
       result.links.forEach(l => {
@@ -322,25 +347,35 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
 
-  // --- Indexability Check ---
+  // --- Indexability Check (Phase 3) ---
   const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow';
   const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href');
+  const xRobotsTag = response.headers.get('X-Robots-Tag') || '';
   
-  const isIndexable = (url: string, rb: string, can?: string | null) => {
+  const isIndexable = (url: string, status: number | string, rb: string, xRobots: string, can?: string | null) => {
+    // 1. HTTP Status 200
+    if (status !== 200) return false;
+    // 2. Meta Robots noindex
     if (rb.toLowerCase().includes('noindex')) return false;
+    // 3. X-Robots-Tag noindex
+    if (xRobots.toLowerCase().includes('noindex')) return false;
+    // 4. Canonical Match
     if (can) {
       try {
         const canAbs = new URL(can, url).toString();
         const urlAbs = new URL(url).toString();
-        if (canAbs !== urlAbs) return false;
+        // Remove trailing slashes for comparison
+        const normalize = (u: string) => u.replace(/\/$/, '');
+        if (normalize(canAbs) !== normalize(urlAbs)) return false;
       } catch { /* ignore */ }
     }
     return true;
   };
 
-  const mainIsIndexable = isIndexable(urlObj.toString(), robots, canonical);
-  const indexableSubpagesCount = successfulSubpages.filter(p => isIndexable(p.url, p.robots || '', p.canonical)).length;
-  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpagesCount;
+  const mainIsIndexable = isIndexable(urlObj.toString(), response.status, robots, xRobotsTag, canonical);
+  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + successfulSubpages.filter(p => 
+    isIndexable(p.url, p.status as number, p.robots || '', p.xRobotsTag || '', p.canonical)
+  ).length;
 
   // Metadata Extraction
   const title = root.querySelector('title')?.text.trim() || '';

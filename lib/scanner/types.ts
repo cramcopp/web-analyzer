@@ -39,6 +39,8 @@ export interface SubpageResult {
   status: number | string;
   strippedContent?: string;
   links?: string[];
+  xRobotsTag?: string;
+  redirectLocation?: string;
 }
 
 export interface PrioritizedTask {
