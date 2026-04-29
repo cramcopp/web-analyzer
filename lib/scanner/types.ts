@@ -249,4 +249,5 @@ export interface AnalysisResult {
       prioritizedTasks: PrioritizedTask[];
     }
   };
+  adminSecret?: string;
 }
