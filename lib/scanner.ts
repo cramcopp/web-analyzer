@@ -43,7 +43,6 @@ export function isSameBaseDomain(host1: string, host2: string): boolean {
 }
 
 export function stripHtmlForAi(html: string): string {
-  // Simple regex strip for Edge runtime (DOMParser not available)
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
@@ -53,6 +52,7 @@ export function stripHtmlForAi(html: string): string {
     .trim();
 }
 
+// FIX: Rekursiver Sitemap-Scanner!
 async function getAllUrlsBeforeCrawl(origin: string, robotsTxt: string): Promise<string[]> {
   const sitemaps: string[] = [];
   robotsTxt.split('\n').forEach(line => {
@@ -64,18 +64,34 @@ async function getAllUrlsBeforeCrawl(origin: string, robotsTxt: string): Promise
   if (sitemaps.length === 0) sitemaps.push(`${origin}/sitemap.xml`);
 
   const urls = new Set<string>();
-  for (const sm of sitemaps) {
+  const visitedSitemaps = new Set<string>();
+
+  async function fetchSitemap(sitemapUrl: string) {
+    if (visitedSitemaps.has(sitemapUrl)) return;
+    visitedSitemaps.add(sitemapUrl);
     try {
-      const res = await fetch(sm, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
+      const res = await fetch(sitemapUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const text = await res.text();
         const matches = text.match(/<loc>(.*?)<\/loc>/g);
-        matches?.forEach(m => {
-          const u = m.replace(/<\/?loc>/g, '').trim();
-          urls.add(u);
-        });
+        if (matches) {
+          for (const m of matches) {
+            const u = m.replace(/<\/?loc>/g, '').trim();
+            if (u.endsWith('.xml')) {
+              // Es ist ein Sitemap-Index! Rekursiv weitergraben.
+              await fetchSitemap(u);
+            } else {
+              urls.add(u);
+            }
+          }
+        }
       }
     } catch {}
+  }
+
+  // Alle gefundenen Start-Sitemaps abklappern
+  for (const sm of sitemaps) {
+    await fetchSitemap(sm);
   }
   return Array.from(urls);
 }
@@ -164,9 +180,7 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
 
       const subResult: SubpageResult = {
-        error: false, 
-        url: subUrl, 
-        urlObj: subUrl,
+        error: false, url: subUrl, urlObj: subUrl,
         title: subRoot.querySelector('title')?.text.trim() || '',
         metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
         robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
@@ -181,40 +195,21 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
           h3: subRoot.querySelectorAll('h3').map(el => el.text.trim())
         },
         images: subRoot.querySelectorAll('img').map(img => ({
-          src: img.getAttribute('src') || '',
-          alt: img.getAttribute('alt') || ''
+          src: img.getAttribute('src') || '', alt: img.getAttribute('alt') || ''
         }))
       };
 
-      const indexCheck = checkIndexability(
-        subUrl, 
-        subRes.status, 
-        subResult.robots || '', 
-        subResult.xRobotsTag || '', 
-        subContentType, 
-        strippedContent, 
-        robotsTxtContent, 
-        subResult.canonical || null, // Ensure string | null
-        subResult.hasNextPrev
-      );
-
+      const indexCheck = checkIndexability(subUrl, subRes.status, subResult.robots || '', subResult.xRobotsTag || '', subContentType, strippedContent, robotsTxtContent, subResult.canonical || null, subResult.hasNextPrev);
       return { ...subResult, isIndexable: indexCheck.isIndexable };
     } catch (e) { 
-      return { 
-        error: true, 
-        url: subUrl, 
-        urlObj: subUrl,
-        status: 'Error' 
-      }; 
+      return { error: true, url: subUrl, urlObj: subUrl, status: 'Error' }; 
     }
-  };
+};
 
 export const calculateHeuristicScores = (root: any, mainIndex: any) => {
-    // Extract internal metrics from root
     const allImages = root.querySelectorAll('img');
     const imagesTotal = allImages.length;
     const imagesWithoutAlt = allImages.filter((img: any) => !img.getAttribute('alt') || img.getAttribute('alt').trim() === '').length;
-    
     const scripts = root.querySelectorAll('script');
     const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
     const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
@@ -241,13 +236,7 @@ export const calculateHeuristicScores = (root: any, mainIndex: any) => {
     if (maxDomDepth > 30) performance -= 20;
     if (totalStylesheets > 10) performance -= 20;
 
-    return {
-      seo: Math.max(0, Math.min(100, seo)),
-      performance: Math.max(0, Math.min(100, performance)),
-      security: 80, // Fallback
-      accessibility: 75,
-      compliance: 60
-    };
+    return { seo: Math.max(0, Math.min(100, seo)), performance: Math.max(0, Math.min(100, performance)), security: 80, accessibility: 75, compliance: 60 };
 };
 
 export async function performPreflight(urlObj: URL, plan: string) {
@@ -275,27 +264,18 @@ export async function performPreflight(urlObj: URL, plan: string) {
   if (!response.ok) throw new Error(`Failed to fetch URL (Status: ${response.status})`);
   
   const html = await response.text();
-  const root = parse(html);
   const mainUrlNormalizedInPreflight = normalizeUrl(urlObj.toString(), urlObj.origin) || urlObj.toString();
 
   const initialQueue = new Set<string>();
   sitemapUrls.forEach(u => {
     const norm = normalizeUrl(u, urlObj.origin);
-    if (norm && isSameBaseDomain(new URL(norm).hostname, domain) && norm !== mainUrlNormalizedInPreflight) {
+    // FIX: XMLs, Bilder und PDFs knallhart aus der Warteschlange werfen!
+    if (norm && isSameBaseDomain(new URL(norm).hostname, domain) && norm !== mainUrlNormalizedInPreflight && !norm.match(/\.(xml|pdf|png|jpg|jpeg|gif|css|js)$/i)) {
       initialQueue.add(norm);
     }
   });
 
-  return {
-    subpageLimit,
-    domain,
-    robotsTxt,
-    sitemapUrls,
-    mainUrlNormalized: mainUrlNormalizedInPreflight,
-    initialQueue: Array.from(initialQueue),
-    html,
-    headers: Object.fromEntries(response.headers.entries())
-  };
+  return { subpageLimit, domain, robotsTxt, sitemapUrls, mainUrlNormalized: mainUrlNormalizedInPreflight, initialQueue: Array.from(initialQueue), html, headers: Object.fromEntries(response.headers.entries()) };
 }
 
 export async function performAnalysis({ url, plan = 'free', userId = '', auditId }: ScanOptions): Promise<AnalysisResult> {
