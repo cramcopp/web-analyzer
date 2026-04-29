@@ -53,8 +53,13 @@ function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
 function normalizeUrl(url: string, baseUrl: string): string | null {
   try {
     const urlObj = new URL(url, baseUrl);
-    urlObj.hash = ''; // Anker immer weg
-    // WICHTIG: Trailing Slash weg für die Vergleichbarkeit in der Queue
+    urlObj.hash = ''; // Anker weg
+    
+    // NEU: Tracking-Parameter entfernen (verhindert Doppel-Crawls von Social Media)
+    const junkParams = ['utm_source', 'utm_medium', 'utm_campaign', 'fbclid', 'gclid', 'ref'];
+    junkParams.forEach(p => urlObj.searchParams.delete(p));
+    
+    // Trailing Slash weg für die Vergleichbarkeit
     return urlObj.href.replace(/\/$/, '');
   } catch {
     return null;
@@ -294,8 +299,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   });
 
   // Root Analysis (Main Page)
-  urlObj.hash = '';
-  const mainUrl = urlObj.toString();
+  // Root Analysis (Main Page) - JETZT NORMALISIERT
+  const mainUrl = normalizeUrl(urlObj.toString(), urlObj.origin) || urlObj.toString();
   processed.add(mainUrl);
   allInternalLinks.add(mainUrl);
   queue.delete(mainUrl);
