@@ -12,7 +12,7 @@ import {
 import { scanSubpage, calculateHeuristicScores, checkIndexability } from './scanner';
 import { setDocument } from './firestore-edge';
 
-async function generateAggregatedAiReport(metrics: any, apiKey: string) {
+async function generateAggregatedAiReport(metrics: any, apiKey: string, modelName: string) {
   const prompt = `
   Du bist ein technischer SEO- und Web-Performance-Auditor. 
   Hier sind die aggregierten Hard-Facts eines Website-Crawls:
@@ -33,7 +33,7 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string) {
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -218,7 +218,11 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         };
 
         // 3. One single, aggregated AI Call
-        const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY);
+        const modelName = plan === 'agency' || plan === 'pro' 
+          ? 'gemini-3-flash-preview' 
+          : 'gemini-3.1-flash-lite-preview';
+          
+        const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, modelName);
 
         // 4. Data Pruning (Firestore 1MB limit protection)
         const slimSubpages = currentState.results.map((r: any) => {
