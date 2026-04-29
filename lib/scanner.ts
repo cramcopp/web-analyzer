@@ -50,50 +50,66 @@ function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
   return normHost === normBase;
 }
 
-function extractRawData(root: any, currentUrl: string, domain: string): string[] {
+function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: string): string[] {
   const discoveredUrls = new Set<string>();
 
-  // Task 3.1: Absolute URL conversion for <a> tags
+  // Task 1.1: <base>-Tag Extraktion erzwingen
+  const baseTag = root.querySelector('base');
+  const baseHref = baseTag?.getAttribute('href');
+  let baseUrl = currentUrl;
+  if (baseHref) {
+    try {
+      baseUrl = new URL(baseHref, currentUrl).toString();
+    } catch {}
+  }
+
+  const normalize = (href: string) => {
+    try {
+      const urlObj = new URL(href, baseUrl);
+      // Task 1.2: Hash-Fragment Stripping
+      urlObj.hash = ''; 
+      return urlObj;
+    } catch {
+      return null;
+    }
+  };
+
+  // Task 3.1: Regex Link Extraction (Prioritize raw HTML scan for JS objects)
+  const patterns = [
+    /(https?:\/\/[^\s"'<>]+)/g,
+    /(?<=href=["'])([^"']+)(?=["'])/g
+  ];
+  
+  patterns.forEach(regex => {
+    const matches = rawHtml.match(regex);
+    if (matches) {
+      matches.forEach(m => {
+        const urlObj = normalize(m);
+        if (urlObj && isSameBaseDomain(urlObj.hostname, domain)) {
+          discoveredUrls.add(urlObj.toString());
+        }
+      });
+    }
+  });
+
+  // DOM-Fallback (Classical <a> tags)
   root.querySelectorAll('a').forEach((el: any) => {
     const href = el.getAttribute('href');
     if (href) {
-      try {
-        const urlObj = new URL(href, currentUrl);
-        if (isSameBaseDomain(urlObj.hostname, domain)) {
-          discoveredUrls.add(urlObj.toString());
-        }
-      } catch {}
+      const urlObj = normalize(href);
+      if (urlObj && isSameBaseDomain(urlObj.hostname, domain)) {
+        discoveredUrls.add(urlObj.toString());
+      }
     }
   });
 
-  // Task 3.2: Harvest Head links (alternate, next, prev, canonical)
+  // Task 3.2: Harvest Head links
   root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => {
     const href = el.getAttribute('href');
     if (href) {
-      try {
-        const urlObj = new URL(href, currentUrl);
-        if (isSameBaseDomain(urlObj.hostname, domain)) {
-          discoveredUrls.add(urlObj.toString());
-        }
-      } catch {}
-    }
-  });
-
-  // Task 3.3: JS State Extraction via RegEx
-  root.querySelectorAll('script').forEach((el: any) => {
-    const content = el.text;
-    if (content) {
-      const regex = /https?:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?/g;
-      const matches = content.match(regex);
-      if (matches) {
-        matches.forEach((m: string) => {
-          try {
-            const urlObj = new URL(m);
-            if (isSameBaseDomain(urlObj.hostname, domain)) {
-              discoveredUrls.add(urlObj.toString());
-            }
-          } catch {}
-        });
+      const urlObj = normalize(href);
+      if (urlObj && isSameBaseDomain(urlObj.hostname, domain)) {
+        discoveredUrls.add(urlObj.toString());
       }
     }
   });
@@ -135,6 +151,42 @@ async function fetchSitemapRecursive(sUrl: string, visited = new Set<string>()):
     }
   } catch (e) { /* ignore */ }
   return foundUrls;
+}
+
+function isAllowedByRobots(robotsContent: string, path: string): boolean {
+  if (!robotsContent) return true;
+  const lines = robotsContent.split('\n');
+  let currentUserAgentActive = false;
+  const disallows: string[] = [];
+  const allows: string[] = [];
+
+  for (const line of lines) {
+    const [key, ...valueParts] = line.split(':');
+    const value = valueParts.join(':').trim();
+    if (!key || !value) continue;
+
+    const lowerKey = key.toLowerCase().trim();
+    if (lowerKey === 'user-agent') {
+      currentUserAgentActive = (value === '*' || value.toLowerCase().includes('googlebot'));
+    } else if (currentUserAgentActive) {
+      if (lowerKey === 'disallow') disallows.push(value);
+      if (lowerKey === 'allow') allows.push(value);
+    }
+  }
+
+  // Check allows first (more specific usually wins in some parsers, but here we just check if any allow matches)
+  for (const pattern of allows) {
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '\\?') + '($|/)');
+    if (regex.test(path)) return true;
+  }
+
+  for (const pattern of disallows) {
+    if (!pattern) continue; // Disallow: (empty) means everything allowed
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '\\?') + '($|/)');
+    if (regex.test(path)) return false;
+  }
+
+  return true;
 }
 
 async function getPreflightData(baseUrl: string): Promise<any> {
@@ -256,7 +308,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   queue.delete(urlObj.toString());
 
   // Task 3: Raw Data Extraction (Main Page)
-  const rootLinks = extractRawData(root, urlObj.toString(), domain);
+  const rootLinks = extractRawData(root, urlObj.toString(), domain, html);
   rootLinks.forEach(l => {
     allInternalLinks.add(l);
     if (!processed.has(l)) queue.add(l);
@@ -289,9 +341,11 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
+      const subContentType = subRes.headers.get('content-type') || '';
+      const hasNextPrev = !!(subRoot.querySelector('link[rel="next"]') || subRoot.querySelector('link[rel="prev"]'));
       
       // Task 3: Raw Data Extraction (MUST happen on untouched HTML)
-      const subInternalLinks = extractRawData(subRoot, subUrl, domain);
+      const subInternalLinks = extractRawData(subRoot, subUrl, domain, subHtml);
       
       // Phase 4: Extreme Stripping (AFTER extraction)
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
@@ -303,9 +357,11 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
         canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
         h1Count: subRoot.querySelectorAll('h1').length, 
         status: subRes.status,
+        contentType: subContentType,
         strippedContent,
         links: subInternalLinks,
-        xRobotsTag: subRes.headers.get('X-Robots-Tag') || ''
+        xRobotsTag: subRes.headers.get('X-Robots-Tag') || '',
+        hasNextPrev
       };
     } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
   };
@@ -349,45 +405,74 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href');
   const xRobotsTag = response.headers.get('x-robots-tag') || '';
 
-  const brutalCleanUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+function isSoft404(text: string): boolean {
+  const wordCount = text.trim().split(/\s+/).length;
+  if (wordCount < 50) return true;
+  
+  const soft404Keywords = [
+    'nicht gefunden', 'nothing found', '404', 'seite nicht vorhanden', 
+    'page not found', 'content not available', 'error 404'
+  ];
+  const lowerText = text.toLowerCase();
+  return soft404Keywords.some(kw => lowerText.includes(kw));
+}
 
-  const isIndexable = (url: string, status: number | string, rb: string, xRobots: string, can?: string | null) => {
-    // 1. HTTP Status 200
-    if (status !== 200) return false;
+const isIndexable = (
+  url: string, 
+  status: number | string, 
+  rb: string, 
+  xRobots: string, 
+  contentType: string,
+  text: string,
+  robotsTxtContent: string,
+  can?: string | null,
+  hasNextPrev?: boolean
+) => {
+  // Task 4.2: Striktes Content-Type Matching
+  if (!contentType.toLowerCase().includes('text/html')) return false;
 
-    // 2. Meta Robots (noindex || none)
-    const rbLower = rb.toLowerCase();
-    if (rbLower.includes('noindex') || rbLower.includes('none')) return false;
+  // Task 2.1: Lokaler robots.txt-Parser Middleware
+  try {
+    const urlObj = new URL(url);
+    if (!isAllowedByRobots(robotsTxtContent, urlObj.pathname + urlObj.search)) return false;
+  } catch {}
 
-    // 3. X-Robots-Tag (Case-Insensitive)
-    const xRobotsLower = xRobots.toLowerCase();
-    if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none')) return false;
+  // 1. HTTP Status 200
+  if (status !== 200) return false;
 
-    // 4. Brutale Canonical-Normalisierung
-    if (can) {
-      try {
-        const canAbs = new URL(can, url).href;
-        if (brutalCleanUrl(canAbs) !== brutalCleanUrl(url)) return false;
-      } catch { /* ignore */ }
-    }
-    return true;
-  };
+  // Task 4.1: Content-Längen-Prüfung (Soft-404)
+  if (isSoft404(text)) return false;
 
-  const mainIsIndexable = isIndexable(urlObj.toString(), response.status, robots, xRobotsTag, canonical);
-  const indexableSubpages = successfulSubpages.filter(p => 
-    isIndexable(p.url, p.status as number, p.robots || '', p.xRobotsTag || '', p.canonical)
-  );
+  // 2. Meta Robots (noindex || none)
+  const rbLower = rb.toLowerCase();
+  if (rbLower.includes('noindex') || rbLower.includes('none')) return false;
 
-  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpages.length;
+  // 3. X-Robots-Tag (Case-Insensitive)
+  const xRobotsLower = xRobots.toLowerCase();
+  if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none')) return false;
 
-  // Task 3.1: Konsolen-Ausgabe für Debugging
-  console.log("--- CRAWL DEBUG ---");
-  console.log("Gecrawlt:", Array.from(allInternalLinks));
-  console.log("Indexierbar:", [
-    ...(mainIsIndexable ? [urlObj.toString()] : []),
-    ...indexableSubpages.map(p => p.url)
-  ]);
-  console.log("-------------------");
+  // Task 5.1: Pagination-Parameter ignorieren vs. respektieren
+  // 4. Brutale Canonical-Normalisierung
+  if (can) {
+    try {
+      const canAbs = new URL(can, url).href;
+      const brutalCleanUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').split('?')[0];
+      
+      // Wenn es eine Parameter-Seite ist (?p=2) und kein Canonical auf die Hauptseite zeigt
+      // stufen wir sie als "Nicht indexierbar" ein, es sei denn sie hat next/prev.
+      if (url.includes('?') && !hasNextPrev) {
+         if (brutalCleanUrl(canAbs) !== brutalCleanUrl(url)) return false;
+      }
+
+      if (brutalCleanUrl(canAbs) !== brutalCleanUrl(url)) return false;
+    } catch { /* ignore */ }
+  } else if (url.includes('?') && !hasNextPrev) {
+    // Parameter-Seite ohne Canonical und ohne next/prev -> Duplicate Content Gefahr
+    return false;
+  }
+  
+  return true;
+};
 
   // Metadata Extraction
   const title = root.querySelector('title')?.text.trim() || '';
@@ -398,6 +483,47 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const h1Texts = root.querySelectorAll('h1').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
+
+  const mainIsIndexable = isIndexable(
+    urlObj.toString(), 
+    response.status, 
+    robots, 
+    xRobotsTag, 
+    headers['content-type'] || '',
+    bodyText,
+    preflight.robotsTxt.content,
+    canonical,
+    !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]'))
+  );
+  
+  const indexableSubpages = successfulSubpages.filter(p => 
+    isIndexable(
+      p.url, 
+      p.status as number, 
+      p.robots || '', 
+      p.xRobotsTag || '', 
+      p.contentType || '', 
+      p.strippedContent || '', 
+      preflight.robotsTxt.content,
+      p.canonical,
+      p.hasNextPrev
+    )
+  );
+
+  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpages.length;
+
+  // Task 6.1: Array-Export Script (Internal for reporting)
+  const crawledUrls = Array.from(allInternalLinks);
+  const indexableUrls = [
+    ...(mainIsIndexable ? [urlObj.toString()] : []),
+    ...indexableSubpages.map(p => p.url)
+  ];
+
+  // Task 6.2: Visueller Diff-Vergleich (Konsole)
+  console.log("--- CRAWL DIFF ENGINE ---");
+  console.log("CRAWLED_URLS_JSON:", JSON.stringify(crawledUrls));
+  console.log("INDEXABLE_URLS_JSON:", JSON.stringify(indexableUrls));
+  console.log("--------------------------");
 
   const techStack: string[] = [];
   if (html.includes('__NEXT_DATA__')) techStack.push('Next.js');
@@ -438,6 +564,8 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
       totalInternalLinks: allInternalLinks.size, 
       scannedSubpagesCount: successfulSubpages.length, 
       indexablePagesCount,
+      crawledUrls,
+      indexableUrls,
       scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
       brokenLinks: [] 
     },

@@ -37,10 +37,12 @@ export interface SubpageResult {
   h1Count?: number;
   imagesWithoutAlt?: number;
   status: number | string;
+  contentType?: string;
   strippedContent?: string;
   links?: string[];
   xRobotsTag?: string;
   redirectLocation?: string;
+  hasNextPrev?: boolean;
 }
 
 export interface PrioritizedTask {
@@ -161,6 +163,8 @@ export interface AnalysisResult {
     totalInternalLinks: number; 
     scannedSubpagesCount: number; 
     indexablePagesCount: number;
+    crawledUrls: string[];
+    indexableUrls: string[];
     scannedSubpages: Omit<SubpageResult, 'error'>[]; 
     brokenLinks: { url: string; status: number | string }[] 
   };
