@@ -65,11 +65,11 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string, plan: st
 
   try {
     // Nutze stabile Modelle wie angefordert
-    if (isPremium) return await fetchModel('gemini-3-flash');
-    return await fetchModel('gemini-3.1-flash-lite');
+    if (isPremium) return await fetchModel('gemini-3-flash-preview');
+    return await fetchModel('gemini-3.1-flash-lite-preview');
   } catch (error) {
     try {
-      return await fetchModel('gemini-3.1-flash-lite'); // Fallback
+      return await fetchModel('gemini-3.1-flash-lite-preview'); // Fallback
     } catch (fallbackError) {
       return {
         seo: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },

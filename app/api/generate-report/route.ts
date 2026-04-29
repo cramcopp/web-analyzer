@@ -308,9 +308,9 @@ export async function POST(req: NextRequest) {
 
     // Tier-based model selection based on YOUR exact AI Studio quotas
     const TIER_MAPPING: Record<string, string[]> = {
-      'agency': ['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'],
-      'pro': ['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'],
-      'free': ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-1.5-flash-8b']
+      'agency': ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash'],
+      'pro': ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash'],
+      'free': ['gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite-preview', 'gemini-1.5-flash-8b']
     };
 
     // eslint-disable-next-line security/detect-object-injection
