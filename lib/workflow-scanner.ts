@@ -1,27 +1,44 @@
-// @ts-ignore - Cloudflare module only available at runtime
+// @ts-ignore
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
-
-// IDE Helper: Define Workflow type if missing locally
-type Workflow = any;
-import { parse } from 'node-html-parser';
 import { 
-  ScanOptions, 
-  AnalysisResult, 
-  SubpageResult 
-} from './scanner/types';
-import { scanSubpage, calculateHeuristicScores, checkIndexability } from './scanner';
+  performPreflight, 
+  scanSubpage, 
+  calculateHeuristicScores, 
+  normalizeUrl,
+  isSameBaseDomain,
+  checkIndexability,
+  stripHtmlForAi
+} from './scanner';
 import { setDocument } from './firestore-edge';
+import { AnalysisResult, ScanOptions, SubpageResult } from './scanner/types';
+import { parse } from 'node-html-parser';
 
-async function generateAggregatedAiReport(metrics: any, apiKey: string, modelName: string) {
+// IDE Helper
+type Workflow = any;
+
+export interface Env {
+  SCAN_WORKFLOW: Workflow;
+  FIREBASE_PROJECT_ID: string;
+  FIREBASE_DATABASE_ID: string;
+  FIREBASE_API_KEY: string;
+  GEMINI_API_KEY: string;
+  INTERNAL_SECRET: string;
+}
+
+// --- KI HILFSFUNKTION ---
+async function generateAggregatedAiReport(metrics: any, apiKey: string, plan: string) {
+  const isPremium = plan === 'pro' || plan === 'agency';
+  
+  const systemInstruction = isPremium 
+    ? `Du bist ein Senior Technical SEO Consultant. Analysiere diese Daten extrem tiefgründig. Verknüpfe Metriken (z.B. Ladezeit und Skripte). Gib detaillierte Empfehlungen.`
+    : `Du bist ein einfacher Website-Checker. Fasse die offensichtlichsten Fehler kurz zusammen. Gib maximal 1-2 sehr simple Ratschläge pro Kategorie.`;
+
   const prompt = `
-  Du bist ein technischer SEO- und Web-Performance-Auditor. 
+  ${systemInstruction}
   Hier sind die aggregierten Hard-Facts eines Website-Crawls:
   ${JSON.stringify(metrics)}
 
-  Analysiere diese Zahlen. Erstelle präzise Insights (was fällt auf?) und konkrete Recommendations (was muss getan werden?).
-  Antworte AUSSCHLIESSLICH im JSON-Format.
-  
-  Erwartete Struktur:
+  Antworte AUSSCHLIESSLICH im JSON-Format mit dieser Struktur:
   {
     "seo": { "insights": ["..."], "recommendations": ["..."] },
     "performance": { "insights": ["..."], "recommendations": ["..."] },
@@ -31,106 +48,68 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string, modelNam
   }
   `;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const fetchModel = async (modelName: string) => {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+      })
+    });
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    const data = await response.json();
+    const text = data.candidates[0].content.parts[0].text;
+    return JSON.parse(text);
+  };
+
+  try {
+    // Nutze stabile Modelle wie angefordert
+    if (isPremium) return await fetchModel('gemini-3-flash');
+    return await fetchModel('gemini-3.1-flash-lite');
+  } catch (error) {
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { 
-            responseMimeType: "application/json",
-            temperature: 0.2
-          }
-        })
-      });
-
-      if (!response.ok) {
-        if (response.status === 429) throw new Error('Rate Limit');
-        throw new Error('API Error');
-      }
-
-      const data = await response.json();
-      const jsonString = data.candidates[0].content.parts[0].text;
-      return JSON.parse(jsonString);
-
-    } catch (error) {
-      if (attempt === 3) {
-        return {
-          seo: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
-          performance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
-          security: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
-          accessibility: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
-          compliance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] }
-        };
-      }
-      await new Promise(res => setTimeout(res, 5000));
+      return await fetchModel('gemini-3.1-flash-lite'); // Fallback
+    } catch (fallbackError) {
+      return {
+        seo: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+        performance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+        security: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+        accessibility: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+        compliance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] }
+      };
     }
   }
 }
 
-type Env = {
-  FIREBASE_PROJECT_ID: string;
-  FIREBASE_DATABASE_ID: string;
-  FIREBASE_API_KEY: string;
-  INTERNAL_SECRET: string;
-  SCAN_WORKFLOW: Workflow;
-  GEMINI_API_KEY: string;
-};
-
+// --- WORKFLOW ENGINE ---
 export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
-  // @ts-ignore - env is injected by the Workflow runtime
-  declare env: Env;
-
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
     const { url, plan = 'free', auditId, userId } = event.payload;
+    const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
     
     try {
-      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-      
       // STEP 1: Preflight & Root Scan
-      const preflightData = await step.do('preflight', async () => {
-        const response = await fetch(urlObj.toString(), {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WebAnalyzer/1.0)' }
-        });
-        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-        
-        const html = await response.text();
-        const root = parse(html);
-        const domain = urlObj.hostname;
-        
-        // Extract initial queue
-        const links = root.querySelectorAll('a[href]').map(a => a.getAttribute('href'));
-        const internalQueue = Array.from(new Set(
-          links
-            .filter(l => l && (l.startsWith('/') || l.includes(domain)))
-            .map(l => l!.startsWith('/') ? `${urlObj.origin}${l}` : l!)
-        )).slice(0, 50); // Hard limit for safety
-
-        return {
-          domain,
-          mainUrlNormalized: urlObj.toString(),
-          initialQueue: internalQueue,
-          html,
-          subpageLimit: plan === 'agency' ? 100 : plan === 'pro' ? 25 : 10,
-          robotsTxt: { content: '' },
-          headers: Object.fromEntries(response.headers.entries())
-        };
+      const preflightData = await step.do('preflight and root scan', async () => {
+        const preflight = await performPreflight(urlObj, plan);
+        return { ...preflight };
       });
 
       const root = parse(preflightData.html);
-      const mainIndex = checkIndexability(
-        preflightData.mainUrlNormalized, 
-        200, 
-        root.querySelector('meta[name="robots"]')?.getAttribute('content') || '',
-        preflightData.headers['x-robots-tag'] || '',
-        preflightData.headers['content-type'] || 'text/html',
-        preflightData.html,
-        '',
-        root.querySelector('link[rel="canonical"]')?.getAttribute('href') || ''
-      );
+      const mainIndex = await step.do('main indexability check', async () => {
+          const htmlStripped = stripHtmlForAi(preflightData.html);
+          const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000);
+          return checkIndexability(
+              preflightData.mainUrlNormalized, 200, 
+              root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow', 
+              preflightData.headers['x-robots-tag'] || '', preflightData.headers['content-type'] || '', 
+              bodyText, preflightData.robotsTxt.content, 
+              root.querySelector('link[rel="canonical"]')?.getAttribute('href'), 
+              !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]'))
+          );
+      });
 
-      // STEP 2: Iteratives Crawling
+      // STEP 2: Iteratives Crawling (MIT BATCH-INDEX FIX)
       let currentState = await step.do('initialize state', async () => {
         return {
           queue: preflightData.initialQueue as string[],
@@ -139,12 +118,11 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         };
       });
 
-      let batchIndex = 0;
+      let batchIndex = 0; 
 
       while (currentState.queue.length > 0 && currentState.results.length < preflightData.subpageLimit) {
         const currentBatch = currentState.queue.slice(0, 5);
         
-        // JEDER Step bekommt einen einzigartigen Namen
         currentState = await step.do(`batch-process-${batchIndex}`, async () => {
           const p = currentBatch.map((u: string) => scanSubpage(u, preflightData.domain, preflightData.robotsTxt.content));
           const scanResults = await Promise.all(p);
@@ -163,7 +141,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
           const remainingQueue = currentState.queue.filter((u: string) => !currentBatch.includes(u));
           
-          // Progress Update to Firestore
+          // Progress Update
           const newResultsCount = currentState.results.length + validResults.length;
           const progress = Math.min(10 + Math.round((newResultsCount / preflightData.subpageLimit) * 80), 90);
           
@@ -179,11 +157,10 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
             queue: Array.from(new Set([...remainingQueue, ...newDiscovered]))
           };
         });
-
         batchIndex++;
       }
 
-      // STEP 3: Scoring & Final Report
+      // STEP 3: Scoring & Final Report (MIT FIRESTORE-1MB-FIX & KI)
       const finalReport = await step.do('finalize report', async () => {
         const allImages = root.querySelectorAll('img');
         const imagesTotal = allImages.length;
@@ -196,35 +173,22 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         const scores = calculateHeuristicScores(root, mainIndex);
         const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
-        // 2. Metrics for AI (Aggregate everything into one single prompt)
+        // KI-Aufruf
         const aiMetrics = {
-          domain: preflightData.domain,
-          title: root.querySelector('title')?.text.trim() || '',
+          domain: preflightData.domain, 
           crawledPages: currentState.processed.length,
-          indexablePages: indexableUrls.length,
-          imagesTotal,
+          indexablePages: indexableUrls.length, 
+          imagesTotal, 
           imagesWithoutAlt,
-          blockingScripts,
-          totalStylesheets,
-          h1Count: root.querySelectorAll('h1').length,
-          hasSitemap: (preflightData as any).sitemapUrls?.length > 0 || false,
-          heuristicScores: scores,
-          subpageSample: currentState.results.slice(0, 5).map((r: any) => ({
-            url: r.url,
-            title: r.title,
-            status: r.status,
-            isIndexable: r.isIndexable
-          }))
+          blockingScripts, 
+          totalStylesheets, 
+          hasSitemap: preflightData.sitemapUrls.length > 0,
+          heuristicScores: scores
         };
+        
+        const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, plan);
 
-        // 3. One single, aggregated AI Call
-        const modelName = plan === 'agency' || plan === 'pro' 
-          ? 'gemini-3-flash' 
-          : 'gemini-3.1-flash-lite';
-          
-        const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, modelName);
-
-        // 4. Data Pruning (Firestore 1MB limit protection)
+        // 1MB Firestore Crash-Schutz!
         const slimSubpages = currentState.results.map((r: any) => {
           const { strippedContent, links, ...safeData } = r; 
           return safeData;
@@ -236,8 +200,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           createdAt: new Date().toISOString(),
           url: preflightData.mainUrlNormalized,
           urlObj: preflightData.mainUrlNormalized,
-          title: aiMetrics.title,
-          metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+          title: root.querySelector('title')?.text.trim() || '',
           status: 'completed',
           progress: 100,
           crawlSummary: {
@@ -249,7 +212,6 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
             scannedSubpages: slimSubpages as any,
             brokenLinks: []
           },
-          // Populate sections from AI results
           seo: { score: scores.seo, insights: aiReport.seo.insights, recommendations: aiReport.seo.recommendations, detailedSeo: {} as any },
           performance: { score: scores.performance, insights: aiReport.performance.insights, recommendations: aiReport.performance.recommendations, detailedPerformance: {} as any },
           security: { score: scores.security, insights: aiReport.security.insights, recommendations: aiReport.security.recommendations, detailedSecurity: {} as any },

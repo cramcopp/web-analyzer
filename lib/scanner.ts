@@ -29,7 +29,7 @@ const STEALTH_CONFIG = {
   }
 };
 
-function normalizeUrl(url: string, base: string): string | null {
+export function normalizeUrl(url: string, base: string): string | null {
   try {
     const absolute = new URL(url, base);
     absolute.hash = ''; // Remove fragments
@@ -37,12 +37,12 @@ function normalizeUrl(url: string, base: string): string | null {
   } catch { return null; }
 }
 
-function isSameBaseDomain(host1: string, host2: string): boolean {
+export function isSameBaseDomain(host1: string, host2: string): boolean {
   const getBase = (h: string) => h.replace(/^www\./, '').toLowerCase();
   return getBase(host1) === getBase(host2);
 }
 
-function stripHtmlForAi(html: string): string {
+export function stripHtmlForAi(html: string): string {
   // Simple regex strip for Edge runtime (DOMParser not available)
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
