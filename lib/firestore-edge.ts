@@ -115,7 +115,7 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
   } catch (e) { return null; }
 }
 
-export async function setDocument(collection: string, id: string, data: Record<string, any>, updateMask?: string[] | null, env?: any): Promise<any> {
+export async function setDocument(collection: string, id: string, data: Record<string, any>, updateMask?: string[] | null, token?: string | null, env?: any): Promise<any> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) fields[k] = valueToFirestore(v);
@@ -125,9 +125,12 @@ export async function setDocument(collection: string, id: string, data: Record<s
     url += `&${updateMask.map(p => `updateMask.fieldPaths=${p}`).join('&')}`;
   }
 
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetchWithRetry(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ fields })
   });
 
@@ -135,14 +138,17 @@ export async function setDocument(collection: string, id: string, data: Record<s
   return documentFromFirestore(await res.json());
 }
 
-export async function addDocument<T = Record<string, any>>(collection: string, data: Record<string, any>, token?: string, env?: any): Promise<T & { id: string }> {
+export async function addDocument<T = Record<string, any>>(collection: string, data: Record<string, any>, token?: string | null, env?: any): Promise<T & { id: string }> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) fields[k] = valueToFirestore(v);
 
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetchWithRetry(`${baseUrl}/${collection}?key=${apiKey}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ fields })
   });
 
@@ -152,17 +158,23 @@ export async function addDocument<T = Record<string, any>>(collection: string, d
   return { id, ...documentFromFirestore(result) } as any;
 }
 
-export async function updateDocument(collection: string, id: string, data: Record<string, any>, token?: string, env?: any): Promise<any> {
-  return setDocument(collection, id, data, Object.keys(data), env);
+export async function updateDocument(collection: string, id: string, data: Record<string, any>, token?: string | null, env?: any): Promise<any> {
+  return setDocument(collection, id, data, Object.keys(data), token, env);
 }
 
-export async function deleteDocument(collection: string, id: string, token?: string, env?: any): Promise<void> {
+export async function deleteDocument(collection: string, id: string, token?: string | null, env?: any): Promise<void> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
-  const res = await fetchWithRetry(`${baseUrl}/${collection}/${id}?key=${apiKey}`, { method: 'DELETE' });
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetchWithRetry(`${baseUrl}/${collection}/${id}?key=${apiKey}`, { 
+    method: 'DELETE',
+    headers
+  });
   if (!res.ok) throw new Error(`Firestore Error ${res.status}`);
 }
 
-export async function queryDocuments<T = Record<string, any>>(collection: string, filters: any[], compositeOp: 'AND' | 'OR' = 'AND', token?: string, env?: any): Promise<T[]> {
+export async function queryDocuments<T = Record<string, any>>(collection: string, filters: any[], compositeOp: 'AND' | 'OR' = 'AND', token?: string | null, env?: any): Promise<T[]> {
   const { projectId, databaseId, apiKey } = getFirestoreConfig(env);
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery?key=${apiKey}`;
   
@@ -193,6 +205,9 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
     }
   };
 
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetchWithRetry(url, {
     method: 'POST',
     headers,
@@ -210,12 +225,12 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
 export async function incrementField(collection: string, id: string, field: string, amount: number, token?: string | null, env?: any): Promise<void> {
   const doc = await getDocument(collection, id, token, env);
   const currentVal = (doc as any)?.[field] || 0;
-  await setDocument(collection, id, { [field]: currentVal + amount }, [field], env);
+  await setDocument(collection, id, { [field]: currentVal + amount }, [field], token, env);
 }
 
 export async function updateStripeSubscription(userId: string, data: Record<string, any>, env?: any): Promise<void> {
   await setDocument('users', userId, {
     ...data,
     lastScanReset: new Date().toISOString()
-  }, Object.keys(data).concat(['lastScanReset']), env);
+  }, Object.keys(data).concat(['lastScanReset']), null, env);
 }
