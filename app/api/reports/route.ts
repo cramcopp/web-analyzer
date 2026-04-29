@@ -6,6 +6,9 @@ import { reportSaveSchema } from '@/lib/validations';
 export const runtime = 'edge';
 
 export async function GET(req: Request) {
+  // @ts-ignore
+  const env = (req as any).context?.env || process.env;
+  
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) {
@@ -21,7 +24,7 @@ export async function GET(req: Request) {
       filters.push({ field: 'url', op: 'EQUAL', value: urlFilter });
     }
     
-    const reports = await queryDocuments('reports', filters, 'AND', token);
+    const reports = await queryDocuments('reports', filters, 'AND', token, env);
     return NextResponse.json(reports);
   } catch (error: any) {
     console.error('Fetch Reports Error:', error);
@@ -30,6 +33,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // @ts-ignore
+  const env = (req as any).context?.env || process.env;
+  
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) {
@@ -51,11 +57,11 @@ export async function POST(req: Request) {
       ...result.data,
       userId: user.uid,
       createdAt: new Date().toISOString()
-    }, token);
+    }, token, env);
     
     // 2. Atomic Increment Scan Count (BIZ-02)
     try {
-      await incrementField('users', user.uid, 'scanCount', 1, token);
+      await incrementField('users', user.uid, 'scanCount', 1, token, env);
     } catch (incError) {
       console.error('Failed to increment scanCount:', incError);
     }

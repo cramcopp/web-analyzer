@@ -93,7 +93,7 @@ export async function POST(req: Request) {
         status: 'scanning',
         createdAt: new Date().toISOString(),
         progress: 0
-      }, token);
+      }, token, env);
     } catch (e: any) {
       console.error("Failed to create placeholder report:", e.message);
       return NextResponse.json({ 
@@ -102,8 +102,6 @@ export async function POST(req: Request) {
       }, { status: 500 });
     }
 
-    // @ts-ignore
-    const env = (req as any).context?.env || process.env;
     const workflowService = env.SCAN_WORKFLOW_SERVICE;
 
     if (workflowService) {

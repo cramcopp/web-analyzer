@@ -4,14 +4,17 @@ import { getDocument } from '@/lib/firestore-edge';
 
 export const runtime = 'edge';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  // @ts-ignore
+  const env = (req as any).context?.env || process.env;
+  
   const { id } = await params;
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const report = await getDocument('reports', id, token);
+    const report = await getDocument('reports', id, token, env);
 
     if (!report) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
