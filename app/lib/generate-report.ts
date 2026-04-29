@@ -3,9 +3,11 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
   if (!scrapeData) {
     throw new Error('Validierungsfehler: Keine scrapeData übergeben.');
   }
-  if (!scrapeData.urlObj) {
-    throw new Error('Validierungsfehler: URL (urlObj) fehlt.');
+  if (!scrapeData.urlObj && !scrapeData.url) {
+    throw new Error('Validierungsfehler: URL fehlt.');
   }
+  // Ensure urlObj is populated for the rest of the function
+  if (!scrapeData.urlObj) scrapeData.urlObj = scrapeData.url;
   if (!scrapeData.bodyText || scrapeData.bodyText.trim() === '') {
     throw new Error('Validierungsfehler: bodyText ist leer. Eine Analyse ist nicht möglich.');
   }
