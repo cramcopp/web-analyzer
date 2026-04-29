@@ -89,7 +89,7 @@ export function documentFromFirestore(doc: any): Record<string, any> {
   return res;
 }
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+export async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, options);
