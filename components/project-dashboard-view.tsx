@@ -327,13 +327,11 @@ function ProjectDashboardView({
       <div className="pb-8 border-b border-[#E5E5E5] dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 animate-in fade-in duration-700">
         <div className="flex-1">
           <div className="flex items-center gap-4 mb-3">
-             <div className="w-12 h-12 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex items-center justify-center rounded-sm shadow-xl shadow-black/5 overflow-hidden shrink-0">
-               <img 
+              <img 
                  src={`https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=128`} 
                  alt={`${project.name} Favicon`}
-                 className="w-8 h-8 object-contain"
+                 className="w-12 h-12 md:w-14 md:h-14 object-contain shrink-0 drop-shadow-md"
                />
-             </div>
              <div>
                 <h2 className="text-[32px] md:text-[44px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">
                   {project.name}
