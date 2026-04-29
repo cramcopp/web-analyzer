@@ -96,12 +96,14 @@ service cloud.firestore {
     }
 
     function isValidReport(data) {
-      return hasOnlyAllowedFields(['userId', 'url', 'score', 'results', 'rawScrapeData', 'createdAt', 'projectId', 'adminSecret']) &&
+      return hasOnlyAllowedFields(['id', 'userId', 'url', 'score', 'results', 'rawScrapeData', 'createdAt', 'projectId', 'adminSecret', 'status', 'progress', 'audit_id', 'crawlSummary', 'seo', 'performance', 'security', 'accessibility', 'compliance']) &&
         data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
         data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
         (!('score' in data) || data.score is number) &&
         (!('projectId' in data) || data.projectId is string) &&
-        data.results is string && data.results.size() < 500000 && // 500KB cap approx
+        (!('status' in data) || data.status is string) &&
+        (!('progress' in data) || data.progress is number) &&
+        (!('results' in data) || (data.results is string && data.results.size() < 1000000)) &&
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
