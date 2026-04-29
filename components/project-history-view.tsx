@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, BarChart3, ChevronRight, Zap, Search, ShieldCheck } from 'lucide-react';
+import { Calendar, BarChart3, ChevronRight, Zap, Search, ShieldCheck, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function ProjectHistoryView({ url, onSelectReport }: { url: string, onSelectReport: (report: any) => void }) {
