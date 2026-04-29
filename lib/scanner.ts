@@ -50,81 +50,45 @@ function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
   return normHost === normBase;
 }
 
+function normalizeUrl(url: string, baseUrl: string): string | null {
+  try {
+    const urlObj = new URL(url, baseUrl);
+    urlObj.hash = ''; // Anker immer weg
+    // WICHTIG: Trailing Slash weg für die Vergleichbarkeit in der Queue
+    return urlObj.href.replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: string): string[] {
   const discoveredUrls = new Set<string>();
-
-  // Task 1.1: <base>-Tag Extraktion erzwingen
   const baseTag = root.querySelector('base');
-  const baseHref = baseTag?.getAttribute('href');
-  let baseUrl = currentUrl;
-  if (baseHref) {
-    try {
-      baseUrl = new URL(baseHref, currentUrl).toString();
-    } catch {}
-  }
-
-  // --- KOPIERE DIESEN BLOCK FÜR DIE LINK-EXTRAKTION ---
+  const baseUrl = baseTag?.getAttribute('href') ? new URL(baseTag.getAttribute('href'), currentUrl).toString() : currentUrl;
   const baseDomain = new URL(baseUrl).hostname.replace(/^www\./, '').toLowerCase();
 
-  root.querySelectorAll('a[href]').forEach((el: any) => {
-    // DER FIX: .trim() entfernt unsichtbare Leerzeichen aus schlampigem HTML
-    let href = el.getAttribute('href')?.trim();
-    
-    if (!href || href.startsWith('#') || href.toLowerCase().startsWith('mailto:') || href.toLowerCase().startsWith('tel:') || href.toLowerCase().startsWith('javascript:')) {
-      return;
-    }
-
-    href = href.split('#')[0];
-    if (!href) return; // Falls es nur ein "#" war
-
-    try {
-      const urlObj = new URL(href, baseUrl);
-      
-      // NORMALISIERUNG: Parameter und Anker entfernen, Trailing-Slash vereinheitlichen
-      urlObj.hash = '';
-      // Wichtig: Wir normalisieren den Pfad für die Queue, um Duplikate zu vermeiden
-      let normalizedUrl = urlObj.href.replace(/\/$/, ''); 
-
-      const targetDomain = urlObj.hostname.replace(/^www\./, '').toLowerCase();
-      if (targetDomain === baseDomain) {
-        discoveredUrls.add(normalizedUrl);
-      }
-    } catch (e) {}
-  });
-
-  // Task 3.2: Harvest Head links (canonical, next, prev)
-  root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => {
-    const href = el.getAttribute('href');
-    if (href) {
+  const processUrl = (href: string | undefined | null) => {
+    if (!href || href.startsWith('#') || /^(mailto|tel|javascript):/i.test(href)) return;
+    const normalized = normalizeUrl(href.split('#')[0].trim(), baseUrl);
+    if (normalized) {
       try {
-        const urlObj = new URL(href, baseUrl);
-        urlObj.hash = '';
-        if (urlObj.hostname.replace(/^www\./, '').toLowerCase() === baseDomain) {
-          discoveredUrls.add(urlObj.href);
-        }
+        const targetDomain = new URL(normalized).hostname.replace(/^www\./, '').toLowerCase();
+        if (targetDomain === baseDomain) discoveredUrls.add(normalized);
       } catch {}
     }
-  });
+  };
 
-  // Regex-Fallback für JS-injected Links
-  const patterns = [
-    /(https?:\/\/[^\s"'<>]+)/g,
-    /(?<=href=["'])([^"']+)(?=["'])/g
-  ];
-  
+  // 1. <a> Tags
+  root.querySelectorAll('a[href]').forEach((el: any) => processUrl(el.getAttribute('href')));
+
+  // 2. Head Links (Canonical, etc.)
+  root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => processUrl(el.getAttribute('href')));
+
+  // 3. Regex Fallback
+  const patterns = [/(https?:\/\/[^\s"'<>]+)/g, /(?<=href=["'])([^"']+)(?=["'])/g];
   patterns.forEach(regex => {
     const matches = rawHtml.match(regex);
-    if (matches) {
-      matches.forEach(m => {
-        try {
-          if (m.startsWith('#') || m.startsWith('mailto:') || m.startsWith('tel:')) return;
-          const urlObj = new URL(m.split('#')[0], baseUrl);
-          if (urlObj.hostname.replace(/^www\./, '').toLowerCase() === baseDomain) {
-            discoveredUrls.add(urlObj.href);
-          }
-        } catch {}
-      });
-    }
+    if (matches) matches.forEach(m => processUrl(m));
   });
 
   return Array.from(discoveredUrls);
@@ -317,18 +281,16 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const allInternalLinks = new Set<string>();
   const subpageResults: SubpageResult[] = [];
   
-  // Seed queue with sitemap URLs (if they match domain)
+  // Seed queue with sitemap URLs
   preflight.sitemapUrls.forEach((u: string) => {
-    try {
-      const uObj = new URL(u);
-      // Task 2.2: Hash-Fragment Stripping (Sicherheitsnetz)
-      uObj.hash = '';
-      const cleanU = uObj.toString();
+    const normalized = normalizeUrl(u, urlObj.origin);
+    if (normalized) {
+      const uObj = new URL(normalized);
       if (isSameBaseDomain(uObj.hostname, domain)) {
-        queue.add(cleanU);
-        allInternalLinks.add(cleanU);
+        queue.add(normalized);
+        allInternalLinks.add(normalized);
       }
-    } catch {}
+    }
   });
 
   // Root Analysis (Main Page)
