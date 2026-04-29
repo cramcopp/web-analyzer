@@ -352,21 +352,25 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href');
   const xRobotsTag = response.headers.get('X-Robots-Tag') || '';
   
+  const normalizeUrl = (u: string) => u.replace(/\/$/, '').toLowerCase();
+
   const isIndexable = (url: string, status: number | string, rb: string, xRobots: string, can?: string | null) => {
     // 1. HTTP Status 200
     if (status !== 200) return false;
-    // 2. Meta Robots noindex
-    if (rb.toLowerCase().includes('noindex')) return false;
-    // 3. X-Robots-Tag noindex
-    if (xRobots.toLowerCase().includes('noindex')) return false;
-    // 4. Canonical Match
+
+    // 2. Meta Robots (noindex || none)
+    const rbLower = rb.toLowerCase();
+    if (rbLower.includes('noindex') || rbLower.includes('none')) return false;
+
+    // 3. X-Robots-Tag (noindex || none)
+    const xRobotsLower = xRobots.toLowerCase();
+    if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none')) return false;
+
+    // 4. Normalisierter Canonical-Abgleich
     if (can) {
       try {
-        const canAbs = new URL(can, url).toString();
-        const urlAbs = new URL(url).toString();
-        // Remove trailing slashes for comparison
-        const normalize = (u: string) => u.replace(/\/$/, '');
-        if (normalize(canAbs) !== normalize(urlAbs)) return false;
+        const canAbs = new URL(can, url).href;
+        if (normalizeUrl(canAbs) !== normalizeUrl(url)) return false;
       } catch { /* ignore */ }
     }
     return true;
