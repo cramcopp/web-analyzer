@@ -1,3 +1,4 @@
+// @ts-ignore - Cloudflare module only available at runtime
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 
 // IDE Helper: Define Workflow type if missing locally
