@@ -43,6 +43,7 @@ export interface SubpageResult {
   xRobotsTag?: string;
   redirectLocation?: string;
   hasNextPrev?: boolean;
+  isIndexable?: boolean;
 }
 
 export interface PrioritizedTask {

@@ -30,7 +30,7 @@ const STEALTH_CONFIG = {
   redirect: 'manual' as const
 };
 
-function normalizeUrl(url: string, baseUrl: string): string | null {
+export function normalizeUrl(url: string, baseUrl: string): string | null {
   try {
     const urlObj = new URL(url, baseUrl);
     urlObj.hash = ''; 
@@ -42,13 +42,13 @@ function normalizeUrl(url: string, baseUrl: string): string | null {
   }
 }
 
-function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
+export function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
   const normHost = hostname.replace(/^www\./, '').toLowerCase();
   const normBase = baseDomain.replace(/^www\./, '').toLowerCase();
   return normHost === normBase;
 }
 
-function stripHtmlForAi(html: string): string {
+export function stripHtmlForAi(html: string): string {
   let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   s = s.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   s = s.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '[SVG]');
@@ -62,7 +62,7 @@ function stripHtmlForAi(html: string): string {
 
 // --- CRAWL CORE LOGIC ---
 
-function extractRawData(root: any, currentUrl: string, rawHtml: string): string[] {
+export function extractRawData(root: any, currentUrl: string, rawHtml: string): string[] {
   const discoveredUrls = new Set<string>();
   const baseTag = root.querySelector('base');
   const baseUrl = baseTag?.getAttribute('href') ? new URL(baseTag.getAttribute('href'), currentUrl).toString() : currentUrl;
@@ -180,7 +180,7 @@ function isSoft404(text: string): boolean {
   return soft404Keywords.some(kw => lowerText.includes(kw));
 }
 
-function checkIndexability(
+export function checkIndexability(
   url: string, status: number | string, rb: string, xRobots: string, 
   contentType: string, text: string, robotsTxtContent: string, 
   can?: string | null, hasNextPrev?: boolean
@@ -216,19 +216,92 @@ function checkIndexability(
   }
 }
 
+
 // --- MAIN ANALYZER ---
 
-export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
-  const CRAWL_DEPTH_CONFIG: Record<string, number> = { 
-    'free': 5, 
-    'pro': 25, 
-    'agency': 100 
+
+
+export const scanSubpage = async (subUrl: string, domain: string, robotsTxtContent: string = ''): Promise<SubpageResult & { isIndexable?: boolean }> => {
+    try {
+      const subRes = await fetch(subUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(10000) });
+      if (subRes.status >= 300 && subRes.status < 400) {
+        return { error: false, url: subUrl, status: subRes.status, links: [], xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', redirectLocation: subRes.headers.get('location') || '' };
+      }
+      if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
+      
+      const subContentType = subRes.headers.get('content-type') || '';
+      if (subContentType && !subContentType.toLowerCase().includes('text/html')) {
+        return { error: false, url: subUrl, status: subRes.status, contentType: subContentType, title: 'Media/Document', links: [], strippedContent: '', xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', hasNextPrev: false };
+      }
+
+      const subHtml = await subRes.text();
+      const subRoot = parse(subHtml);
+      const subLinks = extractRawData(subRoot, subUrl, subHtml);
+      const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
+
+      const subResult: SubpageResult = {
+        error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
+        metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+        robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
+        canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
+        h1Count: subRoot.querySelectorAll('h1').length, status: subRes.status,
+        contentType: subContentType, strippedContent, links: subLinks,
+        xRobotsTag: subRes.headers.get('X-Robots-Tag') || '',
+        hasNextPrev: !!(subRoot.querySelector('link[rel="next"]') || subRoot.querySelector('link[rel="prev"]'))
+      };
+
+      const indexCheck = checkIndexability(subUrl, subRes.status, subResult.robots || '', subResult.xRobotsTag || '', subContentType, strippedContent, robotsTxtContent, subResult.canonical, subResult.hasNextPrev);
+
+      return { ...subResult, isIndexable: indexCheck.isIndexable };
+    } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
   };
+
+export const calculateHeuristicScores = (root: any, mainIndex: any) => {
+    // Extract internal metrics from root
+    const allImages = root.querySelectorAll('img');
+    const imagesTotal = allImages.length;
+    const imagesWithoutAlt = allImages.filter((img: any) => !img.getAttribute('alt') || img.getAttribute('alt').trim() === '').length;
+    
+    const scripts = root.querySelectorAll('script');
+    const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
+    const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
+
+    const calculateMaxDepth = (node: any): number => {
+      if (!node.childNodes || node.childNodes.length === 0) return 1;
+      let max = 0;
+      node.childNodes.forEach((child: any) => {
+        if (child.nodeType === 1) max = Math.max(max, calculateMaxDepth(child));
+      });
+      return 1 + max;
+    };
+    const maxDomDepth = calculateMaxDepth(root);
+
+    let seo = 50; 
+    if (root.querySelector('title')) seo += 10;
+    if (root.querySelector('meta[name="description"]')) seo += 10;
+    if (root.querySelectorAll('h1').length === 1) seo += 10;
+    if (imagesTotal > 0 && imagesWithoutAlt === 0) seo += 10;
+    if (mainIndex.isIndexable) seo += 10;
+
+    let performance = 100;
+    if (blockingScripts > 3) performance -= 20;
+    if (maxDomDepth > 30) performance -= 20;
+    if (totalStylesheets > 10) performance -= 20;
+
+    return {
+      seo: Math.max(0, Math.min(100, seo)),
+      performance: Math.max(0, Math.min(100, performance)),
+      security: 80, // Fallback
+      accessibility: 75,
+      compliance: 60
+    };
+};
+
+export async function performPreflight(urlObj: URL, plan: string) {
+  const CRAWL_DEPTH_CONFIG: Record<string, number> = { 'free': 5, 'pro': 25, 'agency': 100 };
   const subpageLimit = CRAWL_DEPTH_CONFIG[plan] || 5;
-  const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
   const domain = urlObj.hostname;
 
-  // Preflight
   const robotsUrl = `${urlObj.origin}/robots.txt`;
   let robotsTxt = { status: 404, content: '', allowed: true, sitemaps: [] as string[], crawlDelay: 0 };
   try {
@@ -245,22 +318,44 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   } catch (e) {}
 
   const sitemapUrls = await getAllUrlsBeforeCrawl(urlObj.origin, robotsTxt.content);
-  const startTime = Date.now();
-  
-  const rdapPromise = fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
-  const sslPromise = fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(domain)}&publish=off&all=done`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
-  
-  const ttfbStart = Date.now();
   const response = await fetch(urlObj.toString(), { ...STEALTH_CONFIG, signal: AbortSignal.timeout(10000) });
-  const ttfbMs = Date.now() - ttfbStart;
-  const responseTimeMs = Date.now() - startTime;
-
   if (!response.ok) throw new Error(`Failed to fetch URL (Status: ${response.status})`);
+  
   const html = await response.text();
   const root = parse(html);
+  const mainUrlNormalizedInPreflight = normalizeUrl(urlObj.toString(), urlObj.origin) || urlObj.toString();
+
+  const initialQueue = new Set<string>();
+  sitemapUrls.forEach(u => {
+    const norm = normalizeUrl(u, urlObj.origin);
+    if (norm && isSameBaseDomain(new URL(norm).hostname, domain) && norm !== mainUrlNormalizedInPreflight) {
+      initialQueue.add(norm);
+    }
+  });
+
+  return {
+    subpageLimit,
+    domain,
+    robotsTxt,
+    sitemapUrls,
+    mainUrlNormalized: mainUrlNormalizedInPreflight,
+    initialQueue: Array.from(initialQueue),
+    html,
+    headers: Object.fromEntries(response.headers.entries())
+  };
+}
+
+export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
+  const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+  const preflight = await performPreflight(urlObj, plan);
+  const { subpageLimit, domain, robotsTxt, sitemapUrls, mainUrlNormalized, html, headers } = preflight;
+  const root = parse(html);
+  const ttfbMs = 0; 
+  const responseTimeMs = 0;
+
+  const rdapPromise = fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
 
   // Headers & CDN
-  const headers = Object.fromEntries(response.headers.entries());
   const securityHeaders: Record<string, string> = {
     'Content-Security-Policy': headers['content-security-policy'] ? 'Present' : 'Missing',
     'Strict-Transport-Security': headers['strict-transport-security'] ? 'Present' : 'Missing',
@@ -334,90 +429,18 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     aside: root.querySelectorAll('aside').length
   };
 
-  // --- HEURISTIC SCORING ---
-  
-  const calculateHeuristicScores = () => {
-    let seo = 50; // Baseline
-    if (root.querySelector('title')) seo += 10;
-    if (root.querySelector('meta[name="description"]')) seo += 10;
-    if (root.querySelectorAll('h1').length === 1) seo += 10;
-    if (imagesTotal > 0 && imagesWithoutAlt === 0) seo += 10;
-    if (mainIndex.isIndexable) seo += 10;
-
-    let performance = 100;
-    if (ttfbMs > 500) performance -= 20;
-    if (ttfbMs > 1000) performance -= 20;
-    if (blockingScripts > 3) performance -= 10;
-    if (maxDomDepth > 30) performance -= 10;
-    if (totalStylesheets > 10) performance -= 10;
-
-    let security = 40;
-    if (urlObj.protocol === 'https:') security += 20;
-    if (securityHeaders['Strict-Transport-Security'] === 'Present') security += 10;
-    if (securityHeaders['Content-Security-Policy'] === 'Present') security += 10;
-    if (securityHeaders['X-Frame-Options'] !== 'Missing') security += 10;
-    if (securityHeaders['X-Content-Type-Options'] !== 'Missing') security += 10;
-
-    return {
-      seo: Math.max(0, Math.min(100, seo)),
-      performance: Math.max(0, Math.min(100, performance)),
-      security: Math.max(0, Math.min(100, security)),
-      accessibility: 75, // Basic fallback
-      compliance: 60 // Basic fallback
-    };
-  };
 
   // Queue Engine
   const queue = new Set<string>();
   const processed = new Set<string>();
-  const allInternalLinks = new Set<string>();
   const subpageResults: SubpageResult[] = [];
-  
-  sitemapUrls.forEach(u => {
-    const norm = normalizeUrl(u, urlObj.origin);
-    if (norm && isSameBaseDomain(new URL(norm).hostname, domain)) {
-      queue.add(norm);
-    }
-  });
 
-  const mainUrlNormalized = normalizeUrl(urlObj.toString(), urlObj.origin) || urlObj.toString();
   processed.add(mainUrlNormalized);
-  queue.delete(mainUrlNormalized);
+  preflight.initialQueue.forEach(u => queue.add(u));
 
   internalLinks.forEach(l => {
     if (!processed.has(l)) queue.add(l);
   });
-
-  const scanSubpage = async (subUrl: string): Promise<SubpageResult> => {
-    try {
-      const subRes = await fetch(subUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(10000) });
-      if (subRes.status >= 300 && subRes.status < 400) {
-        return { error: false, url: subUrl, status: subRes.status, links: [], xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', redirectLocation: subRes.headers.get('location') || '' };
-      }
-      if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
-      
-      const subContentType = subRes.headers.get('content-type') || '';
-      if (subContentType && !subContentType.toLowerCase().includes('text/html')) {
-        return { error: false, url: subUrl, status: subRes.status, contentType: subContentType, title: 'Media/Document', links: [], strippedContent: '', xRobotsTag: subRes.headers.get('X-Robots-Tag') || '', hasNextPrev: false };
-      }
-
-      const subHtml = await subRes.text();
-      const subRoot = parse(subHtml);
-      const subLinks = extractRawData(subRoot, subUrl, subHtml);
-      const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
-
-      return {
-        error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
-        metaDescription: subRoot.querySelector('meta[name="description"]')?.getAttribute('content') || '',
-        robots: subRoot.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow',
-        canonical: subRoot.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
-        h1Count: subRoot.querySelectorAll('h1').length, status: subRes.status,
-        contentType: subContentType, strippedContent, links: subLinks,
-        xRobotsTag: subRes.headers.get('X-Robots-Tag') || '',
-        hasNextPrev: !!(subRoot.querySelector('link[rel="next"]') || subRoot.querySelector('link[rel="prev"]'))
-      };
-    } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
-  };
 
   while (queue.size > 0 && subpageResults.length < subpageLimit) {
     const current = Array.from(queue).shift()!;
@@ -427,7 +450,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
     if (robotsTxt.crawlDelay > 0) await new Promise(r => setTimeout(r, Math.min(robotsTxt.crawlDelay * 1000, 3000)));
 
-    const result = await scanSubpage(current);
+    const result = await scanSubpage(current, domain, robotsTxt.content);
     subpageResults.push(result);
 
     if (typeof result.status === 'number' && result.status >= 300 && result.status < 400 && result.redirectLocation) {
@@ -437,7 +460,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
     if (!result.error && result.links) {
       result.links.forEach(l => {
-        allInternalLinks.add(l);
+        internalLinks.add(l); // Using consistent internalLinks set
         if (!processed.has(l)) queue.add(l);
       });
     }
@@ -448,14 +471,14 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const htmlStripped = stripHtmlForAi(html);
   const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000);
 
-  const mainIndex = checkIndexability(urlObj.toString(), response.status, root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow', response.headers.get('x-robots-tag') || '', headers['content-type'] || '', bodyText, robotsTxt.content, root.querySelector('link[rel="canonical"]')?.getAttribute('href'), !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]')));
+  const mainIndex = checkIndexability(urlObj.toString(), 200, root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow', headers['x-robots-tag'] || '', headers['content-type'] || '', bodyText, robotsTxt.content, root.querySelector('link[rel="canonical"]')?.getAttribute('href'), !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]')));
   
-  const indexableSubpages = successfulSubpages.filter(p => checkIndexability(p.url, p.status as number, p.robots || '', p.xRobotsTag || '', p.contentType || '', p.strippedContent || '', robotsTxt.content, p.canonical, p.hasNextPrev).isIndexable);
+  const indexableSubpages = successfulSubpages.filter(p => p.isIndexable);
 
   const crawledUrls = Array.from(processed);
   const indexableUrls = [...(mainIndex.isIndexable ? [mainUrlNormalized] : []), ...indexableSubpages.map(p => p.url)];
 
-  const scores = calculateHeuristicScores();
+  const scores = calculateHeuristicScores(root, mainIndex);
 
   const rdapRes = await rdapPromise;
   let domainAge = "Unknown";

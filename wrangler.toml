@@ -7,3 +7,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # Add non-sensitive vars here if needed
 # Sensitive vars (API keys) should be added in the Cloudflare Dashboard
+
+[[workflows]]
+name = "web-scan-workflow"
+binding = "SCAN_WORKFLOW"
+class_name = "ScanWorkflow"
