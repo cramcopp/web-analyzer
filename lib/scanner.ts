@@ -17,49 +17,126 @@ export type {
   SubpageResult 
 };
 
+const STEALTH_CONFIG = {
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+  }
+};
+
 /**
  * Radikal reduziert HTML auf das Wesentliche für die KI.
+ * Phase 4: Extreme Stripping (Entfernt Scripte, Styles, Header, Footer, Nav)
  */
 function stripHtmlForAi(html: string): string {
   let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   s = s.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   s = s.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '[SVG]');
+  s = s.replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '');
+  s = s.replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '');
+  s = s.replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '');
   s = s.replace(/<!--[\s\S]*?-->/g, '');
   s = s.replace(/data:[^;]+;base64,[^"']{100,}/g, '[BASE64_BLOB]');
   return s;
 }
 
-function extractInternalLinks(htmlRoot: any, baseUrl: string, domain: string): string[] {
-  const links: string[] = [];
-  const normalizedBase = domain.replace(/^www\./, '');
-  const isSameDomain = (hostname: string) => {
-    const norm = hostname.replace(/^www\./, '');
-    return norm === normalizedBase;
-  };
+function isSameBaseDomain(hostname: string, baseDomain: string): boolean {
+  const normHost = hostname.replace(/^www\./, '').toLowerCase();
+  const normBase = baseDomain.replace(/^www\./, '').toLowerCase();
+  return normHost === normBase;
+}
 
-  htmlRoot.querySelectorAll('a').forEach((el: any) => {
+function extractRawData(root: any, currentUrl: string, domain: string): string[] {
+  const discoveredUrls = new Set<string>();
+
+  // Task 3.1: Absolute URL conversion for <a> tags
+  root.querySelectorAll('a').forEach((el: any) => {
     const href = el.getAttribute('href');
-    if (href) links.push(href);
+    if (href) {
+      try {
+        const urlObj = new URL(href, currentUrl);
+        if (isSameBaseDomain(urlObj.hostname, domain)) {
+          const clean = urlObj.origin + urlObj.pathname + urlObj.search;
+          discoveredUrls.add(clean);
+        }
+      } catch {}
+    }
   });
 
-  htmlRoot.querySelectorAll('link').forEach((el: any) => {
+  // Task 3.2: Harvest Head links (alternate, next, prev, canonical)
+  root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => {
     const href = el.getAttribute('href');
-    if (href) links.push(href);
+    if (href) {
+      try {
+        const urlObj = new URL(href, currentUrl);
+        if (isSameBaseDomain(urlObj.hostname, domain)) {
+          const clean = urlObj.origin + urlObj.pathname + urlObj.search;
+          discoveredUrls.add(clean);
+        }
+      } catch {}
+    }
   });
 
-  const absoluteUrls = new Set<string>();
-  links.forEach(href => {
-    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-    try {
-      const urlObj = new URL(href, baseUrl);
-      if (isSameDomain(urlObj.hostname)) {
-        const clean = urlObj.origin + urlObj.pathname + urlObj.search;
-        absoluteUrls.add(clean);
+  // Task 3.3: JS State Extraction via RegEx
+  root.querySelectorAll('script').forEach((el: any) => {
+    const content = el.text;
+    if (content) {
+      const regex = /https?:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:\/[^\s"']*)?/g;
+      const matches = content.match(regex);
+      if (matches) {
+        matches.forEach((m: string) => {
+          try {
+            const urlObj = new URL(m);
+            if (isSameBaseDomain(urlObj.hostname, domain)) {
+              const clean = urlObj.origin + urlObj.pathname + urlObj.search;
+              discoveredUrls.add(clean);
+            }
+          } catch {}
+        });
       }
-    } catch { /* Invalid URL */ }
+    }
   });
 
-  return Array.from(absoluteUrls);
+  return Array.from(discoveredUrls);
+}
+
+async function fetchSitemapRecursive(sUrl: string, visited = new Set<string>()): Promise<string[]> {
+  if (visited.has(sUrl) || visited.size > 100) return [];
+  visited.add(sUrl);
+
+  const foundUrls: string[] = [];
+  try {
+    const res = await fetch(sUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const xml = await res.text();
+
+    // Check for nested sitemaps (Sitemap Index)
+    if (xml.includes('<sitemap>')) {
+      const nestedSitemaps = xml.match(/<loc>(.*?)<\/loc>/gi);
+      if (nestedSitemaps) {
+        for (const m of nestedSitemaps) {
+          const inner = m.replace(/<\/?loc>/gi, '').trim();
+          if (inner.startsWith('http')) {
+            const subUrls = await fetchSitemapRecursive(inner, visited);
+            foundUrls.push(...subUrls);
+          }
+        }
+      }
+    } else {
+      // Regular sitemap
+      const locMatches = xml.match(/<loc>(.*?)<\/loc>/gi);
+      if (locMatches) {
+        locMatches.forEach(m => {
+          const inner = m.replace(/<\/?loc>/gi, '').trim();
+          if (inner.startsWith('http')) foundUrls.push(inner);
+        });
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return foundUrls;
 }
 
 async function getPreflightData(baseUrl: string): Promise<any> {
@@ -68,7 +145,7 @@ async function getPreflightData(baseUrl: string): Promise<any> {
   let robotsTxt = { status: 404, content: '', allowed: true, sitemaps: [] as string[], crawlDelay: 0 };
   
   try {
-    const res = await fetch(robotsUrl, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(robotsUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
     robotsTxt.status = res.status;
     if (res.ok) {
       const text = await res.text();
@@ -91,20 +168,10 @@ async function getPreflightData(baseUrl: string): Promise<any> {
   }
 
   const sitemapUrls: string[] = [];
+  const visitedSitemaps = new Set<string>();
   for (const sUrl of robotsTxt.sitemaps) {
-    try {
-      const sRes = await fetch(sUrl, { signal: AbortSignal.timeout(5000) });
-      if (sRes.ok) {
-        const sXml = await sRes.text();
-        const locMatches = sXml.match(/<loc>(.*?)<\/loc>/gi);
-        if (locMatches) {
-          locMatches.forEach(m => {
-            const inner = m.replace(/<\/?loc>/gi, '').trim();
-            if (inner.startsWith('http')) sitemapUrls.push(inner);
-          });
-        }
-      }
-    } catch (e) { /* ignore */ }
+    const urls = await fetchSitemapRecursive(sUrl, visitedSitemaps);
+    sitemapUrls.push(...urls);
   }
 
   return { robotsTxt, sitemapUrls };
@@ -136,7 +203,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   const sslPromise = fetch(`https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(domain)}&publish=off&all=done`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
   
   const ttfbStart = Date.now();
-  const htmlPromise = fetch(urlObj.toString(), htmlRequestConfig);
+  const htmlPromise = fetch(urlObj.toString(), { ...STEALTH_CONFIG, signal: AbortSignal.timeout(10000) });
   
   const response = await htmlPromise;
   const ttfbMs = Date.now() - ttfbStart;
@@ -168,26 +235,55 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   const serverInfo = headers['server'] || 'Hidden';
 
-  // --- Found Discovery (Level 1) ---
-  const foundLinks = new Set<string>();
-  preflight.sitemapUrls.forEach((u: string) => foundLinks.add(u));
-  extractInternalLinks(root, urlObj.toString(), domain).forEach(u => foundLinks.add(u));
-
-  // --- Subpage Scanning ---
-  const subpagesToScan = Array.from(foundLinks).filter(u => u !== urlObj.toString()).slice(0, subpageLimit);
+  // --- Queue Engine (Phase 2) ---
+  const queue = new Set<string>();
+  const processed = new Set<string>();
+  const allInternalLinks = new Set<string>();
+  const subpageResults: SubpageResult[] = [];
   
+  // Seed queue with sitemap URLs (if they match domain)
+  preflight.sitemapUrls.forEach((u: string) => {
+    try {
+      const uObj = new URL(u);
+      if (isSameBaseDomain(uObj.hostname, domain)) {
+        queue.add(u);
+        allInternalLinks.add(u);
+      }
+    } catch {}
+  });
+
+  // Root Analysis (Main Page)
+  processed.add(urlObj.toString());
+  allInternalLinks.add(urlObj.toString());
+  queue.delete(urlObj.toString());
+
+  // Task 3: Raw Data Extraction (Main Page)
+  const rootLinks = extractRawData(root, urlObj.toString(), domain);
+  rootLinks.forEach(l => {
+    allInternalLinks.add(l);
+    if (!processed.has(l)) queue.add(l);
+  });
+
+  // Task 2.1: Continuous while-loop
   const scanSubpage = async (subUrl: string): Promise<SubpageResult> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const subRes = await fetch(subUrl, { signal: controller.signal, headers: { 'User-Agent': 'WebsiteAnalyzerPro/1.0 (Enterprise Auditor)' } });
+      const subRes = await fetch(subUrl, { 
+        signal: controller.signal, 
+        headers: STEALTH_CONFIG.headers 
+      });
       clearTimeout(timeout);
       if (!subRes.ok) return { error: true, url: subUrl, status: subRes.status };
       
       const subHtml = await subRes.text();
       const subRoot = parse(subHtml);
+      
+      // Task 3: Raw Data Extraction (MUST happen on untouched HTML)
+      const subInternalLinks = extractRawData(subRoot, subUrl, domain);
+      
+      // Phase 4: Extreme Stripping (AFTER extraction)
       const strippedContent = stripHtmlForAi(subHtml).replace(/\s+/g, ' ').trim().slice(0, 15000);
-      const subInternalLinks = extractInternalLinks(subRoot, subUrl, domain);
 
       return {
         error: false, url: subUrl, title: subRoot.querySelector('title')?.text.trim() || '',
@@ -202,27 +298,29 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
   };
 
-  const subpageResults: SubpageResult[] = [];
-  if (crawlDelayMs > 0) {
-    for (const subUrl of subpagesToScan) {
-      const result = await scanSubpage(subUrl);
-      subpageResults.push(result);
+  while (queue.size > 0 && subpageResults.length < subpageLimit) {
+    const currentUrl = Array.from(queue).shift()!;
+    queue.delete(currentUrl);
+    if (processed.has(currentUrl)) continue;
+    processed.add(currentUrl);
+
+    if (crawlDelayMs > 0) {
       await new Promise(resolve => setTimeout(resolve, Math.min(crawlDelayMs, 3000)));
     }
-  } else {
-    const BATCH_SIZE = 8; 
-    for (let i = 0; i < subpagesToScan.length; i += BATCH_SIZE) {
-      const batch = subpagesToScan.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(batch.map(url => scanSubpage(url)));
-      subpageResults.push(...results);
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+    const result = await scanSubpage(currentUrl);
+    subpageResults.push(result);
+
+    // Feed found links back into queue
+    if (!result.error && result.links) {
+      result.links.forEach(l => {
+        allInternalLinks.add(l);
+        if (!processed.has(l)) queue.add(l);
+      });
     }
   }
 
   const successfulSubpages = subpageResults.filter(r => !r.error).map(({ error: _, ...d }) => d);
-  successfulSubpages.forEach(sub => {
-    (sub.links || []).forEach(l => foundLinks.add(l));
-  });
 
   // --- Indexability Check ---
   const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow';
@@ -278,7 +376,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     semanticTags: { main: 0, article: 0, section: 0, nav: 0, header: 0, footer: 0, aside: 0 },
     napSignals: { googleMapsLinks: 0, phoneLinks: 0 },
     dataLeakage: { emailsFoundCount: 0, sampleEmails: [] },
-    internalLinksCount: foundLinks.size, externalLinksCount: 0, totalScripts: 0, blockingScripts: 0, totalStylesheets: 0,
+    internalLinksCount: allInternalLinks.size, externalLinksCount: 0, totalScripts: 0, blockingScripts: 0, totalStylesheets: 0,
     responseTimeMs, ttfbMs, preflight, psiMetricsStr: '', psiMetrics: null, lighthouseScores: null, safeBrowsingStr: '', domainAge: domainAgeStr, sslCertificate: { status: 'READY' },
     wienerSachtextIndex: 0, bodyText, techStack,
     cdn,
@@ -290,7 +388,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     securityHeaders,
     headers,
     crawlSummary: { 
-      totalInternalLinks: foundLinks.size, 
+      totalInternalLinks: allInternalLinks.size, 
       scannedSubpagesCount: successfulSubpages.length, 
       indexablePagesCount,
       scannedSubpages: successfulSubpages as Omit<SubpageResult, 'error'>[], 
