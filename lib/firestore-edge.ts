@@ -1,13 +1,93 @@
-import { 
-  FirestoreValue, 
-  FirestoreFilter, 
-  FirestoreConfig, 
-  getFirestoreConfig,
-  valueToFirestore,
-  valueFromFirestore,
-  documentFromFirestore,
-  objectToFirestoreFields
-} from './firestore-types';
+export interface FirestoreValue {
+  stringValue?: string;
+  doubleValue?: number;
+  integerValue?: string;
+  booleanValue?: boolean;
+  timestampValue?: string;
+  mapValue?: { fields: Record<string, FirestoreValue> };
+  arrayValue?: { values: FirestoreValue[] };
+  nullValue?: null;
+}
+
+export interface FirestoreFilter {
+  field: string;
+  op: 'EQUAL' | 'GREATER_THAN' | 'LESS_THAN' | 'ARRAY_CONTAINS' | 'IN';
+  value: any;
+}
+
+export interface FirestoreConfig {
+  projectId: string;
+  databaseId: string;
+  apiKey: string;
+  baseUrl: string;
+}
+
+export function getFirestoreConfig(env?: any): FirestoreConfig {
+  const projectId = env?.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || '';
+  const databaseId = env?.FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || '(default)';
+  const apiKey = env?.FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || '';
+  
+  return {
+    projectId,
+    databaseId,
+    apiKey,
+    baseUrl: `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`
+  };
+}
+
+export function valueToFirestore(value: any): FirestoreValue {
+  if (value === null || value === undefined) return { nullValue: null };
+  if (typeof value === 'string') return { stringValue: value };
+  if (typeof value === 'number') return { doubleValue: value };
+  if (typeof value === 'boolean') return { booleanValue: value };
+  if (value instanceof Date) return { timestampValue: value.toISOString() };
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(valueToFirestore) } };
+  if (typeof value === 'object') {
+    const fields: Record<string, FirestoreValue> = {};
+    for (const [k, v] of Object.entries(value)) {
+      fields[k] = valueToFirestore(v);
+    }
+    return { mapValue: { fields } };
+  }
+  return { stringValue: String(value) };
+}
+
+export function valueFromFirestore(v: FirestoreValue): any {
+  if ('nullValue' in v) return null;
+  if ('stringValue' in v) return v.stringValue;
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('integerValue' in v) return parseInt(v.integerValue!);
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('timestampValue' in v) return new Date(v.timestampValue!);
+  if ('arrayValue' in v) return (v.arrayValue?.values || []).map(valueFromFirestore);
+  if ('mapValue' in v) {
+    const res: Record<string, any> = {};
+    for (const [k, val] of Object.entries(v.mapValue?.fields || {})) {
+      res[k] = valueFromFirestore(val);
+    }
+    return res;
+  }
+  return null;
+}
+
+export function objectToFirestoreFields(data: Record<string, any>): Record<string, FirestoreValue> {
+  const fields: Record<string, FirestoreValue> = {};
+  for (const [k, v] of Object.entries(data)) {
+    fields[k] = valueToFirestore(v);
+  }
+  return fields;
+}
+
+export function documentFromFirestore(doc: any): Record<string, any> {
+  const res: Record<string, any> = {};
+  if (!doc.fields) return res;
+  for (const [k, v] of Object.entries(doc.fields)) {
+    res[k] = valueFromFirestore(v as FirestoreValue);
+  }
+  const nameParts = doc.name.split('/');
+  res.id = nameParts[nameParts.length - 1];
+  return res;
+}
 
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
   for (let i = 0; i < retries; i++) {
@@ -57,7 +137,6 @@ export async function setDocument(collection: string, id: string, data: Record<s
     fieldPaths.push(k);
   }
   
-  // CRITICAL: We MUST use updateMask, otherwise Firestore deletes all fields NOT in this request!
   const mask = fieldPaths.map(p => `updateMask.fieldPaths=${p}`).join('&');
   const url = `${baseUrl}/${collection}/${id}?${mask}&key=${apiKey}`;
   
