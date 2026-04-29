@@ -199,7 +199,14 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
       );
 
       return { ...subResult, isIndexable: indexCheck.isIndexable };
-    } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
+    } catch (e) { 
+      return { 
+        error: true, 
+        url: subUrl, 
+        urlObj: subUrl,
+        status: 'Error' 
+      }; 
+    }
   };
 
 export const calculateHeuristicScores = (root: any, mainIndex: any) => {
