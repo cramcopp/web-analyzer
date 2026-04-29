@@ -73,6 +73,7 @@ export async function POST(request: Request) {
       }, null, null, env);
 
       return NextResponse.json({ 
+        ...result,
         audit_id,
         mode: 'direct',
         status: 'completed'
