@@ -63,18 +63,50 @@ function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: 
     } catch {}
   }
 
-  const normalize = (href: string) => {
-    try {
-      const urlObj = new URL(href, baseUrl);
-      // Task 1.2: Hash-Fragment Stripping
-      urlObj.hash = ''; 
-      return urlObj;
-    } catch {
-      return null;
-    }
-  };
+  // --- KOPIERE DIESEN BLOCK FÜR DIE LINK-EXTRAKTION ---
+  const baseDomain = new URL(baseUrl).hostname.replace(/^www\./, '').toLowerCase();
 
-  // Task 3.1: Regex Link Extraction (Prioritize raw HTML scan for JS objects)
+  root.querySelectorAll('a[href]').forEach((el: any) => {
+    let href = el.getAttribute('href');
+    
+    // Ignoriere leere Links, Anker, Mails und Telefonnummern
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      return;
+    }
+
+    // Schneide Hash-Fragmente ab (aus /kontakt#formular wird /kontakt)
+    href = href.split('#')[0];
+
+    try {
+      // Mach aus relativen Links (z.B. /speisekarte) absolute Links
+      const urlObj = new URL(href, baseUrl);
+      const absoluteUrl = urlObj.href;
+      const targetDomain = urlObj.hostname.replace(/^www\./, '').toLowerCase();
+
+      // Pack es in die Queue, wenn es zur Domain gehört
+      if (targetDomain === baseDomain) {
+        discoveredUrls.add(absoluteUrl);
+      }
+    } catch (e) {
+      // Kaputte Links im href einfach ignorieren
+    }
+  });
+
+  // Task 3.2: Harvest Head links (canonical, next, prev)
+  root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => {
+    const href = el.getAttribute('href');
+    if (href) {
+      try {
+        const urlObj = new URL(href, baseUrl);
+        urlObj.hash = '';
+        if (urlObj.hostname.replace(/^www\./, '').toLowerCase() === baseDomain) {
+          discoveredUrls.add(urlObj.href);
+        }
+      } catch {}
+    }
+  });
+
+  // Regex-Fallback für JS-injected Links
   const patterns = [
     /(https?:\/\/[^\s"'<>]+)/g,
     /(?<=href=["'])([^"']+)(?=["'])/g
@@ -84,33 +116,14 @@ function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: 
     const matches = rawHtml.match(regex);
     if (matches) {
       matches.forEach(m => {
-        const urlObj = normalize(m);
-        if (urlObj && isSameBaseDomain(urlObj.hostname, domain)) {
-          discoveredUrls.add(urlObj.toString());
-        }
+        try {
+          if (m.startsWith('#') || m.startsWith('mailto:') || m.startsWith('tel:')) return;
+          const urlObj = new URL(m.split('#')[0], baseUrl);
+          if (urlObj.hostname.replace(/^www\./, '').toLowerCase() === baseDomain) {
+            discoveredUrls.add(urlObj.href);
+          }
+        } catch {}
       });
-    }
-  });
-
-  // DOM-Fallback (Classical <a> tags)
-  root.querySelectorAll('a').forEach((el: any) => {
-    const href = el.getAttribute('href');
-    if (href) {
-      const urlObj = normalize(href);
-      if (urlObj && isSameBaseDomain(urlObj.hostname, domain)) {
-        discoveredUrls.add(urlObj.toString());
-      }
-    }
-  });
-
-  // Task 3.2: Harvest Head links
-  root.querySelectorAll('link[rel="alternate"], link[rel="next"], link[rel="prev"], link[rel="canonical"]').forEach((el: any) => {
-    const href = el.getAttribute('href');
-    if (href) {
-      const urlObj = normalize(href);
-      if (urlObj && isSameBaseDomain(urlObj.hostname, domain)) {
-        discoveredUrls.add(urlObj.toString());
-      }
     }
   });
 
@@ -433,17 +446,25 @@ const checkIndexability = (
   can?: string | null,
   hasNextPrev?: boolean
 ): { isIndexable: boolean; reason: string } => {
-  // 0. Content-Type Check
-  if (!contentType.toLowerCase().includes('text/html')) {
-    return { isIndexable: false, reason: `Content-Type (${contentType})` };
-  }
-
-  // 1. Status Check
+  // Regel 1: Muss Status 200 sein
   if (status !== 200) {
     return { isIndexable: false, reason: `Status ${status}` };
   }
 
-  // 2. Robots.txt Check
+  // 0. Content-Type Check (Zusatz-Sicherheit)
+  if (contentType && !contentType.toLowerCase().includes('text/html')) {
+    return { isIndexable: false, reason: `Content-Type (${contentType})` };
+  }
+
+  // Regel 2: Darf kein noindex oder none haben
+  const xRobotsLower = xRobots.toLowerCase();
+  const metaRobotsLower = rb.toLowerCase();
+  if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none') ||
+      metaRobotsLower.includes('noindex') || metaRobotsLower.includes('none')) {
+    return { isIndexable: false, reason: "Noindex detected (Meta or Header)" };
+  }
+
+  // Robots.txt Check (Bleibt als Sicherheitsnetz drin)
   try {
     const urlObj = new URL(url);
     if (!isAllowedByRobots(robotsTxtContent, urlObj.pathname + urlObj.search)) {
@@ -451,43 +472,34 @@ const checkIndexability = (
     }
   } catch {}
 
-  // 3. X-Robots-Tag Header Check
-  if (xRobots.toLowerCase().match(/noindex|none/)) {
-    return { isIndexable: false, reason: `X-Robots-Tag: ${xRobots}` };
-  }
-
-  // 4. HTML Meta Check
-  const rbLower = rb.toLowerCase();
-  if (rbLower.includes('noindex') || rbLower.includes('none')) {
-    return { isIndexable: false, reason: `Meta Robots: ${rb}` };
-  }
-
-  // 5. Soft-404 Check
+  // Soft-404 Check (Bleibt als Qualitäts-Check drin)
   if (isSoft404(text)) {
     return { isIndexable: false, reason: "Soft-404 Detection" };
   }
 
-  // 6. Canonical Check (Nur wenn existent!)
-  if (can && can.trim() !== '') {
+  // Regel 3: Canonical Prüfung (Der Fehler-Fix!)
+  if (!can || can.trim() === '') {
+    // Wenn es kein Canonical gibt, ist die Seite automatisch indexierbar!
+    return { isIndexable: true, reason: "OK (No Canonical)" };
+  } else {
     try {
+      // Vergleiche nackte URLs (ohne Slash am Ende und ohne Parameter)
+      const cleanUrl = (u: string) => u.split('?')[0].replace(/\/$/, '');
       const absoluteCanonical = new URL(can, url).href;
-      const cleanUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').split('?')[0];
       
-      if (cleanUrl(url) !== cleanUrl(absoluteCanonical)) {
-        // Sonderfall: Pagination mit next/prev wird oft toleriert
-        if (!(url.includes('?') && hasNextPrev)) {
-          return { isIndexable: false, reason: `Canonical Mismatch (Ist: ${url} | Soll: ${absoluteCanonical})` };
+      if (cleanUrl(url) === cleanUrl(absoluteCanonical)) {
+        return { isIndexable: true, reason: "OK (Canonical Match)" };
+      } else {
+        // Sonderfall: Pagination mit next/prev wird toleriert
+        if (url.includes('?') && hasNextPrev) {
+          return { isIndexable: true, reason: "OK (Pagination Exception)" };
         }
+        return { isIndexable: false, reason: `Canonical Mismatch (Ist: ${url} | Soll: ${absoluteCanonical})` };
       }
-    } catch {
-      return { isIndexable: false, reason: "Broken Canonical URL" };
+    } catch (e) {
+      return { isIndexable: true, reason: "OK (Broken Canonical fallback)" };
     }
-  } else if (url.includes('?') && !hasNextPrev) {
-    // Parameter-Seite ohne Canonical und ohne next/prev
-    return { isIndexable: false, reason: "Parameter URL without Canonical/Pagination" };
   }
-  
-  return { isIndexable: true, reason: "OK" };
 };
 
   // Metadata Extraction
