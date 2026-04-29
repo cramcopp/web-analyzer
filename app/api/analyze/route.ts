@@ -110,7 +110,7 @@ export async function POST(req: Request) {
       try {
         // Direct Scan for small sites to avoid workflow delays
         const { performAnalysis } = await import('@/lib/scanner');
-        const result = await performAnalysis(url, effectivePlan, user.uid);
+        const result = await performAnalysis({ url, plan: effectivePlan, userId: user.uid, auditId: audit_id });
         
         // Save the real result immediately
         await setDocument('reports', audit_id, {
