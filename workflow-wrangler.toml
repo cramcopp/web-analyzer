@@ -1,0 +1,9 @@
+name = "scan-workflow"
+main = "lib/workflow-scanner.ts"
+compatibility_date = "2025-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[workflows]]
+binding = "SCAN_WORKFLOW"
+name = "scan-workflow"
+class_name = "ScanWorkflow"
