@@ -136,7 +136,7 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
   return { id, ...result } as T;
 }
 
-export async function setDocument(collection: string, id: string, data: Record<string, any>, token?: string, env?: any): Promise<any> {
+export async function setDocument(collection: string, id: string, data: Record<string, any>, token?: string | null, env?: any): Promise<any> {
   const { baseUrl, apiKey } = getFirestoreConfig(env);
   const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
   const fields: Record<string, FirestoreValue> = {};

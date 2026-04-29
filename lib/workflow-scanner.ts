@@ -247,16 +247,16 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           adminSecret: this.env.INTERNAL_SECRET // Bypass rules check
         };
 
-        await setDocument('reports', report.audit_id!, report as any, event.payload.token, this.env);
+        await setDocument('reports', report.audit_id!, report as any, null, this.env);
         return report;
       } catch (err: any) {
         console.error("Workflow Finalize Error:", err);
-        // Log error to Firestore placeholder
+        // Log error to Firestore placeholder using admin bypass
         await setDocument('reports', auditId!, { 
           status: 'error', 
           error: `Finalisierung fehlgeschlagen: ${err.message}`,
           adminSecret: this.env.INTERNAL_SECRET 
-        }, event.payload.token, this.env);
+        }, null, this.env);
         throw err;
       }
     });
