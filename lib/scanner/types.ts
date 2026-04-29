@@ -115,6 +115,8 @@ export interface AnalysisResult {
   viewport: string;
   viewportScalable: string;
   robots: string;
+  status?: 'scanning' | 'completed' | 'error' | 'processing';
+  progress?: number;
   h1Count: number;
   h2Count: number;
   imagesTotal: number;
