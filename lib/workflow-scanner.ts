@@ -17,6 +17,9 @@ type Env = {
 };
 
 export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
+  // @ts-ignore - env is injected by the Workflow runtime
+  declare env: Env;
+
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
     const { url, plan = 'free', auditId, userId } = event.payload;
     
