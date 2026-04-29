@@ -154,9 +154,36 @@ export default function WebsiteAnalyzer() {
         body: JSON.stringify({ url: targetUrl, plan: effectivePlan }),
       });
 
-      const scrapeData = await response.json();
+      let scrapeData = await response.json();
       if (!response.ok) throw new Error(scrapeData.error || 'Website konnte nicht geladen werden.');
       
+      // --- ASYNC POLLING FOR WORKFLOW ---
+      if (scrapeData.status === 'processing' && scrapeData.audit_id) {
+        const auditId = scrapeData.audit_id;
+        let isDone = false;
+        let attempts = 0;
+        
+        while (!isDone && attempts < 60) { // Max 5 minutes (60 * 5s)
+          await new Promise(r => setTimeout(r, 5000));
+          attempts++;
+          
+          try {
+            const pollResp = await fetch(`/api/reports/${auditId}`);
+            if (pollResp.ok) {
+              const pollData = await pollResp.json();
+              if (pollData.crawlSummary) {
+                scrapeData = pollData;
+                isDone = true;
+              }
+            }
+          } catch (e) {
+            console.error("Polling error:", e);
+          }
+        }
+        
+        if (!isDone) throw new Error('Analyse dauert zu lange. Bitte schau später in deinem Dashboard nach.');
+      }
+
       if (scrapeData._cached && scrapeData._cachedReport) {
         setRawScrapeData(scrapeData);
         setReport(scrapeData._cachedReport);

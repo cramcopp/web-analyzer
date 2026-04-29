@@ -82,8 +82,27 @@ export async function POST(req: Request) {
        return NextResponse.json({ error: 'Bitte logge dich ein, um eine Analyse zu starten.' }, { status: 401 });
     }
 
-    const scanResult = await performAnalysis({ url, plan: effectivePlan });
+    const audit_id = Math.random().toString(36).substring(7).toUpperCase();
+    
+    // @ts-ignore
+    const env = (req as any).context?.env || process.env;
+    const workflowService = env.SCAN_WORKFLOW_SERVICE;
 
+    if (workflowService) {
+      await workflowService.create({ 
+        id: audit_id, 
+        params: { url, plan: effectivePlan, userId: user.uid } 
+      });
+      
+      return NextResponse.json({ 
+        audit_id, 
+        status: 'processing',
+        message: 'Analyse wurde gestartet. Dies kann einige Minuten dauern.' 
+      });
+    }
+
+    // Fallback to sync for local development or if binding is missing
+    const scanResult = await performAnalysis({ url, plan: effectivePlan });
     return NextResponse.json(scanResult);
 
   } catch (error: any) {

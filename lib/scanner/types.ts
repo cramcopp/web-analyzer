@@ -1,6 +1,6 @@
-export interface ScanOptions {
   url: string;
   plan?: string;
+  userId?: string;
 }
 
 export interface PsiMetrics {

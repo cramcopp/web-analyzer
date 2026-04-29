@@ -119,12 +119,95 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       
       const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
-      const report: Partial<AnalysisResult> = {
+      const semanticTags = {
+        main: root.querySelectorAll('main').length,
+        article: root.querySelectorAll('article').length,
+        section: root.querySelectorAll('section').length,
+        nav: root.querySelectorAll('nav').length,
+        header: root.querySelectorAll('header').length,
+        footer: root.querySelectorAll('footer').length,
+        aside: root.querySelectorAll('aside').length
+      };
+
+      const securityHeaders: Record<string, string> = {
+        'Content-Security-Policy': preflightData.headers['content-security-policy'] ? 'Present' : 'Missing',
+        'Strict-Transport-Security': preflightData.headers['strict-transport-security'] ? 'Present' : 'Missing',
+        'X-Frame-Options': preflightData.headers['x-frame-options'] || 'Missing',
+        'X-Content-Type-Options': preflightData.headers['x-content-type-options'] || 'Missing',
+        'Referrer-Policy': preflightData.headers['referrer-policy'] || 'Missing'
+      };
+
+      const cdn = preflightData.headers['cf-ray'] ? 'Cloudflare' : preflightData.headers['x-vercel-id'] ? 'Vercel' : preflightData.headers['x-akamai-transformed'] ? 'Akamai' : preflightData.headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' : 'None detected';
+
+      const report: AnalysisResult = {
         audit_id: Math.random().toString(36).substring(7).toUpperCase(),
+        userId: event.payload.userId || '',
         createdAt: new Date().toISOString(),
         urlObj: preflightData.mainUrlNormalized,
         title: root.querySelector('title')?.text.trim() || '',
         metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+        metaKeywords: '',
+        htmlLang: root.querySelector('html')?.getAttribute('lang') || '',
+        generator: root.querySelector('meta[name="generator"]')?.getAttribute('content') || '',
+        viewport: root.querySelector('meta[name="viewport"]')?.getAttribute('content') || '',
+        viewportScalable: 'Yes',
+        robots: mainIndex.isIndexable ? 'index, follow' : 'noindex',
+        h1Count: root.querySelectorAll('h1').length,
+        h2Count: root.querySelectorAll('h2').length,
+        imagesTotal,
+        imagesWithoutAlt,
+        lazyImages: allImages.filter((img: any) => img.getAttribute('loading') === 'lazy' || img.getAttribute('data-src')).length,
+        maxDomDepth,
+        semanticTags,
+        headings: {
+            h1: root.querySelectorAll('h1').map((el: any) => el.text.trim()),
+            h2: root.querySelectorAll('h2').map((el: any) => el.text.trim()),
+            h3: root.querySelectorAll('h3').map((el: any) => el.text.trim())
+        },
+        imageDetails,
+        hreflangs: [],
+        napSignals: { googleMapsLinks: 0, phoneLinks: 0 },
+        dataLeakage: { emailsFoundCount: 0, sampleEmails: [] },
+        internalLinksCount: currentState.processed.length,
+        externalLinksCount: 0,
+        totalScripts,
+        blockingScripts,
+        totalStylesheets,
+        responseTimeMs: 0,
+        ttfbMs: 0,
+        preflight: {
+            robotsTxt: preflightData.robotsTxt,
+            sitemap: { status: 200, url: null, urlsFound: preflightData.sitemapUrls.length }
+        },
+        psiMetricsStr: '',
+        psiMetrics: null,
+        lighthouseScores: null,
+        safeBrowsingStr: '',
+        domainAge: 'Unknown',
+        sslCertificate: { status: 'READY' },
+        wienerSachtextIndex: 0,
+        bodyText: '', 
+        techStack: preflightData.html.includes('wp-content') ? ['WordPress'] : preflightData.html.includes('__NEXT_DATA__') ? ['Next.js'] : [],
+        cdn,
+        serverInfo: preflightData.headers['server'] || 'Hidden',
+        legal: {
+            trackingScripts: {},
+            cmpDetected: {},
+            linksInFooter: false,
+            privacyInFooter: false,
+            cookieBannerFound: false
+        },
+        social: {
+            ogTitle: root.querySelector('meta[property="og:title"]')?.getAttribute('content') || '',
+            ogDescription: root.querySelector('meta[property="og:description"]')?.getAttribute('content') || '',
+            ogImage: root.querySelector('meta[property="og:image"]')?.getAttribute('content') || '',
+            ogType: 'website',
+            twitterCard: 'summary'
+        },
+        existingSchemaCount: 0,
+        schemaTypes: [],
+        securityHeaders,
+        headers: preflightData.headers as Record<string, string>,
         crawlSummary: {
           totalInternalLinks: currentState.processed.length, 
           scannedSubpagesCount: currentState.results.length,
@@ -134,6 +217,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           scannedSubpages: currentState.results,
           brokenLinks: []
         },
+        apiEndpoints: [],
         seo: { score: scores.seo, insights: [], recommendations: [], detailedSeo: {} as any },
         performance: { score: scores.performance, insights: [], recommendations: [], detailedPerformance: {} as any },
         security: { score: scores.security, insights: [], recommendations: [], detailedSecurity: {} as any },
