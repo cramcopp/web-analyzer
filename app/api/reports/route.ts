@@ -59,15 +59,9 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString()
     }, token, env);
     
-    // 2. Atomic Increment Scan Count (BIZ-02)
-    try {
-      await incrementField('users', user.uid, 'scanCount', 1, token, env);
-    } catch (incError) {
-      console.error('Failed to increment scanCount:', incError);
-    }
-
     
     return NextResponse.json({ id: newReport.id, success: true });
+
   } catch (error: any) {
     console.error('Save Report Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
