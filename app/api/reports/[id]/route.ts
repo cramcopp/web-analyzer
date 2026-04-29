@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json(report);
   } catch (error: any) {
-
+    console.error(`[API] Error fetching report ${id}:`, error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
