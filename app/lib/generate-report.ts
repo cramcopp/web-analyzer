@@ -1,18 +1,28 @@
 export async function generateReportClientSide(scrapeData: any, plan: string = 'free', retries: number = 2) {
-  // 1. Data Validation Before API Call
+  // 1. Data Validation & Self-Healing
   if (!scrapeData) {
-    throw new Error('Validierungsfehler: Keine scrapeData übergeben.');
+    throw new Error('Validierungsfehler: Keine Daten für die Analyse gefunden.');
   }
-  if (!scrapeData.urlObj && !scrapeData.url) {
-    throw new Error('Validierungsfehler: URL fehlt.');
+
+  // Self-healing: Ensure URL is present
+  const targetUrl = scrapeData.urlObj || scrapeData.url;
+  if (!targetUrl) {
+    console.error('[GenerateReport] Missing URL in scrapeData:', scrapeData);
+    throw new Error('Validierungsfehler: URL fehlt. Der Bericht konnte nicht eindeutig zugeordnet werden.');
   }
-  // Ensure urlObj is populated for the rest of the function
-  if (!scrapeData.urlObj) scrapeData.urlObj = scrapeData.url;
+  
+  // Back-populate both fields for consistency
+  scrapeData.url = targetUrl;
+  scrapeData.urlObj = targetUrl;
+
+  // Check for content
   if (!scrapeData.bodyText || scrapeData.bodyText.trim() === '') {
-    throw new Error('Validierungsfehler: bodyText ist leer. Eine Analyse ist nicht möglich.');
+    // If bodyText is missing (e.g. from an old saved report), we try to use metadata or results
+    console.warn('[GenerateReport] bodyText is missing, using fallback structure');
+    scrapeData.bodyText = `Analyse für ${targetUrl}. Titel: ${scrapeData.title || 'Unbekannt'}. Beschreibung: ${scrapeData.metaDescription || 'Keine'}`;
   }
+
   if (!scrapeData.psiMetricsStr) {
-    // Falls PageSpeed fehlt, initialisieren wir es als Fallback text
     scrapeData.psiMetricsStr = 'Lighthouse / PageSpeed Metriken: Nicht verfügbar.';
   }
 
@@ -26,16 +36,16 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ scrapeData, url: scrapeData.urlObj, plan }),
+        body: JSON.stringify({ scrapeData, url: targetUrl, plan }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const is429 = response.status === 429;
         if (is429) {
-          throw new Error('QUOTA_EXCEEDED:' + (errorData.error || 'Quota überschritten.'));
+          throw new Error('QUOTA_EXCEEDED:' + (errorData.error || 'KI-Limit überschritten. Bitte kurz warten.'));
         }
-        throw new Error(errorData.error || `API antwortete mit Status: ${response.status}`);
+        throw new Error(errorData.error || `API-Fehler: ${response.status}`);
       }
 
       const report = await response.json();
@@ -46,13 +56,11 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
       console.warn(`[GenerateReport] Versuch ${attempt + 1} fehlgeschlagen:`, error.message);
 
       if (attempt < retries) {
-        // Längere Wartezeit bei Quota-Fehlern (429), kurze bei anderen
-        const waitMs = is429 ? 8000 * (attempt + 1) : 1500 * (attempt + 1);
+        const waitMs = is429 ? 8000 * (attempt + 1) : 2000 * (attempt + 1);
         await new Promise(resolve => setTimeout(resolve, waitMs));
       }
     }
   }
 
-  throw new Error(`Report-Generierung fehlgeschlagen nach ${retries + 1} Versuchen. Letzter Fehler: ${lastError?.message}`);
+  throw new Error(`Bericht-Erstellung fehlgeschlagen. Letzter Fehler: ${lastError?.message}`);
 }
-
