@@ -228,13 +228,13 @@ export async function queryDocuments<T = Record<string, any>>(
 
   return results
     .filter((r: QueryResult) => r.document)
-    .map((r) => {
+    .map((r: QueryResult) => {
       const doc = r.document!;
       const fields = doc.fields || {};
       const data: Record<string, any> = {};
       for (const [k, v] of Object.entries(fields)) {
         // eslint-disable-next-line security/detect-object-injection
-        data[k] = valueFromFirestore(v);
+        data[k] = valueFromFirestore(v as FirestoreValue);
       }
       const nameParts = doc.name.split('/');
       return { id: nameParts[nameParts.length - 1], ...data } as T;
