@@ -53,8 +53,8 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         );
     });
 
-    // STEP 2: Iteratives Crawling in Batches
-    let state = await step.do('initialize state', async () => {
+    // STEP 2: Iteratives Crawling
+    let currentState = await step.do('initialize state', async () => {
       return {
         queue: preflightData.initialQueue as string[],
         processed: [preflightData.mainUrlNormalized] as string[],
@@ -62,33 +62,33 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       };
     });
 
-    while (state.queue.length > 0 && state.results.length < preflightData.subpageLimit) {
-      const currentBatch = state.queue.slice(0, 5);
+    while (currentState.queue.length > 0 && currentState.results.length < preflightData.subpageLimit) {
+      const currentBatch = currentState.queue.slice(0, 5);
       
-      const batchUpdate = await step.do(`scan batch ${state.results.length}`, async () => {
+      currentState = await step.do(`batch-process-${currentState.results.length}`, async () => {
         const p = currentBatch.map((u: string) => scanSubpage(u, preflightData.domain, preflightData.robotsTxt.content));
         const scanResults = await Promise.all(p);
         
-        const newLinks: string[] = [];
-        scanResults.forEach((r: any) => {
-          if (!r.error && r.links) {
+        const validResults = scanResults.filter((r: any) => !r.error);
+        const newProcessed = [...currentState.processed, ...currentBatch];
+        const newDiscovered: string[] = [];
+
+        validResults.forEach((r: any) => {
+          if (r.links) {
             r.links.forEach((l: string) => {
-              if (!state.processed.includes(l)) newLinks.push(l);
+              if (!newProcessed.includes(l)) newDiscovered.push(l);
             });
           }
         });
 
+        const remainingQueue = currentState.queue.filter((u: string) => !currentBatch.includes(u));
+        
         return {
-          scanned: scanResults.filter((r: any) => !r.error),
-          discovered: newLinks
+          results: [...currentState.results, ...validResults],
+          processed: Array.from(new Set([...newProcessed, ...newDiscovered])),
+          queue: Array.from(new Set([...remainingQueue, ...newDiscovered]))
         };
       });
-
-      state.results.push(...batchUpdate.scanned);
-      state.processed.push(...currentBatch, ...batchUpdate.discovered);
-      
-      const nextQueue = state.queue.filter((u: string) => !currentBatch.includes(u));
-      state.queue = Array.from(new Set([...nextQueue, ...batchUpdate.discovered]));
     }
 
     // STEP 3: Scoring & Final Report
@@ -117,7 +117,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
       const scores = calculateHeuristicScores(root, mainIndex);
       
-      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...state.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
+      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
       const report: Partial<AnalysisResult> = {
         audit_id: Math.random().toString(36).substring(7).toUpperCase(),
@@ -126,12 +126,12 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         title: root.querySelector('title')?.text.trim() || '',
         metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
         crawlSummary: {
-          totalInternalLinks: state.processed.length, 
-          scannedSubpagesCount: state.results.length,
+          totalInternalLinks: currentState.processed.length, 
+          scannedSubpagesCount: currentState.results.length,
           indexablePagesCount: indexableUrls.length,
-          crawledUrls: state.processed,
+          crawledUrls: currentState.processed,
           indexableUrls: indexableUrls,
-          scannedSubpages: state.results,
+          scannedSubpages: currentState.results,
           brokenLinks: []
         },
         seo: { score: scores.seo, insights: [], recommendations: [], detailedSeo: {} as any },
