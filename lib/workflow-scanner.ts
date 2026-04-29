@@ -113,7 +113,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
             progress, 
             status: 'scanning',
             adminSecret: this.env.INTERNAL_SECRET 
-          }, null, this.env);
+          }, null, null, this.env);
 
           return {
             results: [...currentState.results, ...validResults],
@@ -184,7 +184,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           adminSecret: this.env.INTERNAL_SECRET
         };
 
-        await setDocument('reports', report.audit_id!, report as any, null, this.env);
+        await setDocument('reports', report.audit_id!, report as any, null, null, this.env);
         return report;
       });
 
@@ -195,7 +195,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         status: 'error', 
         error: err.message,
         adminSecret: this.env.INTERNAL_SECRET 
-      }, null, this.env);
+      }, null, null, this.env);
       throw err;
     }
   }

@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       status: 'scanning',
       progress: 0,
       adminSecret: env.INTERNAL_SECRET
-    }, null, env);
+    }, null, null, env);
 
     // 3. TRIGGER SCAN
     try {
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         status: 'completed',
         progress: 100,
         adminSecret: env.INTERNAL_SECRET
-      }, null, env);
+      }, null, null, env);
 
       return NextResponse.json({ 
         audit_id,
