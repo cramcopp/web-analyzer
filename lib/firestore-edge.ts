@@ -191,17 +191,15 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
   }));
 }
 
-export async function incrementField(collection: string, id: string, field: string, amount: number, env?: any): Promise<void> {
-  const doc = await getDocument(collection, id, null, env);
+export async function incrementField(collection: string, id: string, field: string, amount: number, token?: string | null, env?: any): Promise<void> {
+  const doc = await getDocument(collection, id, token, env);
   const currentVal = (doc as any)?.[field] || 0;
   await setDocument(collection, id, { [field]: currentVal + amount }, [field], env);
 }
 
-export async function updateStripeSubscription(userId: string, subscriptionId: string, plan: string, maxScans: number, env?: any): Promise<void> {
+export async function updateStripeSubscription(userId: string, data: Record<string, any>, env?: any): Promise<void> {
   await setDocument('users', userId, {
-    subscriptionId,
-    plan,
-    maxScans,
+    ...data,
     lastScanReset: new Date().toISOString()
-  }, ['subscriptionId', 'plan', 'maxScans', 'lastScanReset'], env);
+  }, Object.keys(data).concat(['lastScanReset']), env);
 }
