@@ -54,38 +54,45 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
     });
 
     // STEP 2: Iteratives Crawling in Batches
-    let queue = new Set<string>(preflightData.initialQueue as string[]);
-    let processed = new Set<string>([preflightData.mainUrlNormalized as string]);
-    let results: (SubpageResult & { isIndexable?: boolean })[] = [];
-    const limit = preflightData.subpageLimit;
+    let state = await step.do('initialize state', async () => {
+      return {
+        queue: preflightData.initialQueue as string[],
+        processed: [preflightData.mainUrlNormalized] as string[],
+        results: [] as any[]
+      };
+    });
 
-    while (queue.size > 0 && results.length < limit) {
-      const batch = Array.from(queue).slice(0, 5) as string[]; // 5 Seiten gleichzeitig
+    while (state.queue.length > 0 && state.results.length < preflightData.subpageLimit) {
+      const currentBatch = state.queue.slice(0, 5);
       
-      const batchResults = await step.do(`scan batch ${results.length}`, async () => {
-        const p = batch.map((u: string) => scanSubpage(u, preflightData.domain, preflightData.robotsTxt.content));
-        return await Promise.all(p);
+      const batchUpdate = await step.do(`scan batch ${state.results.length}`, async () => {
+        const p = currentBatch.map((u: string) => scanSubpage(u, preflightData.domain, preflightData.robotsTxt.content));
+        const scanResults = await Promise.all(p);
+        
+        const newLinks: string[] = [];
+        scanResults.forEach((r: any) => {
+          if (!r.error && r.links) {
+            r.links.forEach((l: string) => {
+              if (!state.processed.includes(l)) newLinks.push(l);
+            });
+          }
+        });
+
+        return {
+          scanned: scanResults.filter((r: any) => !r.error),
+          discovered: newLinks
+        };
       });
 
-      results.push(...batchResults.filter((r: any) => !r.error));
+      state.results.push(...batchUpdate.scanned);
+      state.processed.push(...currentBatch, ...batchUpdate.discovered);
       
-      // Queue aktualisieren
-      batch.forEach(u => queue.delete(u));
-      batchResults.forEach((r: any) => {
-        if (!r.error && r.links) {
-          r.links.forEach((l: string) => {
-            if (!processed.has(l)) {
-              queue.add(l);
-              processed.add(l);
-            }
-          });
-        }
-      });
+      const nextQueue = state.queue.filter(u => !currentBatch.includes(u));
+      state.queue = Array.from(new Set([...nextQueue, ...batchUpdate.discovered]));
     }
 
     // STEP 3: Scoring & Final Report
     const finalReport = await step.do('finalize report', async () => {
-      // Re-calculate images, links etc for heuristic scores
       const allImages = root.querySelectorAll('img');
       const imagesTotal = allImages.length;
       const imageDetails = allImages.map((img: any) => ({
@@ -98,7 +105,6 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
       const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
 
-      // DOM Depth calculation (simplified or re-implemented)
       const calculateMaxDepth = (node: any): number => {
         if (!node.childNodes || node.childNodes.length === 0) return 1;
         let max = 0;
@@ -111,9 +117,8 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
       const scores = calculateHeuristicScores(root, mainIndex);
       
-      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...results.filter(r => r.isIndexable).map(r => r.url)];
+      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...state.results.filter(r => r.isIndexable).map(r => r.url)];
 
-      // Report zusammenbauen
       const report: Partial<AnalysisResult> = {
         audit_id: Math.random().toString(36).substring(7).toUpperCase(),
         createdAt: new Date().toISOString(),
@@ -121,12 +126,12 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         title: root.querySelector('title')?.text.trim() || '',
         metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
         crawlSummary: {
-          totalInternalLinks: processed.size, 
-          scannedSubpagesCount: results.length,
+          totalInternalLinks: state.processed.length, 
+          scannedSubpagesCount: state.results.length,
           indexablePagesCount: indexableUrls.length,
-          crawledUrls: Array.from(processed),
+          crawledUrls: state.processed,
           indexableUrls: indexableUrls,
-          scannedSubpages: results,
+          scannedSubpages: state.results,
           brokenLinks: []
         },
         seo: { score: scores.seo, insights: [], recommendations: [], detailedSeo: {} as any },
@@ -136,7 +141,6 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         compliance: { score: scores.compliance, insights: [], recommendations: [], detailedCompliance: {} as any },
       };
 
-      // In Firestore speichern
       await setDocument('reports', report.audit_id!, report as any);
       return report;
     });
