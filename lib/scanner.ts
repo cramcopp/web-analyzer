@@ -295,17 +295,22 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   preflight.sitemapUrls.forEach((u: string) => {
     try {
       const uObj = new URL(u);
+      // Task 2.2: Hash-Fragment Stripping (Sicherheitsnetz)
+      uObj.hash = '';
+      const cleanU = uObj.toString();
       if (isSameBaseDomain(uObj.hostname, domain)) {
-        queue.add(u);
-        allInternalLinks.add(u);
+        queue.add(cleanU);
+        allInternalLinks.add(cleanU);
       }
     } catch {}
   });
 
   // Root Analysis (Main Page)
-  processed.add(urlObj.toString());
-  allInternalLinks.add(urlObj.toString());
-  queue.delete(urlObj.toString());
+  urlObj.hash = '';
+  const mainUrl = urlObj.toString();
+  processed.add(mainUrl);
+  allInternalLinks.add(mainUrl);
+  queue.delete(mainUrl);
 
   // Task 3: Raw Data Extraction (Main Page)
   const rootLinks = extractRawData(root, urlObj.toString(), domain, html);
@@ -451,9 +456,9 @@ const isIndexable = (
   const xRobotsLower = xRobots.toLowerCase();
   if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none')) return false;
 
-  // Task 5.1: Pagination-Parameter ignorieren vs. respektieren
-  // 4. Brutale Canonical-Normalisierung
-  if (can) {
+  // Phase 1: Behebung des Canonical-Null-Bugs
+  // Task 1.1: Conditional Canonical Check (Nur prüfen, wenn Tag existiert)
+  if (can && can.trim() !== '') {
     try {
       const canAbs = new URL(can, url).href;
       const brutalCleanUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').split('?')[0];
@@ -468,9 +473,11 @@ const isIndexable = (
     } catch { /* ignore */ }
   } else if (url.includes('?') && !hasNextPrev) {
     // Parameter-Seite ohne Canonical und ohne next/prev -> Duplicate Content Gefahr
+    // Hier bleiben wir bei der strengen Regel für Parameter-URLs
     return false;
   }
   
+  // Wenn kein Canonical existiert (und keine Parameter-Gefahr besteht), ist die Seite indexierbar!
   return true;
 };
 
