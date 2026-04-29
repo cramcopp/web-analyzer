@@ -89,10 +89,7 @@ export async function POST(req: Request) {
     const workflowService = env.SCAN_WORKFLOW_SERVICE;
 
     if (workflowService) {
-      await workflowService.create({ 
-        id: audit_id, 
-        params: { url, plan: effectivePlan, userId: user.uid } 
-      });
+      await workflowService.startScan({ url, plan: effectivePlan, userId: user.uid });
       
       return NextResponse.json({ 
         audit_id, 

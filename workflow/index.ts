@@ -1,9 +1,14 @@
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import { ScanWorkflow } from '../lib/workflow-scanner';
 
 export { ScanWorkflow };
 
-export default {
-  async fetch(request: Request, env: any) {
-    return new Response("Workflow Worker is running. Trigger it via Service Binding or API.");
+export default class extends WorkerEntrypoint<{ SCAN_WORKFLOW: Workflow }> {
+  async startScan(params: any) {
+    return await this.env.SCAN_WORKFLOW.create({ params });
   }
-};
+
+  async fetch(request: Request) {
+    return new Response("Workflow Worker is running. Trigger it via startScan RPC.");
+  }
+}
