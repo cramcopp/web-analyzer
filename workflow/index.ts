@@ -8,7 +8,8 @@ export { ScanWorkflow };
 export default class extends WorkerEntrypoint<{ SCAN_WORKFLOW: Workflow }> {
   async startScan(params: any) {
     // @ts-ignore
-    return await this.env.SCAN_WORKFLOW.create({ params });
+    const instance = await this.env.SCAN_WORKFLOW.create({ params });
+    return { id: instance.id };
   }
 
   async fetch(request: Request) {

@@ -28,15 +28,11 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       const preflight = await performPreflight(urlObj, plan);
       return {
         ...preflight,
-        // We can't return circular structures or complex objects like 'root'
-        // So we return the raw HTML and re-parse if needed, or extract what we need
       };
     });
 
-    const root = parse(preflightData.html);
     const mainIndex = await step.do('main indexability check', async () => {
-        // Re-calculate main indexability in this step
-        // We need to import checkIndexability or use it here
+        const root = parse(preflightData.html);
         const { checkIndexability, stripHtmlForAi } = await import('./scanner');
         const htmlStripped = stripHtmlForAi(preflightData.html);
         const bodyText = htmlStripped.replace(/\s+/g, ' ').trim().slice(0, 500000);
@@ -93,6 +89,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
     // STEP 3: Scoring & Final Report
     const finalReport = await step.do('finalize report', async () => {
+      const root = parse(preflightData.html);
       const allImages = root.querySelectorAll('img');
       const imagesTotal = allImages.length;
       const imageDetails = allImages.map((img: any) => ({
