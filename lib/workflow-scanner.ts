@@ -102,6 +102,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
       
       const scripts = root.querySelectorAll('script');
+      const totalScripts = scripts.length;
       const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
       const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
 

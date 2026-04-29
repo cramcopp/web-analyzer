@@ -1,3 +1,4 @@
+export interface ScanOptions {
   url: string;
   plan?: string;
   userId?: string;
@@ -101,6 +102,7 @@ export interface PreflightData {
 export interface AnalysisResult {
   // Technical Scrape Data
   audit_id: string;
+  userId: string;
   createdAt: string;
   urlObj: string;
   title: string;
