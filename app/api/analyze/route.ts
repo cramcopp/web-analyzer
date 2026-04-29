@@ -8,8 +8,8 @@ export const runtime = 'edge';
 const getEnv = () => {
   return {
     INTERNAL_SECRET: process.env.INTERNAL_SECRET,
-    // FIX 2: Richtiger Name für das Workflow-Binding
-    SCAN_WORKFLOW: (process.env as any).SCAN_WORKFLOW,
+    // FIX 2: Richtiger Name für das Workflow-Binding gemäß wrangler.toml
+    SCAN_WORKFLOW_SERVICE: (process.env as any).SCAN_WORKFLOW_SERVICE,
     FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
     FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
     FIREBASE_DATABASE_ID: process.env.FIREBASE_DATABASE_ID || '(default)'
@@ -62,9 +62,9 @@ export async function POST(request: Request) {
     }, null, null, env);
 
     // 3. TRIGGER CLOUDFLARE WORKFLOW
-    if (env.SCAN_WORKFLOW) {
-      // FIX 4: Cloudflare Workflows MÜSSEN mit .create({ params: {...} }) gestartet werden
-      await env.SCAN_WORKFLOW.create({ 
+    if (env.SCAN_WORKFLOW_SERVICE) {
+      // Cloudflare Workflows MÜSSEN mit .create({ params: {...} }) gestartet werden
+      await env.SCAN_WORKFLOW_SERVICE.create({ 
         params: {
           url, 
           plan, 
