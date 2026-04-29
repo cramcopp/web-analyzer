@@ -303,7 +303,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
   const lazyImages = allImages.filter((img: any) => img.getAttribute('loading') === 'lazy').length;
 
-  const mainIndex = checkIndexability(mainUrlNormalized, 200, root.querySelector('meta[name="robots"]')?.getAttribute('content') || '', headers['x-robots-tag'] || '', headers['content-type'] || 'text/html', html, robotsTxt.content, root.querySelector('link[rel="canonical"]')?.getAttribute('href') || null);
+  const mainIndex = checkIndexability(mainUrlNormalized, 200, root.querySelector('meta[name="robots"]')?.getAttribute('content') || '', headers['x-robots-tag'] || '', headers['content-type'] || 'text/html', html, robotsTxt.content, (root.querySelector('link[rel="canonical"]')?.getAttribute('href') || null) as string | null);
 
   // Links
   const allLinks = root.querySelectorAll('a[href]');
