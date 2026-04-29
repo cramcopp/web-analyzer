@@ -1,4 +1,7 @@
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+
+// IDE Helper: Define Workflow type if missing locally
+type Workflow = any;
 import { parse } from 'node-html-parser';
 import { 
   ScanOptions, 
