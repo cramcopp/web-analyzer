@@ -161,6 +161,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           audit_id: auditId || Math.random().toString(36).substring(7).toUpperCase(),
           userId: userId,
           createdAt: new Date().toISOString(),
+          url: preflightData.mainUrlNormalized,
           urlObj: preflightData.mainUrlNormalized,
           title: root.querySelector('title')?.text.trim() || '',
           metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
