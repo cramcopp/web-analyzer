@@ -106,24 +106,52 @@ export async function POST(req: Request) {
       }, { status: 500 });
     }
 
-    const workflowService = env.SCAN_WORKFLOW_SERVICE;
+      // TRIGGER SCAN
+      try {
+        // Direct Scan for small sites to avoid workflow delays
+        const { performAnalysis } = await import('@/lib/scanner');
+        const result = await performAnalysis(url, effectivePlan, user.uid);
+        
+        // Save the real result immediately
+        await setDocument('reports', audit_id, {
+          ...result,
+          audit_id,
+          userId: user.uid,
+          status: 'completed',
+          progress: 100,
+          adminSecret: env.INTERNAL_SECRET
+        }, null, env);
 
-    if (workflowService) {
-      await workflowService.startScan({ 
-        url, 
-        plan: effectivePlan, 
-        userId: user.uid, 
-        token,
-        auditId: audit_id // Pass the generated ID
-      });
-      
-      return NextResponse.json({ 
-        audit_id, 
-        status: 'processing',
-        message: 'Analyse wurde gestartet. Dies kann einige Minuten dauern.' 
-      });
-    }
-
+        return NextResponse.json({ 
+          audit_id,
+          mode: 'direct',
+          status: 'completed'
+        });
+      } catch (e: any) {
+        console.error("Direct scan failed, trying workflow:", e);
+        
+        // Fallback to workflow if direct scan fails or times out
+        if (env.SCAN_WORKFLOW_SERVICE) {
+          await env.SCAN_WORKFLOW_SERVICE.startScan({ 
+            url, 
+            plan: effectivePlan, 
+            userId: user.uid,
+            token,
+            auditId: audit_id
+          });
+          
+          return NextResponse.json({ 
+            audit_id,
+            mode: 'workflow',
+            status: 'processing'
+          });
+        }
+        
+        return NextResponse.json({ 
+          error: 'Analyse fehlgeschlagen.', 
+          details: e.message 
+        }, { status: 500 });
+      }
     return NextResponse.json({ 
       error: 'Scanner Service nicht erreichbar.', 
       details: 'Bitte prüfe die SCAN_WORKFLOW_SERVICE Bindung.' 
