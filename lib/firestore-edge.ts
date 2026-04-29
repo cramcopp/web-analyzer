@@ -11,6 +11,13 @@ function getFirestoreConfig(env?: any) {
   const databaseId = env?.FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || DEFAULT_DATABASE_ID;
   const apiKey = env?.FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
   
+  if (!projectId || !apiKey) {
+    const missing = [];
+    if (!projectId) missing.push('FIREBASE_PROJECT_ID');
+    if (!apiKey) missing.push('FIREBASE_API_KEY');
+    throw new Error(`Firestore configuration missing: ${missing.join(', ')}. Bitte prüfe die Environment-Variablen in Cloudflare.`);
+  }
+
   return {
     projectId,
     databaseId,

@@ -85,14 +85,22 @@ export async function POST(req: Request) {
     const audit_id = Math.random().toString(36).substring(7).toUpperCase();
     
     // Create initial placeholder report so polling doesn't return 404
-    await setDocument('reports', audit_id, {
-      id: audit_id,
-      userId: user.uid,
-      url,
-      status: 'scanning',
-      createdAt: new Date().toISOString(),
-      progress: 0
-    }, token);
+    try {
+      await setDocument('reports', audit_id, {
+        id: audit_id,
+        userId: user.uid,
+        url,
+        status: 'scanning',
+        createdAt: new Date().toISOString(),
+        progress: 0
+      }, token);
+    } catch (e: any) {
+      console.error("Failed to create placeholder report:", e.message);
+      return NextResponse.json({ 
+        error: 'Initialisierung der Analyse fehlgeschlagen.', 
+        details: e.message 
+      }, { status: 500 });
+    }
 
     // @ts-ignore
     const env = (req as any).context?.env || process.env;

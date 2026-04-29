@@ -23,7 +23,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json(report);
   } catch (error: any) {
-    console.error(`[API] Error fetching report ${id}:`, error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Unknown Firestore Error';
+    console.error(`[API] Error fetching report ${id}:`, msg);
+    return NextResponse.json({ 
+      error: msg,
+      details: 'Prüfe ob die Firestore-Regeln den Zugriff erlauben und ob die Audit-ID korrekt ist.'
+    }, { status: 500 });
   }
 }
