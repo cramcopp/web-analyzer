@@ -84,6 +84,9 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string, plan: st
 
 // --- WORKFLOW ENGINE ---
 export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
+  // @ts-ignore
+  declare env: Env;
+
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
     const { url, plan = 'free', auditId, userId } = event.payload;
     const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
@@ -104,7 +107,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
               root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow', 
               preflightData.headers['x-robots-tag'] || '', preflightData.headers['content-type'] || '', 
               bodyText, preflightData.robotsTxt.content, 
-              root.querySelector('link[rel="canonical"]')?.getAttribute('href'), 
+              root.querySelector('link[rel="canonical"]')?.getAttribute('href') || null, 
               !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]'))
           );
       });
