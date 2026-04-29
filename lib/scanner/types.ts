@@ -3,6 +3,7 @@ export interface ScanOptions {
   plan?: string;
   userId?: string;
   token?: string;
+  auditId?: string;
 }
 
 export interface PsiMetrics {

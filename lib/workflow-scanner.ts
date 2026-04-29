@@ -20,8 +20,11 @@ export interface Env {
 }
 
 export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
+  // @ts-ignore - env is injected by the Workflow runtime
+  env: Env;
+
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
-    const { url, plan = 'free' } = event.payload;
+    const { url, plan = 'free', auditId } = event.payload;
     const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
     
     // STEP 1: Preflight & Root Scan
@@ -138,8 +141,14 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
       const cdn = preflightData.headers['cf-ray'] ? 'Cloudflare' : preflightData.headers['x-vercel-id'] ? 'Vercel' : preflightData.headers['x-akamai-transformed'] ? 'Akamai' : preflightData.headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' : 'None detected';
 
+      // Prune large fields to stay under Firestore limits (1MB)
+      const storageResults = currentState.results.map(r => {
+        const { strippedContent, ...rest } = r;
+        return rest;
+      });
+
       const report: AnalysisResult = {
-        audit_id: Math.random().toString(36).substring(7).toUpperCase(),
+        audit_id: auditId || Math.random().toString(36).substring(7).toUpperCase(),
         userId: event.payload.userId || '',
         createdAt: new Date().toISOString(),
         urlObj: preflightData.mainUrlNormalized,
@@ -213,7 +222,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           indexablePagesCount: indexableUrls.length,
           crawledUrls: currentState.processed,
           indexableUrls: indexableUrls,
-          scannedSubpages: currentState.results,
+          scannedSubpages: storageResults as any,
           brokenLinks: []
         },
         apiEndpoints: [],
@@ -224,7 +233,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         compliance: { score: scores.compliance, insights: [], recommendations: [], detailedCompliance: {} as any },
       };
 
-      await setDocument('reports', report.audit_id!, report as any, event.payload.token);
+      await setDocument('reports', report.audit_id!, report as any, event.payload.token, this.env);
       return report;
     });
 

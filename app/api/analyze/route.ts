@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { performAnalysis } from '@/lib/scanner';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, queryDocuments } from '@/lib/firestore-edge';
+import { getDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
 import { analyzeSchema } from '@/lib/validations';
 import { PLAN_CONFIG } from '@/lib/plans';
 
@@ -84,12 +84,28 @@ export async function POST(req: Request) {
 
     const audit_id = Math.random().toString(36).substring(7).toUpperCase();
     
+    // Create initial placeholder report so polling doesn't return 404
+    await setDocument('reports', audit_id, {
+      id: audit_id,
+      userId: user.uid,
+      url,
+      status: 'scanning',
+      createdAt: new Date().toISOString(),
+      progress: 0
+    }, token);
+
     // @ts-ignore
     const env = (req as any).context?.env || process.env;
     const workflowService = env.SCAN_WORKFLOW_SERVICE;
 
     if (workflowService) {
-      await workflowService.startScan({ url, plan: effectivePlan, userId: user.uid, token });
+      await workflowService.startScan({ 
+        url, 
+        plan: effectivePlan, 
+        userId: user.uid, 
+        token,
+        auditId: audit_id // Pass the generated ID
+      });
       
       return NextResponse.json({ 
         audit_id, 
@@ -99,7 +115,7 @@ export async function POST(req: Request) {
     }
 
     // Fallback to sync for local development or if binding is missing
-    const scanResult = await performAnalysis({ url, plan: effectivePlan });
+    const scanResult = await performAnalysis({ url, plan: effectivePlan, userId: user.uid, auditId: audit_id });
     return NextResponse.json(scanResult);
 
   } catch (error: any) {

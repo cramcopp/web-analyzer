@@ -4,10 +4,20 @@
  * Avoids the heavy overhead of the standard Firebase SDK.
  */
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
-const DATABASE_ID = process.env.FIREBASE_DATABASE_ID || '(default)';
-const API_KEY = process.env.FIREBASE_API_KEY;
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents`;
+const DEFAULT_DATABASE_ID = '(default)';
+
+function getFirestoreConfig(env?: any) {
+  const projectId = env?.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const databaseId = env?.FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || DEFAULT_DATABASE_ID;
+  const apiKey = env?.FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
+  
+  return {
+    projectId,
+    databaseId,
+    apiKey,
+    baseUrl: `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents`
+  };
+}
 
 /**
  * Helper for fetch with exponential backoff retry.
@@ -92,17 +102,22 @@ function valueFromFirestore(value: FirestoreValue): any {
   return null;
 }
 
-export async function getDocument<T = Record<string, any>>(collection: string, id: string, token?: string): Promise<T | null> {
-  const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
+export async function getDocument<T = Record<string, any>>(collection: string, id: string, token?: string, env?: any): Promise<T | null> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetchWithRetry(url, { headers });
   if (res.status === 404) return null;
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    console.error(`[Firestore Error] Status: ${res.status}, Message: ${err.error?.message || 'Unknown'}`);
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    console.error(`[Firestore Error] Status: ${res.status}, Message: ${errMessage}`);
+    throw new Error(errMessage);
   }
   const data = await res.json() as { fields?: Record<string, FirestoreValue> };
   const fields = data.fields || {};
@@ -114,8 +129,9 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
   return { id, ...result } as T;
 }
 
-export async function setDocument(collection: string, id: string, data: Record<string, any>, token?: string): Promise<any> {
-  const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
+export async function setDocument(collection: string, id: string, data: Record<string, any>, token?: string, env?: any): Promise<any> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) {
     // eslint-disable-next-line security/detect-object-injection
@@ -132,15 +148,20 @@ export async function setDocument(collection: string, id: string, data: Record<s
   });
 
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    console.error(`[Firestore setDocument Error] Status: ${res.status}, ID: ${id}, Message: ${err.error?.message || 'Unknown'}`);
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    console.error(`[Firestore setDocument Error] Status: ${res.status}, ID: ${id}, Message: ${errMessage}`);
+    throw new Error(errMessage);
   }
   return await res.json();
 }
 
-export async function addDocument<T = Record<string, any>>(collection: string, data: Record<string, any>, token?: string): Promise<T & { id: string }> {
-  const url = `${BASE_URL}/${collection}?key=${API_KEY}`;
+export async function addDocument<T = Record<string, any>>(collection: string, data: Record<string, any>, token?: string, env?: any): Promise<T & { id: string }> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const url = `${baseUrl}/${collection}?key=${apiKey}`;
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(data)) {
     // eslint-disable-next-line security/detect-object-injection
@@ -157,8 +178,12 @@ export async function addDocument<T = Record<string, any>>(collection: string, d
   });
 
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    throw new Error(errMessage);
   }
   const result = await res.json() as { name: string };
   const nameParts = result.name.split('/');
@@ -169,9 +194,11 @@ export async function queryDocuments<T = Record<string, any>>(
   collection: string, 
   filters: FirestoreFilter[], 
   compositeOp: 'AND' | 'OR' = 'AND',
-  token?: string
+  token?: string,
+  env?: any
 ): Promise<T[]> {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents:runQuery?key=${API_KEY}`;
+  const { projectId, databaseId, apiKey } = getFirestoreConfig(env);
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery?key=${apiKey}`;
   
   const mapOp = (op: string) => {
     switch (op) {
@@ -212,8 +239,12 @@ export async function queryDocuments<T = Record<string, any>>(
   });
 
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    throw new Error(errMessage);
   }
 
   interface QueryResult {
@@ -243,7 +274,8 @@ export async function queryDocuments<T = Record<string, any>>(
     });
 }
 
-export async function updateDocument(collection: string, id: string, data: Record<string, any>, token?: string): Promise<any> {
+export async function updateDocument(collection: string, id: string, data: Record<string, any>, token?: string, env?: any): Promise<any> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
   const fields: Record<string, FirestoreValue> = {};
   const fieldPaths: string[] = [];
   for (const [k, v] of Object.entries(data)) {
@@ -253,7 +285,7 @@ export async function updateDocument(collection: string, id: string, data: Recor
   }
 
   const mask = fieldPaths.map(p => `updateMask.fieldPaths=${p}`).join('&');
-  const url = `${BASE_URL}/${collection}/${id}?${mask}&key=${API_KEY}`;
+  const url = `${baseUrl}/${collection}/${id}?${mask}&key=${apiKey}`;
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -265,14 +297,19 @@ export async function updateDocument(collection: string, id: string, data: Recor
   });
 
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    throw new Error(errMessage);
   }
   return await res.json();
 }
 
-export async function deleteDocument(collection: string, id: string, token?: string): Promise<boolean> {
-  const url = `${BASE_URL}/${collection}/${id}?key=${API_KEY}`;
+export async function deleteDocument(collection: string, id: string, token?: string, env?: any): Promise<boolean> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -282,8 +319,12 @@ export async function deleteDocument(collection: string, id: string, token?: str
   });
 
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    throw new Error(errMessage);
   }
   return true;
 }
@@ -299,13 +340,14 @@ export async function updateStripeSubscription(uid: string, data: Record<string,
 /**
  * BIZ-02: Atomic increment to prevent race conditions.
  */
-export async function incrementField(collection: string, id: string, field: string, amount: number, token?: string): Promise<any> {
-  if (!PROJECT_ID) {
+export async function incrementField(collection: string, id: string, field: string, amount: number, token?: string, env?: any): Promise<any> {
+  const { projectId, databaseId, apiKey } = getFirestoreConfig(env);
+  if (!projectId) {
     throw new Error('FIREBASE_PROJECT_ID is not defined in environment variables.');
   }
 
   // We use the commit endpoint for transformations
-  const commitUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents:commit?key=${API_KEY}`;
+  const commitUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:commit?key=${apiKey}`;
   
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -314,7 +356,7 @@ export async function incrementField(collection: string, id: string, field: stri
     writes: [
       {
         transform: {
-          document: `projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${collection}/${id}`,
+          document: `projects/${projectId}/databases/${databaseId}/documents/${collection}/${id}`,
           fieldTransforms: [
             {
               fieldPath: field,
@@ -333,8 +375,12 @@ export async function incrementField(collection: string, id: string, field: stri
   });
 
   if (!res.ok) {
-    const err = await res.json() as { error?: { message?: string } };
-    throw new Error(err.error?.message || `Firestore Error ${res.status}`);
+    let errMessage = `Firestore Error ${res.status}`;
+    try {
+      const err = await res.json() as { error?: { message?: string } };
+      errMessage = err.error?.message || errMessage;
+    } catch {}
+    throw new Error(errMessage);
   }
   return await res.json();
 }
