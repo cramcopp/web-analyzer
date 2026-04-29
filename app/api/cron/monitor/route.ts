@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { queryDocuments, addDocument, updateDocument, incrementField } from '@/lib/firestore-edge';
-import { performAnalysis } from '@/lib/scanner';
 
 export const runtime = 'edge';
 
@@ -28,49 +27,24 @@ export async function GET(req: Request) {
       const batch = projects.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(async (project) => {
         try {
-          console.log(`Analyzing project: ${project.url}`);
-          const scanData = await performAnalysis({ url: project.url, plan: 'pro' });
-
-          const reportRes = await fetch(`${new URL(req.url).origin}/api/generate-report`, {
+          console.log(`Triggering workflow for project: ${project.url}`);
+          
+          // Trigger workflow instead of direct analysis to save bundle size
+          const analyzeRes = await fetch(`${new URL(req.url).origin}/api/analyze`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'x-admin-secret': process.env.INTERNAL_SECRET || ''
+              'Authorization': `Bearer ${secret}` // Internal secret as bearer
             },
-            body: JSON.stringify({ ...scanData, plan: 'pro' })
+            body: JSON.stringify({ url: project.url, plan: 'pro' })
           });
 
-          if (!reportRes.ok) throw new Error('AI Generation failed');
-          const report = await reportRes.json();
+          if (!analyzeRes.ok) throw new Error(`Workflow trigger failed: ${analyzeRes.status}`);
+          const { audit_id } = await analyzeRes.json();
 
-          // Save report via Edge SDK
-          const reportData = {
-            projectId: project.id,
-            userId: project.userId,
-            url: project.url,
-            score: report.seo?.score || 0,
-            results: JSON.stringify(report),
-            rawScrapeData: JSON.stringify(scanData),
-            createdAt: new Date().toISOString(),
-            adminSecret: process.env.INTERNAL_SECRET
-          };
-
-          const newReport = await addDocument('reports', reportData, process.env.INTERNAL_SECRET);
-
-          // Update project with last report info
-          await updateDocument('projects', project.id, {
-            lastReportId: newReport.id,
-            lastScore: report.seo?.score || 0,
-            lastScanAt: new Date().toISOString(),
-            adminSecret: process.env.INTERNAL_SECRET
-          });
-
-          // Increment scan count for user
-          await incrementField('users', project.userId, 'scanCount', 1, process.env.INTERNAL_SECRET);
-
-          return { project: project.name, status: 'success', score: report.seo?.score };
+          return { project: project.name, status: 'started', auditId: audit_id };
         } catch (err: any) {
-          console.error(`Failed to process project ${project.url}:`, err.message);
+          console.error(`Failed to trigger project ${project.url}:`, err.message);
           return { project: project.url, status: 'error', error: err.message };
         }
       });

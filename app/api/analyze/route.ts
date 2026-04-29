@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { performAnalysis } from '@/lib/scanner';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
 import { analyzeSchema } from '@/lib/validations';
@@ -125,9 +124,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // Fallback to sync for local development or if binding is missing
-    const scanResult = await performAnalysis({ url, plan: effectivePlan, userId: user.uid, auditId: audit_id });
-    return NextResponse.json(scanResult);
+    return NextResponse.json({ 
+      error: 'Scanner Service nicht erreichbar.', 
+      details: 'Bitte prüfe die SCAN_WORKFLOW_SERVICE Bindung.' 
+    }, { status: 503 });
 
   } catch (error: any) {
     console.error("API Analysis Error:", error instanceof Error ? error.message : 'Unknown error');
