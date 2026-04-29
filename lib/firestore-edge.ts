@@ -72,7 +72,7 @@ function valueFromFirestore(v: FirestoreValue): any {
     return res;
   }
   if ('arrayValue' in v) {
-    return v.arrayValue.values?.map(valueFromFirestore) || [];
+    return (v as any).arrayValue.values?.map(valueFromFirestore) || [];
   }
   return v;
 }
@@ -83,7 +83,7 @@ function getFirestoreConfig(env?: any) {
   const databaseId = env?.FIREBASE_DATABASE_ID || process.env.FIREBASE_DATABASE_ID || '(default)';
 
   if (!projectId || !apiKey) {
-    throw new Error('Firebase configuration missing (PROJECT_ID or API_KEY)');
+    throw new Error('Firebase configuration missing');
   }
 
   return {
@@ -94,90 +94,72 @@ function getFirestoreConfig(env?: any) {
   };
 }
 
-/**
- * setDocument with support for selective updates via updateMask.
- * If updateMask is provided, only those fields will be patched.
- * If not provided, it performs a full document replacement (with create if not exists).
- */
-export async function setDocument(
-  collection: string, 
-  id: string, 
-  data: Record<string, any>, 
-  updateMask?: string[] | null, 
-  env?: any
-): Promise<any> {
-  const { baseUrl, apiKey } = getFirestoreConfig(env);
-  const fields: Record<string, FirestoreValue> = {};
-  
-  for (const [k, v] of Object.entries(data)) {
-    fields[k] = valueToFirestore(v);
-  }
+// --- EXPORTED FUNCTIONS ---
 
-  let url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
-  
-  // If we have an updateMask, we only update specific fields
-  if (updateMask && updateMask.length > 0) {
-    const maskParams = updateMask.map(p => `updateMask.fieldPaths=${p}`).join('&');
-    url += `&${maskParams}`;
-  }
+export { fetchWithRetry };
 
-  const token = env?.token || (typeof window !== 'undefined' ? null : null); // Token handling is usually external
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  
-  // Try to use Authorization header if a token is passed via env or dedicated param
-  const authToken = env?.INTERNAL_SECRET || process.env.INTERNAL_SECRET;
-  if (authToken) {
-    // Note: This is a hack because we are using REST API with API Key, 
-    // but sometimes we need Admin privileges. Firestore REST doesn't support Admin SDK tokens easily.
-    // We rely on Firestore Rules with adminSecret check.
-  }
-
-  const res = await fetchWithRetry(url, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ fields })
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[Firestore Error] ${res.status}: ${errText}`);
-    throw new Error(`Firestore Error ${res.status}: ${errText}`);
-  }
-
-  return documentFromFirestore(await res.json());
-}
-
-export async function getDocument<T = Record<string, any>>(
-  collection: string, 
-  id: string, 
-  token?: string | null, 
-  env?: any
-): Promise<T | null> {
+export async function getDocument<T = Record<string, any>>(collection: string, id: string, token?: string | null, env?: any): Promise<T | null> {
   try {
     const { baseUrl, apiKey } = getFirestoreConfig(env);
     const url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
-    
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetchWithRetry(url, { headers });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Firestore Error ${res.status}`);
-
     return documentFromFirestore(await res.json()) as T;
-  } catch (e) {
-    console.error(`Error getting document ${collection}/${id}:`, e);
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
-export async function queryDocuments<T = Record<string, any>>(
-  collection: string, 
-  filters: any[], 
-  compositeOp: 'AND' | 'OR' = 'AND',
-  token?: string,
-  env?: any
-): Promise<T[]> {
+export async function setDocument(collection: string, id: string, data: Record<string, any>, updateMask?: string[] | null, env?: any): Promise<any> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const fields: Record<string, FirestoreValue> = {};
+  for (const [k, v] of Object.entries(data)) fields[k] = valueToFirestore(v);
+
+  let url = `${baseUrl}/${collection}/${id}?key=${apiKey}`;
+  if (updateMask && updateMask.length > 0) {
+    url += `&${updateMask.map(p => `updateMask.fieldPaths=${p}`).join('&')}`;
+  }
+
+  const res = await fetchWithRetry(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields })
+  });
+
+  if (!res.ok) throw new Error(`Firestore Error ${res.status}: ${await res.text()}`);
+  return documentFromFirestore(await res.json());
+}
+
+export async function addDocument<T = Record<string, any>>(collection: string, data: Record<string, any>, token?: string, env?: any): Promise<T & { id: string }> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const fields: Record<string, FirestoreValue> = {};
+  for (const [k, v] of Object.entries(data)) fields[k] = valueToFirestore(v);
+
+  const res = await fetchWithRetry(`${baseUrl}/${collection}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields })
+  });
+
+  if (!res.ok) throw new Error(`Firestore Error ${res.status}`);
+  const result = await res.json();
+  const id = result.name.split('/').pop();
+  return { id, ...documentFromFirestore(result) } as any;
+}
+
+export async function updateDocument(collection: string, id: string, data: Record<string, any>, token?: string, env?: any): Promise<any> {
+  return setDocument(collection, id, data, Object.keys(data), env);
+}
+
+export async function deleteDocument(collection: string, id: string, token?: string, env?: any): Promise<void> {
+  const { baseUrl, apiKey } = getFirestoreConfig(env);
+  const res = await fetchWithRetry(`${baseUrl}/${collection}/${id}?key=${apiKey}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Firestore Error ${res.status}`);
+}
+
+export async function queryDocuments<T = Record<string, any>>(collection: string, filters: any[], compositeOp: 'AND' | 'OR' = 'AND', token?: string, env?: any): Promise<T[]> {
   const { projectId, databaseId, apiKey } = getFirestoreConfig(env);
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery?key=${apiKey}`;
   
@@ -188,33 +170,38 @@ export async function queryDocuments<T = Record<string, any>>(
         compositeFilter: {
           op: compositeOp,
           filters: filters.map(f => ({
-            fieldFilter: {
-              field: { fieldPath: f.field },
-              op: f.op,
-              value: valueToFirestore(f.value)
-            }
+            fieldFilter: { field: { fieldPath: f.field }, op: f.op, value: valueToFirestore(f.value) }
           }))
         }
       }
     }
   };
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
   const res = await fetchWithRetry(url, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(query)
   });
 
   if (!res.ok) throw new Error(`Firestore Query Error ${res.status}`);
-
   const results = await res.json();
-  return results
-    .filter((r: any) => r.document)
-    .map((r: any) => ({
-      id: r.document.name.split('/').pop(),
-      ...documentFromFirestore(r.document)
-    }));
+  return results.filter((r: any) => r.document).map((r: any) => ({
+    id: r.document.name.split('/').pop(),
+    ...documentFromFirestore(r.document)
+  }));
+}
+
+export async function incrementField(collection: string, id: string, field: string, amount: number, env?: any): Promise<void> {
+  const doc = await getDocument(collection, id, null, env);
+  const currentVal = (doc as any)?.[field] || 0;
+  await setDocument(collection, id, { [field]: currentVal + amount }, [field], env);
+}
+
+export async function updateStripeSubscription(userId: string, subscriptionId: string, plan: string, maxScans: number, env?: any): Promise<void> {
+  await setDocument('users', userId, {
+    subscriptionId,
+    plan,
+    maxScans,
+    lastScanReset: new Date().toISOString()
+  }, ['subscriptionId', 'plan', 'maxScans', 'lastScanReset'], env);
 }
