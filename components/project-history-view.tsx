@@ -122,13 +122,21 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
             <div 
               key={report.id}
               className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 group hover:border-[#D4AF37] transition-all cursor-pointer"
-              onClick={() => onSelectReport(report)}
+              onClick={() => {
+                if (report.status !== 'scanning') onSelectReport(report);
+              }}
             >
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-[#F5F5F3] dark:bg-zinc-950 flex flex-col items-center justify-center relative">
-                  <span className="text-[24px] font-black text-[#1A1A1A] dark:text-zinc-100">{report.score || '0'}</span>
-                  <span className="text-[8px] font-bold text-[#888] uppercase">Score</span>
-                  {trend !== null && trend !== 0 && (
+                  {report.status === 'scanning' ? (
+                    <RefreshCw className="w-6 h-6 text-[#D4AF37] animate-spin" />
+                  ) : (
+                    <>
+                      <span className="text-[24px] font-black text-[#1A1A1A] dark:text-zinc-100">{report.score || '0'}</span>
+                      <span className="text-[8px] font-bold text-[#888] uppercase">Score</span>
+                    </>
+                  )}
+                  {report.status !== 'scanning' && trend !== null && trend !== 0 && (
                     <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 text-[8px] font-black rounded-sm shadow-sm ${trend > 0 ? 'bg-[#27AE60] text-white' : 'bg-[#EB5757] text-white'}`}>
                       {trend > 0 ? '+' : ''}{trend}%
                     </div>
@@ -138,27 +146,42 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 text-[#D4AF37]" />
-                    <span className="text-[14px] font-black text-[#1A1A1A] dark:text-zinc-100">{date}</span>
+                    <span className="text-[14px] font-black text-[#1A1A1A] dark:text-zinc-100">
+                      {report.status === 'scanning' ? `Scan läuft... (${report.progress || 0}%)` : date}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-4 mt-1">
-                    <div className="flex items-center gap-1.5">
-                      <Search className="w-3 h-3 text-[#888]" />
-                      <span className="text-[9px] font-bold text-[#888] uppercase">SEO: {report.seoScore}</span>
+                  {report.status === 'scanning' ? (
+                    <div className="w-48 h-1 bg-zinc-100 dark:bg-zinc-800 mt-2 rounded-full overflow-hidden">
+                      <div className="h-full bg-[#D4AF37] animate-pulse" style={{ width: `${report.progress || 0}%` }} />
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Zap className="w-3 h-3 text-[#888]" />
-                      <span className="text-[9px] font-bold text-[#888] uppercase">Perf: {report.performanceScore}</span>
+                  ) : (
+                    <div className="flex items-center gap-4 mt-1">
+                      <div className="flex items-center gap-1.5">
+                        <Search className="w-3 h-3 text-[#888]" />
+                        <span className="text-[9px] font-bold text-[#888] uppercase">SEO: {report.seoScore}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Zap className="w-3 h-3 text-[#888]" />
+                        <span className="text-[9px] font-bold text-[#888] uppercase">Perf: {report.performanceScore}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3 h-3 text-[#888]" />
+                        <span className="text-[9px] font-bold text-[#888] uppercase">Sec: {report.securityScore}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3 h-3 text-[#888]" />
-                      <span className="text-[9px] font-bold text-[#888] uppercase">Sec: {report.securityScore}</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
-              <button className="px-5 py-2.5 bg-[#1A1A1A] dark:bg-zinc-800 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2 group-hover:bg-[#D4AF37] transition-all">
-                Bericht ansehen
+              <button 
+                className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${
+                  report.status === 'scanning' 
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed' 
+                    : 'bg-[#1A1A1A] dark:bg-zinc-800 text-white group-hover:bg-[#D4AF37]'
+                }`}
+                disabled={report.status === 'scanning'}
+              >
+                {report.status === 'scanning' ? 'Warten...' : 'Bericht ansehen'}
                 <ChevronRight className="w-3 h-3" />
               </button>
             </div>

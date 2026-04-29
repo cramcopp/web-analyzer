@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { History, Search } from 'lucide-react';
+import { History, Search, RefreshCw } from 'lucide-react';
 import { HistoryItem } from '../../types/common';
 
 interface SidebarHistoryProps {
@@ -54,20 +54,28 @@ export function SidebarHistory({ history, onLoadReport, onItemClick }: SidebarHi
           displayedHistory.map((scan, i) => (
             <button
               key={i}
-              onClick={() => onItemClick(() => onLoadReport?.(scan.id))}
-              className="w-full text-left flex items-start gap-2 p-2 rounded-md hover:bg-white dark:hover:bg-zinc-900 border border-transparent hover:border-[#E5E5E5] dark:hover:border-zinc-800 transition-colors group"
+              onClick={() => {
+                if (scan.status !== 'scanning') onItemClick(() => onLoadReport?.(scan.id));
+              }}
+              className={`w-full text-left flex items-start gap-2 p-2 rounded-md border border-transparent transition-colors group ${
+                scan.status === 'scanning' ? 'cursor-wait bg-black/5 dark:bg-white/5' : 'hover:bg-white dark:hover:bg-zinc-900 hover:border-[#E5E5E5] dark:hover:border-zinc-800'
+              }`}
             >
               <div className="shrink-0 mt-0.5">
-                <span
-                  className={`w-2 h-2 rounded-full block ${scan.score >= 80 ? "bg-[#27AE60]" : scan.score >= 50 ? "bg-[#F2994A]" : "bg-[#EB5757]"}`}
-                ></span>
+                {scan.status === 'scanning' ? (
+                  <RefreshCw className="w-2.5 h-2.5 text-[#D4AF37] animate-spin" />
+                ) : (
+                  <span
+                    className={`w-2 h-2 rounded-full block ${scan.score >= 80 ? "bg-[#27AE60]" : scan.score >= 50 ? "bg-[#F2994A]" : "bg-[#EB5757]"}`}
+                  ></span>
+                )}
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-[11px] font-medium text-[#1A1A1A] dark:text-zinc-100 truncate w-full group-hover:text-[#D4AF37] transition-colors">
                   {scan.url.replace(/^https?:\/\//, "")}
                 </span>
                 <span className="text-[9px] text-[#888] mt-0.5">
-                  {scan.date}
+                  {scan.status === 'scanning' ? `Scan läuft (${scan.progress || 0}%)` : scan.date}
                 </span>
               </div>
             </button>

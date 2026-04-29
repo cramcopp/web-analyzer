@@ -21,4 +21,6 @@ export interface HistoryItem {
   score: number;
   date: string;
   rawDate: Date;
+  status?: 'scanning' | 'completed' | 'failed';
+  progress?: number;
 }

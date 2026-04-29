@@ -95,6 +95,8 @@ export const Sidebar = memo(function Sidebar({
               score: docData.score || 0,
               date: dateStr,
               rawDate: dateObj,
+              status: docData.status,
+              progress: docData.progress
             };
           });
           formatted.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
