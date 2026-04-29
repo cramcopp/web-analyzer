@@ -130,40 +130,62 @@ function extractRawData(root: any, currentUrl: string, domain: string, rawHtml: 
   return Array.from(discoveredUrls);
 }
 
-async function fetchSitemapRecursive(sUrl: string, visited = new Set<string>()): Promise<string[]> {
-  if (visited.has(sUrl) || visited.size > 100) return [];
-  visited.add(sUrl);
+export async function getAllUrlsBeforeCrawl(baseUrl: string): Promise<string[]> {
+    const allUrls = new Set<string>();
+    allUrls.add(baseUrl); // Startseite ist immer drin
 
-  const foundUrls: string[] = [];
-  try {
-    const res = await fetch(sUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return [];
-    const xml = await res.text();
-
-    // Check for nested sitemaps (Sitemap Index)
-    if (xml.includes('<sitemap>')) {
-      const nestedSitemaps = xml.match(/<loc>(.*?)<\/loc>/gi);
-      if (nestedSitemaps) {
-        for (const m of nestedSitemaps) {
-          const inner = m.replace(/<\/?loc>/gi, '').trim();
-          if (inner.startsWith('http')) {
-            const subUrls = await fetchSitemapRecursive(inner, visited);
-            foundUrls.push(...subUrls);
-          }
+    const cleanBase = baseUrl.replace(/\/$/, '');
+    const sitemapsToVisit: string[] = [`${cleanBase}/sitemap.xml`, `${cleanBase}/wp-sitemap.xml`];
+    
+    // 1. Suche nach versteckten Sitemaps in der robots.txt
+    try {
+        const robotsRes = await fetch(`${cleanBase}/robots.txt`, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
+        if (robotsRes.status === 200) {
+            const robotsText = await robotsRes.text();
+            const sitemapMatches = robotsText.match(/^Sitemap:\s*(.*)$/gmi);
+            if (sitemapMatches) {
+                sitemapMatches.forEach(match => {
+                    const url = match.replace(/Sitemap:\s*/i, '').trim();
+                    if (!sitemapsToVisit.includes(url)) sitemapsToVisit.push(url);
+                });
+            }
         }
-      }
-    } else {
-      // Regular sitemap
-      const locMatches = xml.match(/<loc>(.*?)<\/loc>/gi);
-      if (locMatches) {
-        locMatches.forEach(m => {
-          const inner = m.replace(/<\/?loc>/gi, '').trim();
-          if (inner.startsWith('http')) foundUrls.push(inner);
-        });
-      }
+    } catch(e) { /* robots.txt fehlt, egal */ }
+
+    // 2. Alle Sitemaps rekursiv entpacken (Das schlägt Wix, Shopify & WP)
+    const visitedSitemaps = new Set<string>();
+
+    while (sitemapsToVisit.length > 0) {
+        const currentSitemap = sitemapsToVisit.pop()!;
+        if (visitedSitemaps.has(currentSitemap)) continue;
+        visitedSitemaps.add(currentSitemap);
+
+        try {
+            const res = await fetch(currentSitemap, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(8000) });
+            if (res.status !== 200) continue;
+            
+            const xmlText = await res.text();
+            
+            // Regex, um alle <loc> Tags rasend schnell zu finden
+            const locRegex = /<loc>(.*?)<\/loc>/g;
+            let match;
+            
+            while ((match = locRegex.exec(xmlText)) !== null) {
+                const url = match[1].trim();
+                
+                // Wenn die URL auf ".xml" endet, ist es ein Sitemap-Index!
+                if (url.endsWith('.xml') || url.includes('sitemap')) {
+                    if (!visitedSitemaps.has(url)) sitemapsToVisit.push(url);
+                } 
+                // Wenn es keine XML ist, ist es eine echte versteckte Webseite!
+                else {
+                    allUrls.add(url);
+                }
+            }
+        } catch (e) { /* Sitemap kaputt, weitermachen */ }
     }
-  } catch (e) { /* ignore */ }
-  return foundUrls;
+    
+    return Array.from(allUrls);
 }
 
 function isAllowedByRobots(robotsContent: string, path: string): boolean {
@@ -216,9 +238,6 @@ async function getPreflightData(baseUrl: string): Promise<any> {
       const lines = text.split('\n');
       for (const line of lines) {
         const lowerLine = line.toLowerCase().trim();
-        if (lowerLine.startsWith('sitemap:')) {
-          robotsTxt.sitemaps.push(line.split(/sitemap:/i)[1].trim());
-        }
         if (lowerLine.startsWith('crawl-delay:')) {
           robotsTxt.crawlDelay = parseInt(line.split(/crawl-delay:/i)[1].trim()) || 0;
         }
@@ -226,16 +245,8 @@ async function getPreflightData(baseUrl: string): Promise<any> {
     }
   } catch (e) { /* ignore */ }
 
-  if (robotsTxt.sitemaps.length === 0) {
-    robotsTxt.sitemaps.push(`${url.origin}/sitemap.xml`);
-  }
-
-  const sitemapUrls: string[] = [];
-  const visitedSitemaps = new Set<string>();
-  for (const sUrl of robotsTxt.sitemaps) {
-    const urls = await fetchSitemapRecursive(sUrl, visitedSitemaps);
-    sitemapUrls.push(...urls);
-  }
+  // Nutze den neuen Unpacker für die URLs
+  const sitemapUrls = await getAllUrlsBeforeCrawl(url.origin);
 
   return { robotsTxt, sitemapUrls };
 }
