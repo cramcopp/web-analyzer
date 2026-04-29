@@ -226,7 +226,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
       const finalReportToSave = {
         ...report,
-        adminSecret: this.env.INTERNAL_SECRET
+        adminSecret: (this as any).env.INTERNAL_SECRET
       };
       await setDocument('reports', report.audit_id!, finalReportToSave as any);
       return report;
