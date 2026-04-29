@@ -104,7 +104,17 @@ function isSoft404(text: string): boolean {
   return indicators.some(i => low.includes(i)) && text.length < 1000;
 }
 
-export function checkIndexability(url: string, status: number, robotsMeta: string, xRobots: string, contentType: string, text: string, robotsTxtContent: string, can: string | null, hasNextPrev: boolean = false) {
+export function checkIndexability(
+  url: string, 
+  status: number, 
+  robotsMeta: string, 
+  xRobots: string, 
+  contentType: string, 
+  text: string, 
+  robotsTxtContent: string, 
+  can: string | null, 
+  hasNextPrev: boolean = false
+) {
   if (status >= 400) return { isIndexable: false, reason: `HTTP ${status}` };
   if (contentType && !contentType.includes('text/html')) return { isIndexable: false, reason: "Non-HTML Content" };
   
@@ -176,7 +186,17 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
         }))
       };
 
-      const indexCheck = checkIndexability(subUrl, subRes.status, subResult.robots || '', subResult.xRobotsTag || '', subContentType, strippedContent, robotsTxtContent, subResult.canonical, subResult.hasNextPrev);
+      const indexCheck = checkIndexability(
+        subUrl, 
+        subRes.status, 
+        subResult.robots || '', 
+        subResult.xRobotsTag || '', 
+        subContentType, 
+        strippedContent, 
+        robotsTxtContent, 
+        subResult.canonical || null, // Ensure string | null
+        subResult.hasNextPrev
+      );
 
       return { ...subResult, isIndexable: indexCheck.isIndexable };
     } catch (e) { return { error: true, url: subUrl, status: 'Error' }; }
@@ -303,7 +323,22 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
   const lazyImages = allImages.filter((img: any) => img.getAttribute('loading') === 'lazy').length;
 
-  const mainIndex = checkIndexability(mainUrlNormalized, 200, root.querySelector('meta[name="robots"]')?.getAttribute('content') || '', headers['x-robots-tag'] || '', headers['content-type'] || 'text/html', html, robotsTxt.content, (root.querySelector('link[rel="canonical"]')?.getAttribute('href') || null) as string | null);
+  // Type-Safe Indexability Check
+  const robotsMeta = root.querySelector('meta[name="robots"]')?.getAttribute('content') || '';
+  const xRobots = headers['x-robots-tag'] || '';
+  const contentType = headers['content-type'] || 'text/html';
+  const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href') || null;
+
+  const mainIndex = checkIndexability(
+    mainUrlNormalized, 
+    200, 
+    robotsMeta, 
+    xRobots, 
+    contentType, 
+    html, 
+    robotsTxt.content, 
+    canonical
+  );
 
   // Links
   const allLinks = root.querySelectorAll('a[href]');
@@ -331,7 +366,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const scripts = root.querySelectorAll('script');
   const totalScripts = scripts.length;
   const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
-  const totalStylesheets = root.querySelectorAll('link[rel=\"stylesheet\"]').length;
+  const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
 
   // DOM Depth
   const calculateMaxDepth = (node: any): number => {
