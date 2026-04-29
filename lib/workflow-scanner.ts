@@ -87,7 +87,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       state.results.push(...batchUpdate.scanned);
       state.processed.push(...currentBatch, ...batchUpdate.discovered);
       
-      const nextQueue = state.queue.filter(u => !currentBatch.includes(u));
+      const nextQueue = state.queue.filter((u: string) => !currentBatch.includes(u));
       state.queue = Array.from(new Set([...nextQueue, ...batchUpdate.discovered]));
     }
 
@@ -117,7 +117,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
       const scores = calculateHeuristicScores(root, mainIndex);
       
-      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...state.results.filter(r => r.isIndexable).map(r => r.url)];
+      const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...state.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
       const report: Partial<AnalysisResult> = {
         audit_id: Math.random().toString(36).substring(7).toUpperCase(),
