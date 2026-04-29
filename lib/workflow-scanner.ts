@@ -209,7 +209,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           h1Count: root.querySelectorAll('h1').length,
           hasSitemap: (preflightData as any).sitemapUrls?.length > 0 || false,
           heuristicScores: scores,
-          subpageSample: currentState.results.slice(0, 5).map(r => ({
+          subpageSample: currentState.results.slice(0, 5).map((r: any) => ({
             url: r.url,
             title: r.title,
             status: r.status,
