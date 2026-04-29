@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { parse } from 'node-html-parser';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
 import { z } from 'zod';
@@ -128,11 +127,17 @@ export async function POST(req: Request) {
           if (!res.ok) return { url: item.link, name: item.title, error: 'Access Denied' };
           
           const html = await res.text();
-          const root = parse(html);
           
-          const title = root.querySelector('title')?.text.trim() || item.title;
-          const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') || item.snippet;
-          const h1Count = root.querySelectorAll('h1').length;
+          // Lightweight regex extraction to avoid heavy parser dependencies
+          const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+          const title = titleMatch ? titleMatch[1].trim() : item.title;
+          
+          const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*)["'][^>]*>/i) || 
+                           html.match(/<meta[^>]*content=["']([^"']*)["'][^>]*name=["']description["'][^>]*>/i);
+          const metaDescription = descMatch ? descMatch[1] : item.snippet;
+          
+          const h1Matches = html.match(/<h1[^>]*>/gi);
+          const h1Count = h1Matches ? h1Matches.length : 0;
           
           return {
              url: item.link,
