@@ -12,12 +12,70 @@ import {
 import { scanSubpage, calculateHeuristicScores, checkIndexability } from './scanner';
 import { setDocument } from './firestore-edge';
 
+async function generateAggregatedAiReport(metrics: any, apiKey: string) {
+  const prompt = `
+  Du bist ein technischer SEO- und Web-Performance-Auditor. 
+  Hier sind die aggregierten Hard-Facts eines Website-Crawls:
+  ${JSON.stringify(metrics)}
+
+  Analysiere diese Zahlen. Erstelle präzise Insights (was fällt auf?) und konkrete Recommendations (was muss getan werden?).
+  Antworte AUSSCHLIESSLICH im JSON-Format.
+  
+  Erwartete Struktur:
+  {
+    "seo": { "insights": ["..."], "recommendations": ["..."] },
+    "performance": { "insights": ["..."], "recommendations": ["..."] },
+    "security": { "insights": ["..."], "recommendations": ["..."] },
+    "accessibility": { "insights": ["..."], "recommendations": ["..."] },
+    "compliance": { "insights": ["..."], "recommendations": ["..."] }
+  }
+  `;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=\${apiKey}\`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { 
+            responseMimeType: "application/json",
+            temperature: 0.2
+          }
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) throw new Error('Rate Limit');
+        throw new Error('API Error');
+      }
+
+      const data = await response.json();
+      const jsonString = data.candidates[0].content.parts[0].text;
+      return JSON.parse(jsonString);
+
+    } catch (error) {
+      if (attempt === 3) {
+        return {
+          seo: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+          performance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+          security: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+          accessibility: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
+          compliance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] }
+        };
+      }
+      await new Promise(res => setTimeout(res, 5000));
+    }
+  }
+}
+
 type Env = {
   FIREBASE_PROJECT_ID: string;
   FIREBASE_DATABASE_ID: string;
   FIREBASE_API_KEY: string;
   INTERNAL_SECRET: string;
   SCAN_WORKFLOW: Workflow;
+  GEMINI_API_KEY: string;
 };
 
 export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
@@ -129,31 +187,42 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       const finalReport = await step.do('finalize report', async () => {
         const allImages = root.querySelectorAll('img');
         const imagesTotal = allImages.length;
-        const imageDetails = allImages.map((img: any) => ({
-          src: img.getAttribute('src') || '',
-          alt: img.getAttribute('alt') || null
-        }));
+        const imagesWithoutAlt = allImages.filter((img: any) => !img.getAttribute('alt')).length;
         
         const scripts = root.querySelectorAll('script');
         const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
         const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
 
-        const calculateMaxDepth = (node: any): number => {
-          if (!node.childNodes || node.childNodes.length === 0) return 1;
-          let max = 0;
-          node.childNodes.forEach((child: any) => {
-            if (child.nodeType === 1) max = Math.max(max, calculateMaxDepth(child));
-          });
-          return 1 + max;
-        };
-        const maxDomDepth = calculateMaxDepth(root);
-
         const scores = calculateHeuristicScores(root, mainIndex);
         const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
-        // Data Pruning (ONLY remove the AI-bloat, keep links/headings for dashboard)
+        // 2. Metrics for AI (Aggregate everything into one single prompt)
+        const aiMetrics = {
+          domain: preflightData.domain,
+          title: root.querySelector('title')?.text.trim() || '',
+          crawledPages: currentState.processed.length,
+          indexablePages: indexableUrls.length,
+          imagesTotal,
+          imagesWithoutAlt,
+          blockingScripts,
+          totalStylesheets,
+          h1Count: root.querySelectorAll('h1').length,
+          hasSitemap: (preflightData as any).sitemapUrls?.length > 0 || false,
+          heuristicScores: scores,
+          subpageSample: currentState.results.slice(0, 5).map(r => ({
+            url: r.url,
+            title: r.title,
+            status: r.status,
+            isIndexable: r.isIndexable
+          }))
+        };
+
+        // 3. One single, aggregated AI Call
+        const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY);
+
+        // 4. Data Pruning (Firestore 1MB limit protection)
         const slimSubpages = currentState.results.map((r: any) => {
-          const { strippedContent, ...safeData } = r; 
+          const { strippedContent, links, ...safeData } = r; 
           return safeData;
         });
 
@@ -163,7 +232,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           createdAt: new Date().toISOString(),
           url: preflightData.mainUrlNormalized,
           urlObj: preflightData.mainUrlNormalized,
-          title: root.querySelector('title')?.text.trim() || '',
+          title: aiMetrics.title,
           metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
           status: 'completed',
           progress: 100,
@@ -176,11 +245,12 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
             scannedSubpages: slimSubpages as any,
             brokenLinks: []
           },
-          seo: { score: scores.seo, insights: [], recommendations: [], detailedSeo: {} as any },
-          performance: { score: scores.performance, insights: [], recommendations: [], detailedPerformance: {} as any },
-          security: { score: scores.security, insights: [], recommendations: [], detailedSecurity: {} as any },
-          accessibility: { score: scores.accessibility, insights: [], recommendations: [], detailedAccessibility: {} as any },
-          compliance: { score: scores.compliance, insights: [], recommendations: [], detailedCompliance: {} as any },
+          // Populate sections from AI results
+          seo: { score: scores.seo, insights: aiReport.seo.insights, recommendations: aiReport.seo.recommendations, detailedSeo: {} as any },
+          performance: { score: scores.performance, insights: aiReport.performance.insights, recommendations: aiReport.performance.recommendations, detailedPerformance: {} as any },
+          security: { score: scores.security, insights: aiReport.security.insights, recommendations: aiReport.security.recommendations, detailedSecurity: {} as any },
+          accessibility: { score: scores.accessibility, insights: aiReport.accessibility.insights, recommendations: aiReport.accessibility.recommendations, detailedAccessibility: {} as any },
+          compliance: { score: scores.compliance, insights: aiReport.compliance.insights, recommendations: aiReport.compliance.recommendations, detailedCompliance: {} as any },
           adminSecret: this.env.INTERNAL_SECRET
         };
 
