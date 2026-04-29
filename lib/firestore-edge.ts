@@ -221,9 +221,13 @@ export async function queryDocuments<T = Record<string, any>>(
     };
   }
 
-  const results = await res.json() as QueryResult[];
-  return (results || [])
-    .filter((r) => r.document)
+  const results = await res.json();
+  if (!Array.isArray(results)) {
+    return [];
+  }
+
+  return results
+    .filter((r: QueryResult) => r.document)
     .map((r) => {
       const doc = r.document!;
       const fields = doc.fields || {};
@@ -294,6 +298,10 @@ export async function updateStripeSubscription(uid: string, data: Record<string,
  * BIZ-02: Atomic increment to prevent race conditions.
  */
 export async function incrementField(collection: string, id: string, field: string, amount: number, token?: string): Promise<any> {
+  if (!PROJECT_ID) {
+    throw new Error('FIREBASE_PROJECT_ID is not defined in environment variables.');
+  }
+
   // We use the commit endpoint for transformations
   const commitUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents:commit?key=${API_KEY}`;
   

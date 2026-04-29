@@ -148,7 +148,7 @@ function ReportResultsView({
            <div className="absolute top-4 left-6">
               <span className="text-[10px] font-black uppercase tracking-[2px] text-[#888]">Audit Radar</span>
            </div>
-           <ResponsiveContainer width="100%" height="100%">
+           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                 <PolarGrid stroke={isDark ? '#333' : '#EEE'} />
                 <PolarAngleAxis dataKey="subject" tick={{ fill: isDark ? '#888' : '#666', fontSize: 10, fontWeight: 'bold' }} />

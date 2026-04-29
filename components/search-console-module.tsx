@@ -121,7 +121,7 @@ function SearchConsoleModule({ data, isLoading, onConnect, error, plan = 'free',
                  Performance-Trend (Letzte 30 Tage)
               </h4>
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                    <LineChart data={data.performance} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#3F3F46' : '#eee'} />
                       <XAxis 

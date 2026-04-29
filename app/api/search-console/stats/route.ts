@@ -64,7 +64,7 @@ export async function GET(req: Request) {
             await updateDocument('users', user.uid, {
               gscTokens: JSON.stringify(tokens),
               adminSecret: process.env.INTERNAL_SECRET
-            });
+            }, token);
 
             // Retry the original request
             return googleFetch(url, options, true);
@@ -87,11 +87,11 @@ export async function GET(req: Request) {
     // Simple matching: find a site that is a prefix of the provided URL or matches the domain
     const matchedSite = sites.find((s: any) => siteUrl.startsWith(s.siteUrl || '')) || sites[0]; 
 
-    if (!matchedSite) {
+    if (!matchedSite || !matchedSite.siteUrl) {
       return NextResponse.json({ error: 'Keine passende Search Console Property gefunden.' }, { status: 404 });
     }
 
-    const targetProperty = matchedSite.siteUrl!;
+    const targetProperty = matchedSite.siteUrl;
     const encodedProperty = encodeURIComponent(targetProperty);
 
     // 2. Fetch Performance Data (Last 30 days)

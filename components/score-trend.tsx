@@ -62,7 +62,7 @@ function ScoreTrend({ url }: { url: string }) {
       </div>
 
       <div className="flex-1 w-full min-h-[200px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <LineChart data={history}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEE" />
             <XAxis 
