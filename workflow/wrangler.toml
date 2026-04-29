@@ -1,0 +1,13 @@
+name = "web-scan-workflow-worker"
+main = "index.ts"
+compatibility_date = "2025-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[workflows]]
+name = "web-scan-workflow"
+binding = "SCAN_WORKFLOW"
+class_name = "ScanWorkflow"
+
+[vars]
+# Copy vars from main project if needed
+# FIREBASE_PROJECT_ID = "..."

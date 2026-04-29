@@ -1,14 +1,15 @@
 name = "web-analyzer-pro"
 pages_build_output_dir = ".vercel/output/static"
 
-compatibility_date = "2024-11-01"
+compatibility_date = "2025-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # Add non-sensitive vars here if needed
 # Sensitive vars (API keys) should be added in the Cloudflare Dashboard
 
-[[workflows]]
-name = "web-scan-workflow"
-binding = "SCAN_WORKFLOW"
-class_name = "ScanWorkflow"
+[[services]]
+binding = "SCAN_WORKFLOW_SERVICE"
+service = "web-scan-workflow-worker"
+
+
