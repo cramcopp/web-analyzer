@@ -60,8 +60,7 @@ function extractRawData(root: any, currentUrl: string, domain: string): string[]
       try {
         const urlObj = new URL(href, currentUrl);
         if (isSameBaseDomain(urlObj.hostname, domain)) {
-          const clean = urlObj.origin + urlObj.pathname + urlObj.search;
-          discoveredUrls.add(clean);
+          discoveredUrls.add(urlObj.toString());
         }
       } catch {}
     }
@@ -74,8 +73,7 @@ function extractRawData(root: any, currentUrl: string, domain: string): string[]
       try {
         const urlObj = new URL(href, currentUrl);
         if (isSameBaseDomain(urlObj.hostname, domain)) {
-          const clean = urlObj.origin + urlObj.pathname + urlObj.search;
-          discoveredUrls.add(clean);
+          discoveredUrls.add(urlObj.toString());
         }
       } catch {}
     }
@@ -92,8 +90,7 @@ function extractRawData(root: any, currentUrl: string, domain: string): string[]
           try {
             const urlObj = new URL(m);
             if (isSameBaseDomain(urlObj.hostname, domain)) {
-              const clean = urlObj.origin + urlObj.pathname + urlObj.search;
-              discoveredUrls.add(clean);
+              discoveredUrls.add(urlObj.toString());
             }
           } catch {}
         });
@@ -350,9 +347,9 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
   // --- Indexability Check (Phase 3) ---
   const robots = root.querySelector('meta[name="robots"]')?.getAttribute('content') || 'index, follow';
   const canonical = root.querySelector('link[rel="canonical"]')?.getAttribute('href');
-  const xRobotsTag = response.headers.get('X-Robots-Tag') || '';
-  
-  const normalizeUrl = (u: string) => u.replace(/\/$/, '').toLowerCase();
+  const xRobotsTag = response.headers.get('x-robots-tag') || '';
+
+  const brutalCleanUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 
   const isIndexable = (url: string, status: number | string, rb: string, xRobots: string, can?: string | null) => {
     // 1. HTTP Status 200
@@ -362,24 +359,35 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
     const rbLower = rb.toLowerCase();
     if (rbLower.includes('noindex') || rbLower.includes('none')) return false;
 
-    // 3. X-Robots-Tag (noindex || none)
+    // 3. X-Robots-Tag (Case-Insensitive)
     const xRobotsLower = xRobots.toLowerCase();
     if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none')) return false;
 
-    // 4. Normalisierter Canonical-Abgleich
+    // 4. Brutale Canonical-Normalisierung
     if (can) {
       try {
         const canAbs = new URL(can, url).href;
-        if (normalizeUrl(canAbs) !== normalizeUrl(url)) return false;
+        if (brutalCleanUrl(canAbs) !== brutalCleanUrl(url)) return false;
       } catch { /* ignore */ }
     }
     return true;
   };
 
   const mainIsIndexable = isIndexable(urlObj.toString(), response.status, robots, xRobotsTag, canonical);
-  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + successfulSubpages.filter(p => 
+  const indexableSubpages = successfulSubpages.filter(p => 
     isIndexable(p.url, p.status as number, p.robots || '', p.xRobotsTag || '', p.canonical)
-  ).length;
+  );
+
+  const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpages.length;
+
+  // Task 3.1: Konsolen-Ausgabe für Debugging
+  console.log("--- CRAWL DEBUG ---");
+  console.log("Gecrawlt:", Array.from(allInternalLinks));
+  console.log("Indexierbar:", [
+    ...(mainIsIndexable ? [urlObj.toString()] : []),
+    ...indexableSubpages.map(p => p.url)
+  ]);
+  console.log("-------------------");
 
   // Metadata Extraction
   const title = root.querySelector('title')?.text.trim() || '';
