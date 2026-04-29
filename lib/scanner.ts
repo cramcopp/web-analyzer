@@ -303,7 +303,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const imagesWithoutAlt = imageDetails.filter(img => !img.alt || img.alt.trim() === '').length;
   const lazyImages = allImages.filter((img: any) => img.getAttribute('loading') === 'lazy').length;
 
-  const mainIndex = checkIndexability(mainUrlNormalized, 200, root.querySelector('meta[name=\"robots\"]')?.getAttribute('content') || '', headers['x-robots-tag'] || '', headers['content-type'] || 'text/html', html, robotsTxt.content, root.querySelector('link[rel=\"canonical\"]')?.getAttribute('href') || '');
+  const mainIndex = checkIndexability(mainUrlNormalized, 200, root.querySelector('meta[name="robots"]')?.getAttribute('content') || '', headers['x-robots-tag'] || '', headers['content-type'] || 'text/html', html, robotsTxt.content, root.querySelector('link[rel="canonical"]')?.getAttribute('href') || null);
 
   // Links
   const allLinks = root.querySelectorAll('a[href]');
@@ -410,10 +410,10 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const scores = calculateHeuristicScores(root, mainIndex);
 
   const rdapRes = await rdapPromise;
-  let domainAge = \"Unknown\";
+  let domainAge = "Unknown";
   if (rdapRes?.ok) {
     const data = await rdapRes.json();
-    domainAge = data.events?.find((e: any) => e.eventAction === 'registration')?.eventDate.split('T')[0] || \"Unknown\";
+    domainAge = data.events?.find((e: any) => e.eventAction === 'registration')?.eventDate.split('T')[0] || "Unknown";
   }
 
   return {
@@ -423,7 +423,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
     url: mainUrlNormalized,
     urlObj: mainUrlNormalized,
     title: root.querySelector('title')?.text.trim() || '',
-    metaDescription: root.querySelector('meta[name=\"description\"]').getAttribute('content') || '',
+    metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
     metaKeywords: '', htmlLang: '', hreflangs: [], generator: '', viewport: '', viewportScalable: 'Yes',
     robots: mainIndex.isIndexable ? 'index, follow' : 'noindex',
     h1Count: root.querySelectorAll('h1').length, h2Count: root.querySelectorAll('h2').length,
