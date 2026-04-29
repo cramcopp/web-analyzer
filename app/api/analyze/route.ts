@@ -1,164 +1,97 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
-import { analyzeSchema } from '@/lib/validations';
-import { PLAN_CONFIG } from '@/lib/plans';
 
 export const runtime = 'edge';
 
-export async function POST(req: Request) {
-  // @ts-ignore
-  const env = (req as any).context?.env || process.env;
-  
-  const user = await getSessionUser();
-  const token = await getSessionToken();
-
-  if (!user || !token) {
-    return NextResponse.json({ error: 'Bitte melde dich an, um den Scanner zu nutzen.' }, { status: 401 });
-  }
-
+export async function POST(request: Request, { params }: { params: any }, env?: any) {
   try {
-    const body = await req.json();
-    const result = analyzeSchema.safeParse(body);
-    
-    if (!result.success) {
+    const { url } = await request.json();
+    const token = await getSessionToken();
+    const user = await getSessionUser();
+
+    if (!user || !token) {
+      return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    }
+
+    // 1. Check Quota (BIZ-01)
+    const userData = await getDocument('users', user.uid, token, env);
+    const plan = userData?.plan || 'free';
+    const scanCount = userData?.scanCount || 0;
+    const maxScans = userData?.maxScans || (plan === 'agency' ? 100 : plan === 'pro' ? 25 : 5);
+
+    if (scanCount >= maxScans) {
       return NextResponse.json({ 
-        error: result.error.issues[0]?.message || 'Ungültige Eingabe' 
-      }, { status: 400 });
+        error: 'Scan-Limit erreicht', 
+        details: `Du hast ${scanCount}/${maxScans} Scans verbraucht. Bitte upgrade deinen Plan.` 
+      }, { status: 403 });
     }
 
-    let { url } = result.data;
-    const { apiKey } = result.data;
-
-    // URL Sanitization & Protocol Enforcement
-    try {
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-      const urlObj = new URL(url);
-      url = urlObj.origin + urlObj.pathname;
-    } catch (e) {
-      return NextResponse.json({ error: 'Ungültiges URL-Format' }, { status: 400 });
-    }
-
-    // --- 10-Minute Scan Cache ---
-    if (user && token) {
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      const recentReports = await queryDocuments('reports', [
-        { field: 'userId', op: 'EQUAL', value: user.uid },
-        { field: 'url', op: 'EQUAL', value: url },
-        { field: 'createdAt', op: 'GREATER_THAN', value: tenMinutesAgo }
-      ], 'AND', token);
-
-      if (recentReports && recentReports.length > 0) {
-        const latest = recentReports[0];
-        // If it has results and rawScrapeData, return them directly
-        if (latest.results && latest.rawScrapeData) {
-          return NextResponse.json({
-            ...JSON.parse(latest.rawScrapeData),
-            _cached: true,
-            _cachedReport: JSON.parse(latest.results)
-          });
-        }
-      }
-    }
-
-    // BIZ-01: Server-side quota check
-    let effectivePlan = 'free';
-    if (user && token) {
-      const userData = await getDocument('users', user.uid, token);
-      if (userData) {
-        effectivePlan = userData.plan || 'free';
-        const scanCount = userData.scanCount || 0;
-        const maxScans = userData.maxScans || PLAN_CONFIG.free.maxScans;
-
-        if (scanCount >= maxScans) {
-          return NextResponse.json({ 
-            error: 'Scan-Limit erreicht', 
-            details: `Du hast ${scanCount} von ${maxScans} Scans verbraucht. Bitte upgrade dein Abo.` 
-          }, { status: 403 });
-        }
-      }
-    } else {
-       // BIZ-01: Block unauthenticated scans to prevent cost explosion
-       return NextResponse.json({ error: 'Bitte logge dich ein, um eine Analyse zu starten.' }, { status: 401 });
-    }
-
+    // 2. Normalize & Setup Audit
     const audit_id = Math.random().toString(36).substring(7).toUpperCase();
     
-    // Create initial placeholder report so polling doesn't return 404
+    // Create Placeholder in Firestore
+    await setDocument('reports', audit_id, {
+      audit_id,
+      userId: user.uid,
+      url: url,
+      urlObj: url,
+      createdAt: new Date().toISOString(),
+      status: 'scanning',
+      progress: 0,
+      adminSecret: env.INTERNAL_SECRET
+    }, null, env);
+
+    // 3. TRIGGER SCAN
     try {
+      // Direct Scan for small sites to avoid workflow delays
+      const { performAnalysis } = await import('@/lib/scanner');
+      const result = await performAnalysis({ url, plan, userId: user.uid, auditId: audit_id });
+      
+      // Save the real result immediately
       await setDocument('reports', audit_id, {
-        id: audit_id,
+        ...result,
+        audit_id,
         userId: user.uid,
-        url,
-        status: 'scanning',
-        progress: 0,
-        createdAt: new Date().toISOString(),
-        results: '', // Added to satisfy old rules
-        adminSecret: env.INTERNAL_SECRET // Bypass rules check
-      }, token, env);
-    } catch (e: any) {
-      const errorMsg = `Initialisierung fehlgeschlagen: ${e.message}`;
-      console.error(errorMsg);
+        url: url,
+        urlObj: url,
+        status: 'completed',
+        progress: 100,
+        adminSecret: env.INTERNAL_SECRET
+      }, null, env);
+
       return NextResponse.json({ 
-        error: errorMsg 
+        audit_id,
+        mode: 'direct',
+        status: 'completed'
+      });
+    } catch (e: any) {
+      console.error("Direct scan failed, trying workflow:", e);
+      
+      // Fallback to workflow if direct scan fails or times out
+      if (env.SCAN_WORKFLOW_SERVICE) {
+        await env.SCAN_WORKFLOW_SERVICE.startScan({ 
+          url, 
+          plan, 
+          userId: user.uid,
+          token,
+          auditId: audit_id
+        });
+        
+        return NextResponse.json({ 
+          audit_id,
+          mode: 'workflow',
+          status: 'processing'
+        });
+      }
+      
+      return NextResponse.json({ 
+        error: 'Analyse fehlgeschlagen.', 
+        details: e.message 
       }, { status: 500 });
     }
-
-      // TRIGGER SCAN
-      try {
-        // Direct Scan for small sites to avoid workflow delays
-        const { performAnalysis } = await import('@/lib/scanner');
-        const result = await performAnalysis({ url, plan: effectivePlan, userId: user.uid, auditId: audit_id });
-        
-        // Save the real result immediately
-        await setDocument('reports', audit_id, {
-          ...result,
-          audit_id,
-          userId: user.uid,
-          status: 'completed',
-          progress: 100,
-          adminSecret: env.INTERNAL_SECRET
-        }, null, env);
-
-        return NextResponse.json({ 
-          audit_id,
-          mode: 'direct',
-          status: 'completed'
-        });
-      } catch (e: any) {
-        console.error("Direct scan failed, trying workflow:", e);
-        
-        // Fallback to workflow if direct scan fails or times out
-        if (env.SCAN_WORKFLOW_SERVICE) {
-          await env.SCAN_WORKFLOW_SERVICE.startScan({ 
-            url, 
-            plan: effectivePlan, 
-            userId: user.uid,
-            token,
-            auditId: audit_id
-          });
-          
-          return NextResponse.json({ 
-            audit_id,
-            mode: 'workflow',
-            status: 'processing'
-          });
-        }
-        
-        return NextResponse.json({ 
-          error: 'Analyse fehlgeschlagen.', 
-          details: e.message 
-        }, { status: 500 });
-      }
-    return NextResponse.json({ 
-      error: 'Scanner Service nicht erreichbar.', 
-      details: 'Bitte prüfe die SCAN_WORKFLOW_SERVICE Bindung.' 
-    }, { status: 503 });
-
   } catch (error: any) {
-    console.error("API Analysis Error:", error instanceof Error ? error.message : 'Unknown error');
-    return NextResponse.json({ error: error.message || 'Server error occurred during analysis.' }, { status: 500 });
+    console.error('Analyze API Error:', error);
+    return NextResponse.json({ error: 'Interner Server-Fehler', details: error.message }, { status: 500 });
   }
 }

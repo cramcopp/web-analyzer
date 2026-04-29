@@ -253,6 +253,9 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
           h2: subRoot.querySelectorAll('h2').map(el => el.text.trim()),
           h3: subRoot.querySelectorAll('h3').map(el => el.text.trim())
         },
+        url: subUrl,
+        urlObj: subUrl,
+        status: 'scanning',
         images: subRoot.querySelectorAll('img').map(img => ({
           src: img.getAttribute('src') || '',
           alt: img.getAttribute('alt') || ''
@@ -503,7 +506,9 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
     audit_id: auditId || Math.random().toString(36).substring(7).toUpperCase(),
     userId,
     createdAt: new Date().toISOString(),
-    urlObj: mainUrlNormalized, title: root.querySelector('title')?.text.trim() || '',
+    url: mainUrlNormalized,
+    urlObj: mainUrlNormalized,
+    title: root.querySelector('title')?.text.trim() || '',
     metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
     metaKeywords: '', htmlLang: '', hreflangs: [], generator: '', viewport: '', viewportScalable: 'Yes',
     robots: mainIndex.isIndexable ? 'index, follow' : 'noindex',
