@@ -192,7 +192,7 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
 
   const res = await fetchWithRetry(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(query)
   });
 
