@@ -57,7 +57,8 @@ function documentFromFirestore(doc: any): any {
   return result;
 }
 
-function valueFromFirestore(v: FirestoreValue): any {
+function valueFromFirestore(v: any): any {
+  if (!v) return null;
   if ('stringValue' in v) return v.stringValue;
   if ('integerValue' in v) return parseInt(v.integerValue);
   if ('doubleValue' in v) return v.doubleValue;
@@ -66,13 +67,15 @@ function valueFromFirestore(v: FirestoreValue): any {
   if ('nullValue' in v) return null;
   if ('mapValue' in v) {
     const res: Record<string, any> = {};
-    for (const [mk, mv] of Object.entries(v.mapValue.fields)) {
+    const fields = v.mapValue.fields || {};
+    for (const [mk, mv] of Object.entries(fields)) {
       res[mk] = valueFromFirestore(mv);
     }
     return res;
   }
   if ('arrayValue' in v) {
-    return (v as any).arrayValue.values?.map(valueFromFirestore) || [];
+    const values = v.arrayValue.values || [];
+    return values.map(valueFromFirestore);
   }
   return v;
 }
