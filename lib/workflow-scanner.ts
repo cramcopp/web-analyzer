@@ -142,7 +142,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       const cdn = preflightData.headers['cf-ray'] ? 'Cloudflare' : preflightData.headers['x-vercel-id'] ? 'Vercel' : preflightData.headers['x-akamai-transformed'] ? 'Akamai' : preflightData.headers['server']?.includes('Cloudfront') ? 'Amazon CloudFront' : 'None detected';
 
       // Prune large fields to stay under Firestore limits (1MB)
-      const storageResults = currentState.results.map(r => {
+      const storageResults = currentState.results.map((r: any) => {
         const { strippedContent, ...rest } = r;
         return rest;
       });
