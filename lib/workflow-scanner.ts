@@ -239,3 +239,16 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
     }
   }
 }
+
+// NEU: Der HTTP-Empfänger, der den Workflow von außen startet!
+export default {
+  async fetch(req: Request, env: Env) {
+    if (req.method === 'POST') {
+      const params = await req.json();
+      // Hier startet der Worker seinen eigenen Workflow!
+      await env.SCAN_WORKFLOW.create({ params });
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+    return new Response("Method not allowed", { status: 405 });
+  }
+};

@@ -62,15 +62,18 @@ export async function POST(req: Request) {
 
     // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
-      await env.SCAN_WORKFLOW_SERVICE.create({ 
-        params: {
+      // FIX: Wir kommunizieren über fetch() mit dem Service-Binding!
+      await env.SCAN_WORKFLOW_SERVICE.fetch(new Request("https://worker/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           url, 
           plan, 
           userId: user.uid,
           token,
           auditId: audit_id
-        }
-      });
+        })
+      }));
       
       return NextResponse.json({ 
         audit_id,
