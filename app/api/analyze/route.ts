@@ -8,6 +8,9 @@ import { PLAN_CONFIG } from '@/lib/plans';
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
+  // @ts-ignore
+  const env = (req as any).context?.env || process.env;
+  
   const user = await getSessionUser();
   const token = await getSessionToken();
 
