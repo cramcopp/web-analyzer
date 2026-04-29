@@ -345,7 +345,7 @@ export async function performPreflight(urlObj: URL, plan: string) {
   };
 }
 
-export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Promise<AnalysisResult> {
+export async function performAnalysis({ url, plan = 'free', userId = '' }: ScanOptions): Promise<AnalysisResult> {
   const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
   const preflight = await performPreflight(urlObj, plan);
   const { subpageLimit, domain, robotsTxt, sitemapUrls, mainUrlNormalized, html, headers } = preflight;
@@ -489,6 +489,7 @@ export async function performAnalysis({ url, plan = 'free' }: ScanOptions): Prom
 
   return {
     audit_id: Math.random().toString(36).substring(7).toUpperCase(),
+    userId,
     createdAt: new Date().toISOString(),
     urlObj: mainUrlNormalized, title: root.querySelector('title')?.text.trim() || '',
     metaDescription: root.querySelector('meta[name="description"]')?.getAttribute('content') || '',
