@@ -46,13 +46,14 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        (request.auth.token.email == "cram.henley@gmail.com" && request.auth.token.email_verified == true));
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (request.auth.token.email == "cram.henley@gmail.com" && request.auth.token.email_verified == true)
+      );
     }
 
     function hasAgencyPlan() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.plan == 'agency';
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.plan == 'agency';
     }
 
     function isTeamMember(teamId) {
