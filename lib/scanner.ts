@@ -422,7 +422,7 @@ function isSoft404(text: string): boolean {
   return soft404Keywords.some(kw => lowerText.includes(kw));
 }
 
-const isIndexable = (
+const checkIndexability = (
   url: string, 
   status: number | string, 
   rb: string, 
@@ -432,53 +432,62 @@ const isIndexable = (
   robotsTxtContent: string,
   can?: string | null,
   hasNextPrev?: boolean
-) => {
-  // Task 4.2: Striktes Content-Type Matching
-  if (!contentType.toLowerCase().includes('text/html')) return false;
+): { isIndexable: boolean; reason: string } => {
+  // 0. Content-Type Check
+  if (!contentType.toLowerCase().includes('text/html')) {
+    return { isIndexable: false, reason: `Content-Type (${contentType})` };
+  }
 
-  // Task 2.1: Lokaler robots.txt-Parser Middleware
+  // 1. Status Check
+  if (status !== 200) {
+    return { isIndexable: false, reason: `Status ${status}` };
+  }
+
+  // 2. Robots.txt Check
   try {
     const urlObj = new URL(url);
-    if (!isAllowedByRobots(robotsTxtContent, urlObj.pathname + urlObj.search)) return false;
+    if (!isAllowedByRobots(robotsTxtContent, urlObj.pathname + urlObj.search)) {
+      return { isIndexable: false, reason: "robots.txt Disallow" };
+    }
   } catch {}
 
-  // 1. HTTP Status 200
-  if (status !== 200) return false;
+  // 3. X-Robots-Tag Header Check
+  if (xRobots.toLowerCase().match(/noindex|none/)) {
+    return { isIndexable: false, reason: `X-Robots-Tag: ${xRobots}` };
+  }
 
-  // Task 4.1: Content-Längen-Prüfung (Soft-404)
-  if (isSoft404(text)) return false;
-
-  // 2. Meta Robots (noindex || none)
+  // 4. HTML Meta Check
   const rbLower = rb.toLowerCase();
-  if (rbLower.includes('noindex') || rbLower.includes('none')) return false;
+  if (rbLower.includes('noindex') || rbLower.includes('none')) {
+    return { isIndexable: false, reason: `Meta Robots: ${rb}` };
+  }
 
-  // 3. X-Robots-Tag (Case-Insensitive)
-  const xRobotsLower = xRobots.toLowerCase();
-  if (xRobotsLower.includes('noindex') || xRobotsLower.includes('none')) return false;
+  // 5. Soft-404 Check
+  if (isSoft404(text)) {
+    return { isIndexable: false, reason: "Soft-404 Detection" };
+  }
 
-  // Phase 1: Behebung des Canonical-Null-Bugs
-  // Task 1.1: Conditional Canonical Check (Nur prüfen, wenn Tag existiert)
+  // 6. Canonical Check (Nur wenn existent!)
   if (can && can.trim() !== '') {
     try {
-      const canAbs = new URL(can, url).href;
-      const brutalCleanUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').split('?')[0];
+      const absoluteCanonical = new URL(can, url).href;
+      const cleanUrl = (u: string) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').split('?')[0];
       
-      // Wenn es eine Parameter-Seite ist (?p=2) und kein Canonical auf die Hauptseite zeigt
-      // stufen wir sie als "Nicht indexierbar" ein, es sei denn sie hat next/prev.
-      if (url.includes('?') && !hasNextPrev) {
-         if (brutalCleanUrl(canAbs) !== brutalCleanUrl(url)) return false;
+      if (cleanUrl(url) !== cleanUrl(absoluteCanonical)) {
+        // Sonderfall: Pagination mit next/prev wird oft toleriert
+        if (!(url.includes('?') && hasNextPrev)) {
+          return { isIndexable: false, reason: `Canonical Mismatch (Ist: ${url} | Soll: ${absoluteCanonical})` };
+        }
       }
-
-      if (brutalCleanUrl(canAbs) !== brutalCleanUrl(url)) return false;
-    } catch { /* ignore */ }
+    } catch {
+      return { isIndexable: false, reason: "Broken Canonical URL" };
+    }
   } else if (url.includes('?') && !hasNextPrev) {
-    // Parameter-Seite ohne Canonical und ohne next/prev -> Duplicate Content Gefahr
-    // Hier bleiben wir bei der strengen Regel für Parameter-URLs
-    return false;
+    // Parameter-Seite ohne Canonical und ohne next/prev
+    return { isIndexable: false, reason: "Parameter URL without Canonical/Pagination" };
   }
   
-  // Wenn kein Canonical existiert (und keine Parameter-Gefahr besteht), ist die Seite indexierbar!
-  return true;
+  return { isIndexable: true, reason: "OK" };
 };
 
   // Metadata Extraction
@@ -491,7 +500,7 @@ const isIndexable = (
   const h2Texts = root.querySelectorAll('h2').map(el => el.text.replace(/\s+/g, ' ').trim());
   const h3Texts = root.querySelectorAll('h3').map(el => el.text.replace(/\s+/g, ' ').trim());
 
-  const mainIsIndexable = isIndexable(
+  const mainIndexResult = checkIndexability(
     urlObj.toString(), 
     response.status, 
     robots, 
@@ -503,8 +512,15 @@ const isIndexable = (
     !!(root.querySelector('link[rel="next"]') || root.querySelector('link[rel="prev"]'))
   );
   
-  const indexableSubpages = successfulSubpages.filter(p => 
-    isIndexable(
+  if (!mainIndexResult.isIndexable) {
+    console.log(`❌ Abgelehnt: ${urlObj.toString()} -> Grund: ${mainIndexResult.reason}`);
+  } else {
+    console.log(`✅ Indexierbar: ${urlObj.toString()}`);
+  }
+
+  const indexableSubpages: any[] = [];
+  successfulSubpages.forEach(p => {
+    const res = checkIndexability(
       p.url, 
       p.status as number, 
       p.robots || '', 
@@ -514,9 +530,16 @@ const isIndexable = (
       preflight.robotsTxt.content,
       p.canonical,
       p.hasNextPrev
-    )
-  );
+    );
+    if (res.isIndexable) {
+      indexableSubpages.push(p);
+      console.log(`✅ Indexierbar: ${p.url}`);
+    } else {
+      console.log(`❌ Abgelehnt: ${p.url} -> Grund: ${res.reason}`);
+    }
+  });
 
+  const mainIsIndexable = mainIndexResult.isIndexable;
   const indexablePagesCount = (mainIsIndexable ? 1 : 0) + indexableSubpages.length;
 
   // Task 6.1: Array-Export Script (Internal for reporting)
