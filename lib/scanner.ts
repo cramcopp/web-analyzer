@@ -255,7 +255,6 @@ export const scanSubpage = async (subUrl: string, domain: string, robotsTxtConte
         },
         url: subUrl,
         urlObj: subUrl,
-        status: 'scanning',
         images: subRoot.querySelectorAll('img').map(img => ({
           src: img.getAttribute('src') || '',
           alt: img.getAttribute('alt') || ''
