@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument, fetchWithRetry } from '@/lib/firestore-edge';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
       
       if (!res.ok) {
         if (res.status === 401 && !isRetry && tokens.refresh_token) {
-          console.log('Google Access Token expired, attempting refresh...');
+          console.warn('Google Access Token expired, attempting refresh...');
           const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

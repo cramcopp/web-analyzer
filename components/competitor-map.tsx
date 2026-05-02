@@ -3,6 +3,7 @@
 import { memo, useState } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Target, Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import DataSourceBadge from './data-source-badge';
 
 // Custom dot that renders stably on hover (no CSS scale on SVG elements)
 function CustomDot(props: any) {
@@ -58,21 +59,24 @@ function CompetitorMap({ competitors, userScore, userName }: { competitors?: any
   const userSeo = userScore;
   const userPerf = userScore;
 
-  const competitorData = competitors.map(c => ({
+  const competitorData = competitors
+  .filter(c => typeof c.estimatedScores?.seo === 'number' && typeof c.estimatedScores?.performance === 'number')
+  .map(c => ({
     name: c.name,
     url: c.url || '',
-    x: c.estimatedScores?.seo ?? 50,
-    y: c.estimatedScores?.performance ?? 50,
+    x: c.estimatedScores.seo,
+    y: c.estimatedScores.performance,
     z: 80,
     isUser: false,
   }));
+  if (competitorData.length === 0) return null;
 
   const data = [
     { name: userName || 'Du', x: userSeo, y: userPerf, z: 100, isUser: true },
     ...competitorData,
   ];
 
-  // Real competitive analysis
+  // AI-inferred competitive analysis. Do not present this as provider truth.
   const avgCompSeo = competitorData.reduce((s, c) => s + c.x, 0) / (competitorData.length || 1);
   const avgCompPerf = competitorData.reduce((s, c) => s + c.y, 0) / (competitorData.length || 1);
   const seoDiff = userSeo - avgCompSeo;
@@ -87,15 +91,15 @@ function CompetitorMap({ competitors, userScore, userName }: { competitors?: any
   if (overallDiff > 5) {
     analysisIcon = <TrendingUp className="w-3.5 h-3.5 text-[#27AE60]" />;
     analysisTitle = 'Wettbewerbs-Vorteil';
-    analysisText = `Deine Seite liegt im Branchendurchschnitt vorn (SEO +${seoDiff.toFixed(0)} Pkt., Performance +${perfDiff.toFixed(0)} Pkt.). Halte diesen Vorsprung durch regelmäßige Optimierungen.`;
+    analysisText = `KI-Hinweis: Der Schaetzwert liegt ueber dem Vergleichsschnitt (SEO +${seoDiff.toFixed(0)} Pkt., Performance +${perfDiff.toFixed(0)} Pkt.). Bitte mit Provider-Daten verifizieren.`;
     borderColor = '#27AE60';
   } else if (overallDiff < -5) {
     analysisIcon = <TrendingDown className="w-3.5 h-3.5 text-[#EB5757]" />;
     analysisTitle = 'Aufholbedarf';
-    analysisText = `Deine Seite liegt ${Math.abs(seoDiff).toFixed(0)} Punkte unter dem Branchen-SEO-Schnitt und ${Math.abs(perfDiff).toFixed(0)} Punkte unter der Durchschnitts-Performance. Priorität: Critical-Fixes aus dem Aktionsplan umsetzen.`;
+    analysisText = `KI-Hinweis: Der Schaetzwert liegt ${Math.abs(seoDiff).toFixed(0)} SEO-Punkte und ${Math.abs(perfDiff).toFixed(0)} Performance-Punkte unter dem Vergleichsschnitt. Bitte mit Provider-Daten verifizieren.`;
     borderColor = '#EB5757';
   } else {
-    analysisText = `Du liegst nah am Branchendurchschnitt (SEO Δ${seoDiff > 0 ? '+' : ''}${seoDiff.toFixed(0)}, Performance Δ${perfDiff > 0 ? '+' : ''}${perfDiff.toFixed(0)}). Gezielte Optimierungen können dich deutlich nach vorne bringen.`;
+    analysisText = `KI-Hinweis: Der Schaetzwert liegt nah am Vergleichsschnitt (SEO ${seoDiff > 0 ? '+' : ''}${seoDiff.toFixed(0)}, Performance ${perfDiff > 0 ? '+' : ''}${perfDiff.toFixed(0)}). Bitte mit Provider-Daten verifizieren.`;
   }
 
   return (
@@ -105,6 +109,7 @@ function CompetitorMap({ competitors, userScore, userName }: { competitors?: any
            <div className="flex items-center gap-2">
               <Target className="w-5 h-5 text-[#D4AF37]" />
               <h4 className="text-[16px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Markt-Positionierung</h4>
+              <DataSourceBadge type="ai_inferred" />
            </div>
            <p className="text-[10px] text-[#888] font-bold uppercase tracking-widest">SEO vs. Performance im Branchenvergleich</p>
         </div>

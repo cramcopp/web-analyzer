@@ -4,7 +4,8 @@ import { memo, useState, useCallback, useMemo } from 'react';
 import { 
   Zap, RefreshCw, LayoutDashboard, Search,
   ShieldCheck, TrendingUp, Network, Link, Trophy, 
-  Wrench, History, Settings, Sparkles, ChevronRight, CheckCircle2
+  History, Settings, Sparkles, ChevronRight, CheckCircle2,
+  Activity, FileText, BrainCircuit, FileSearch, ListChecks
 } from 'lucide-react';
 import LoadingDisplay from './loading-display';
 import ReportResultsView from './report-results-view';
@@ -18,6 +19,11 @@ import ProjectBacklinksView from './project-backlinks-view';
 import ProjectToolsView from './project-tools-view';
 import ProjectSetupView from './project-setup-view';
 import ProjectKeywordsView from './project-keywords-view';
+import ProjectMonitoringView from './project-monitoring-view';
+import ProjectAgencyReportsView from './project-agency-reports-view';
+import ProjectAiVisibilityView from './project-ai-visibility-view';
+import ProjectIssuesView from './project-issues-view';
+import ProjectEvidenceView from './project-evidence-view';
 import { AnalysisResult, PrioritizedTask } from '@/lib/scanner/types';
 
 interface Project {
@@ -40,22 +46,26 @@ interface ProjectDashboardProps {
   onExportActionPlan: () => void;
   plan?: string;
   setActiveView: (view: any) => void;
+  initialTab?: TabId;
 }
 
-type TabId = 'overview' | 'audit' | 'rankings' | 'keywords' | 'linking' | 'ai_plan' | 'backlinks' | 'competition' | 'tools' | 'history' | 'settings';
+type TabId = 'overview' | 'audit' | 'issues' | 'evidence' | 'rankings' | 'keywords' | 'linking' | 'monitoring' | 'ai_visibility' | 'ai_plan' | 'backlinks' | 'competition' | 'reports' | 'tasks' | 'tools' | 'history' | 'settings';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Übersicht', icon: LayoutDashboard },
-  { id: 'audit', label: 'On-Page Audit', icon: ShieldCheck },
-  { id: 'keywords', label: 'Keyword Scan', icon: Search },
+  { id: 'audit', label: 'Audit', icon: ShieldCheck },
+  { id: 'issues', label: 'Issues', icon: ListChecks },
+  { id: 'evidence', label: 'Evidence', icon: FileSearch },
+  { id: 'keywords', label: 'Keywords', icon: Search },
   { id: 'rankings', label: 'Rankings', icon: TrendingUp },
-  { id: 'linking', label: 'Verlinkung', icon: Network },
-  { id: 'ai_plan', label: 'AI-Aktionsplan', icon: Sparkles },
+  { id: 'linking', label: 'Interne Verlinkung', icon: Network },
   { id: 'backlinks', label: 'Backlinks', icon: Link },
   { id: 'competition', label: 'Wettbewerber', icon: Trophy },
-  { id: 'tools', label: 'Tools', icon: Wrench },
-  { id: 'history', label: 'Historie', icon: History },
-  { id: 'settings', label: 'Setup', icon: Settings },
+  { id: 'ai_visibility', label: 'AI Visibility', icon: BrainCircuit },
+  { id: 'monitoring', label: 'Monitoring', icon: Activity },
+  { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'tasks', label: 'Tasks', icon: CheckCircle2 },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
 function ProjectDashboardView({
@@ -70,9 +80,10 @@ function ProjectDashboardView({
   gscError,
   onExportActionPlan,
   plan = 'free',
-  setActiveView
+  setActiveView,
+  initialTab = 'overview'
 }: ProjectDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [viewingHistoricalReport, setViewingHistoricalReport] = useState<any>(null);
 
   const handleSelectHistoricalReport = useCallback((reportData: any) => {
@@ -95,6 +106,25 @@ function ProjectDashboardView({
 
   const activeReport = activeData.report;
   const activeRaw = activeData.raw;
+  const activeAuditData = useMemo(() => ({
+    ...(activeRaw || {}),
+    ...(activeReport || {}),
+    issues: activeRaw?.issues || activeReport?.issues || [],
+    evidence: activeRaw?.evidence || activeReport?.evidence || [],
+    urlSnapshots: activeRaw?.urlSnapshots || activeReport?.urlSnapshots || [],
+    crawlSummary: activeRaw?.crawlSummary || activeReport?.crawlSummary,
+    scoreBreakdown: activeRaw?.scoreBreakdown || activeReport?.scoreBreakdown,
+    dataSources: activeRaw?.dataSources || activeReport?.dataSources || {},
+    providerAvailability: activeRaw?.providerAvailability || activeReport?.providerAvailability,
+    providerStatuses: activeRaw?.providerStatuses || activeReport?.providerStatuses || [],
+    bodyText: activeRaw?.bodyText || activeReport?.bodyText || '',
+    keywordFacts: activeRaw?.keywordFacts || activeReport?.keywordFacts || [],
+    rankFacts: activeRaw?.rankFacts || activeReport?.rankFacts || [],
+    backlinkFacts: activeRaw?.backlinkFacts || activeReport?.backlinkFacts || [],
+    competitorFacts: activeRaw?.competitorFacts || activeReport?.competitorFacts || [],
+    trafficFacts: activeRaw?.trafficFacts || activeReport?.trafficFacts || [],
+    aiVisibilityFacts: activeRaw?.aiVisibilityFacts || activeReport?.aiVisibilityFacts || [],
+  }), [activeRaw, activeReport]);
 
   const faviconDomain = useMemo(() => {
     try {
@@ -308,12 +338,18 @@ function ProjectDashboardView({
           </div>
         );
 
-      case 'keywords': return <ProjectKeywordsView report={activeReport} />;
-      case 'rankings': return <ProjectRankingsView report={activeReport} />;
-      case 'linking': return <ProjectLinkingView report={activeReport} plan={plan} />;
+      case 'issues': return <ProjectIssuesView report={activeAuditData} />;
+      case 'evidence': return <ProjectEvidenceView report={activeAuditData} />;
+      case 'keywords': return <ProjectKeywordsView report={activeAuditData} />;
+      case 'rankings': return <ProjectRankingsView report={activeAuditData} />;
+      case 'linking': return <ProjectLinkingView report={activeAuditData} plan={plan} />;
+      case 'monitoring': return <ProjectMonitoringView project={project} report={activeAuditData} />;
+      case 'ai_visibility': return <ProjectAiVisibilityView report={activeAuditData} />;
       case 'ai_plan': return <ProjectAiActionPlanView report={activeReport} />;
-      case 'competition': return <ProjectCompetitionView report={activeReport} />;
-      case 'backlinks': return <ProjectBacklinksView report={activeReport} />;
+      case 'competition': return <ProjectCompetitionView report={activeAuditData} />;
+      case 'backlinks': return <ProjectBacklinksView report={activeAuditData} />;
+      case 'reports': return <ProjectAgencyReportsView project={project} report={activeAuditData} plan={plan} />;
+      case 'tasks': return <ProjectAgencyReportsView project={project} report={activeAuditData} plan={plan} initialTab="tasks" />;
       case 'history': return <ProjectHistoryView url={project.url} onSelectReport={handleSelectHistoricalReport} />;
       case 'tools': return <ProjectToolsView project={project} />;
       case 'settings': return <ProjectSetupView project={project} />;

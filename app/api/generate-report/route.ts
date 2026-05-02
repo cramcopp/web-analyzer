@@ -1,8 +1,9 @@
 
 
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyReportGrounding } from '@/lib/reporting/report-verifier';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -313,7 +314,6 @@ export async function POST(req: NextRequest) {
       'free': ['gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite-preview', 'gemini-1.5-flash-8b']
     };
 
-    // eslint-disable-next-line security/detect-object-injection
     const models = TIER_MAPPING[plan] || TIER_MAPPING['free'];
 
 
@@ -325,35 +325,50 @@ export async function POST(req: NextRequest) {
           if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 300000) {
              trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 300000) + '...[TRUNCATED FOR ENTERPRISE DEPTH]';
           }
+          const groundedData = {
+            url,
+            issues: trimmedScrapeData.issues || [],
+            evidence: (trimmedScrapeData.evidence || []).map((item: any) => ({
+              id: item.id,
+              type: item.type,
+              url: item.url,
+              inlineValue: typeof item.inlineValue === 'string' ? item.inlineValue.slice(0, 1500) : item.inlineValue,
+              createdAt: item.createdAt
+            })),
+            crawlSummary: trimmedScrapeData.crawlSummary || null,
+            scoreBreakdown: trimmedScrapeData.scoreBreakdown || null,
+            realProviderFacts: {
+              keywordFacts: trimmedScrapeData.keywordFacts || [],
+              rankFacts: trimmedScrapeData.rankFacts || [],
+              backlinkFacts: trimmedScrapeData.backlinkFacts || [],
+              competitorFacts: trimmedScrapeData.competitorFacts || [],
+              trafficFacts: trimmedScrapeData.trafficFacts || [],
+              aiVisibilityFacts: trimmedScrapeData.aiVisibilityFacts || []
+            },
+            gscData: trimmedScrapeData.gscData || null,
+            psiMetrics: trimmedScrapeData.psiMetrics || null,
+            cruxMetrics: trimmedScrapeData.cruxMetrics || null,
+            dataSources: trimmedScrapeData.dataSources || {}
+          };
 
-          let prompt = "";
-          if (plan === 'agency') {
-            prompt = `DU BIST DER GNADENLOSE ENTERPRISE-AUDIT-HAMMER. 
-            Dein Ziel ist es, JEDEN noch so kleinen Fehler auf der Website ${url} zu finden und gnadenlos zu kritisieren. 
-            Du bist ein Elite-Sicherheitsberater und SEO-Head-of-Engineering auf Enterprise-Niveau. 
+          let prompt = plan === 'agency'
+            ? `Du bist ein Senior Technical SEO Consultant fuer ein DACH Website-Governance-SaaS. Erstelle einen klaren, direkten Agenturbericht fuer ${url}.`
+            : `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. Erstelle einen ehrlichen Bericht in deutscher Sprache fuer ${url}.`;
 
-            RICHTLINIEN FÜR DEINE BEWERTUNG:
-            1. SCORES: Sei extrem geizig mit Punkten. 
-               - 90-100: Absolute Perfektion (fast unmöglich).
-               - 70-89: Gut, aber mit klarem Optimierungspotenzial.
-               - 50-69: Durchschnittlich/Mittelmäßig.
-               - < 50: Mangelhaft (z.B. fehlende Security-Header, TTFB > 500ms, fehlende robots.txt).
-            2. TONFALL: Professionell, hochgradig technisch, analytisch, aber absolut direkt und unbeschönigt.
-            3. TIEFE: Analysiere alle Unterseiten-Daten (Crawl-Summary) auf Inkonsistenzen.
-            4. SECURITY & LEGAL: Prüfe peinlich genau auf robots.txt, Header und Tracker.
-            5. PRIORISIERTE AUFGABEN: Nutze 'CRITICAL' für echte Risiken.`;
-          } else {
-            prompt = `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. 
-            Analysiere die Website ${url} und erstelle einen motivierenden, aber ehrlichen Bericht in DEUTSCHER SPRACHE.
-            
-            RICHTLINIEN:
-            1. SCORES: Sei fair und realistisch. Belohne gute Ansätze, aber weise auf wichtige Verbesserungen hin.
-            2. TONFALL: Hilfreich, beratend und motivierend. Nutze konstruktive Kritik.
-            3. FOKUS: Konzentriere dich auf die wichtigsten Hebel für SEO, Performance und Sicherheit.
-            4. AUFGABEN: Gib klare, leicht verständliche Handlungsempfehlungen.`;
-          }
+          prompt += `
 
-          prompt += `\n\nErstelle den Bericht basierend auf diesen Daten: ${JSON.stringify(trimmedScrapeData)}`;
+          Harte Regeln fuer Datenwahrheit:
+          - Nutze nur Daten aus issues, evidence, crawlSummary, realProviderFacts, GSC, PSI oder CrUX.
+          - Erfinde keine Rankings, Backlinks, Suchvolumen, Trafficdaten, Wettbewerberwerte oder AI-Visibility-Metriken.
+          - Behaupte keine Core-Web-Vitals, Lighthouse- oder PSI-Werte, wenn psiMetrics/cruxMetrics fehlen.
+          - Jede Empfehlung muss auf vorhandene issue ids, evidence ids oder crawlSummary-Fakten zurueckfuehrbar sein.
+          - Wenn Daten fehlen, schreibe "Nicht verfuegbar" oder "Provider nicht verbunden".
+          - Scores aus dem JSON sind deterministische Scanner-Scores; veraendere sie inhaltlich nicht.
+          - competitorBenchmarking darf nur echte realProviderFacts.competitorFacts nutzen. Wenn leer, gib [] zurueck oder markiere Nicht verfuegbar.
+          - keywordGapAnalysis sind nur Themenhinweise aus vorhandenen Inhalten/Issues, keine Suchvolumen- oder Ranking-Fakten.
+
+          Erstelle den Bericht ausschliesslich aus diesem Grounding-JSON:
+          ${JSON.stringify(groundedData)}`;
 
 
           const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
@@ -400,7 +415,9 @@ export async function POST(req: NextRequest) {
       throw lastModelError || new Error('Failed to generate AI report');
     }
 
-    return NextResponse.json(aiResponse);
+    const verifiedReport = verifyReportGrounding(aiResponse, scrapeData, url);
+
+    return NextResponse.json(verifiedReport);
   } catch (error: any) {
     console.error('Error generating report:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

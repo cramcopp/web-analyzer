@@ -1,4 +1,4 @@
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 async function fetchWithRetry(url: string, options: any, retries = 3, backoff = 500): Promise<Response> {
   for (let i = 0; i < retries; i++) {
@@ -112,7 +112,7 @@ export async function getDocument<T = Record<string, any>>(collection: string, i
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Firestore Error ${res.status}`);
     return documentFromFirestore(await res.json()) as T;
-  } catch (e) { return null; }
+  } catch { return null; }
 }
 
 export async function setDocument(collection: string, id: string, data: Record<string, any>, updateMask?: string[] | null, token?: string | null, env?: any): Promise<any> {

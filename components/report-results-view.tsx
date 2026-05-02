@@ -1,9 +1,9 @@
 'use client';
 
 import { memo, useMemo } from 'react';
-import { 
-  Download, Share2, Zap, Search, 
-  ShieldCheck, UserCheck, Scale, CodeXml, Copy, Star 
+import {
+  Download, Share2, Zap, Search,
+  ShieldCheck, UserCheck, Scale, CodeXml, Copy
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -31,6 +31,7 @@ const CompetitorMap = dynamic(() => import('./competitor-map'), { loading: () =>
 const QuickNav = dynamic(() => import('./quick-nav'), { ssr: false });
 const ScoreCard = dynamic(() => import('./score-card'));
 const DetailSection = dynamic(() => import('./detail-section'));
+const ScoreBreakdownView = dynamic(() => import('./score-breakdown-view'));
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -88,6 +89,7 @@ function ReportResultsView({
     { subject: 'Legal', A: report.compliance?.score || 0, full: 100 },
     { subject: 'Content', A: report.contentStrategy?.score || 0, full: 100 },
   ], [report]);
+  const scoreBreakdown = (report as any).scoreBreakdown || rawScrapeData?.scoreBreakdown;
 
   return (
     <motion.div 
@@ -171,6 +173,12 @@ function ReportResultsView({
             userScore={((report.seo?.score || 0) + (report.performance?.score || 0)) / 2} 
             userName={rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : 'website'}
           />
+        </ErrorBoundary>
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <ErrorBoundary moduleName="Score Breakdown">
+          <ScoreBreakdownView breakdown={scoreBreakdown} />
         </ErrorBoundary>
       </motion.div>
 
@@ -271,6 +279,14 @@ function ReportResultsView({
                     security_headers: rawScrapeData?.securityHeaders,
                     ssl_details: rawScrapeData?.sslCertificate,
                     performance_metrics: rawScrapeData?.lighthouseScores,
+                    score_breakdown: rawScrapeData?.scoreBreakdown,
+                    issues: rawScrapeData?.issues?.map((issue: any) => ({
+                      id: issue.id,
+                      type: issue.issueType,
+                      category: issue.category,
+                      severity: issue.severity,
+                      confidence: issue.confidence
+                    })),
                     schema_types: rawScrapeData?.schemaTypes,
                     internal_links: rawScrapeData?.internalLinksCount
                   }, null, 2)}

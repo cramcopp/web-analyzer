@@ -11,12 +11,31 @@ import TeamWorkspace from '../components/team-workspace';
 import LoadingDisplay from '../components/loading-display';
 import ReportResultsView from '../components/report-results-view';
 import ProjectDashboardView from '../components/project-dashboard-view';
+import ProjectsOverviewView from '../components/projects-overview-view';
 import SettingsView from '../components/settings-view';
 import ProfileView from '../components/profile-view';
 import { ReportData, PrioritizedTask, GscData } from '../types/report';
 import { AnalysisResult } from '../lib/scanner';
 import { Notification, Project } from '../types/common';
 import { useTrial } from '../hooks/use-trial';
+import { getMonthlyScanLimit } from '../lib/plans';
+
+type ActiveView = 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
+type ProjectNavTab =
+  | 'overview'
+  | 'audit'
+  | 'issues'
+  | 'evidence'
+  | 'keywords'
+  | 'rankings'
+  | 'linking'
+  | 'backlinks'
+  | 'competition'
+  | 'ai_visibility'
+  | 'monitoring'
+  | 'reports'
+  | 'tasks'
+  | 'settings';
 
 export default function WebsiteAnalyzer() {
   const { user, userData, loading: authLoading } = useAuth();
@@ -32,10 +51,14 @@ export default function WebsiteAnalyzer() {
   const [notification, setNotification] = useState<{message: string, url: string} | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'analyzer' | 'project' | 'settings' | 'profile' | 'pricing' | 'team'>('analyzer');
+  const [activeView, setActiveView] = useState<ActiveView>('analyzer');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectInitialTab, setProjectInitialTab] = useState<ProjectNavTab>('overview');
 
-  const { effectivePlan, trialDaysLeft, showTrialBadge, isInTrial } = useTrial();
+  const { effectivePlan, trialDaysLeft, isInTrial } = useTrial();
+  const scanLimitMonthly = getMonthlyScanLimit(effectivePlan);
+  const scanCount = userData?.scanCount || 0;
+  const scanUsageRatio = scanLimitMonthly > 0 ? scanCount / scanLimitMonthly : 0;
 
   const addNotification = (title: string, message: string) => {
     const newNotif: Notification = {
@@ -56,8 +79,14 @@ export default function WebsiteAnalyzer() {
       if (!resp.ok) throw new Error('Report nicht gefunden.');
       const data = await resp.json();
       
-      if (data.results) setReport(typeof data.results === 'string' ? JSON.parse(data.results) : data.results);
-      if (data.rawScrapeData) setRawScrapeData(typeof data.rawScrapeData === 'string' ? JSON.parse(data.rawScrapeData) : data.rawScrapeData);
+      if (data.results) {
+        const parsedResults = typeof data.results === 'string' ? JSON.parse(data.results) : data.results;
+        setReport({ ...parsedResults, id: data.id, audit_id: parsedResults.audit_id || data.audit_id || data.id });
+      }
+      if (data.rawScrapeData) {
+        const parsedRaw = typeof data.rawScrapeData === 'string' ? JSON.parse(data.rawScrapeData) : data.rawScrapeData;
+        setRawScrapeData({ ...parsedRaw, id: data.id, audit_id: parsedRaw.audit_id || data.audit_id || data.id });
+      }
       
       setLastAnalyzedUrl(data.url);
       setUrl(data.url);
@@ -85,8 +114,14 @@ export default function WebsiteAnalyzer() {
                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
              )[0];
              
-             if (latest.results) setReport(typeof latest.results === 'string' ? JSON.parse(latest.results) : latest.results);
-             if (latest.rawScrapeData) setRawScrapeData(typeof latest.rawScrapeData === 'string' ? JSON.parse(latest.rawScrapeData) : latest.rawScrapeData);
+             if (latest.results) {
+               const parsedResults = typeof latest.results === 'string' ? JSON.parse(latest.results) : latest.results;
+               setReport({ ...parsedResults, id: latest.id, audit_id: parsedResults.audit_id || latest.audit_id || latest.id });
+             }
+             if (latest.rawScrapeData) {
+               const parsedRaw = typeof latest.rawScrapeData === 'string' ? JSON.parse(latest.rawScrapeData) : latest.rawScrapeData;
+               setRawScrapeData({ ...parsedRaw, id: latest.id, audit_id: parsedRaw.audit_id || latest.audit_id || latest.id });
+             }
              setLastAnalyzedUrl(proj.url);
           } else {
              setReport(null);
@@ -99,6 +134,11 @@ export default function WebsiteAnalyzer() {
     }
     setActiveView('project');
   };
+
+  const openProjectSection = useCallback((tab: ProjectNavTab) => {
+    setProjectInitialTab(tab);
+    setActiveView(selectedProject ? 'project' : 'projects');
+  }, [selectedProject]);
 
   const fetchGSCData = useCallback(async (targetUrl: string) => {
     setIsGscLoading(true);
@@ -126,7 +166,7 @@ export default function WebsiteAnalyzer() {
       targetUrl = 'https://' + targetUrl;
     }
 
-    try { new URL(targetUrl); } catch (err) {
+    try { new URL(targetUrl); } catch {
       setError('Bitte gib eine gültige URL ein.');
       return;
     }
@@ -136,13 +176,13 @@ export default function WebsiteAnalyzer() {
     setReport(null);
 
     try {
-      if (user && userData && (userData.scanCount || 0) >= (userData.maxScans || 5)) {
+      if (user && userData && scanCount >= scanLimitMonthly) {
         if (userData.plan === 'free') {
           setActiveView('pricing');
           setIsLoading(false);
           return;
         } else {
-          setError(`Limit von ${userData.maxScans} Scans erreicht.`);
+          setError(`Limit von ${scanLimitMonthly} Scans erreicht.`);
           setIsLoading(false);
           return;
         }
@@ -195,18 +235,19 @@ export default function WebsiteAnalyzer() {
 
       setRawScrapeData(scrapeData);
       const finalReport = await generateReportClientSide(scrapeData, effectivePlan);
-      setReport(finalReport);
+      const reportWithAuditId = { ...finalReport, audit_id: finalReport.audit_id || scrapeData.audit_id, url: scrapeData.url || targetUrl };
+      setReport(reportWithAuditId);
       setLastAnalyzedUrl(targetUrl);
       addNotification('Analyse abgeschlossen', `Bericht für ${targetUrl} ist bereit.`);
 
       if (user) {
         const avgScore = Math.round((
-          (finalReport.seo?.score || 0) + 
-          (finalReport.security?.score || 0) + 
-          (finalReport.performance?.score || 0) + 
-          (finalReport.accessibility?.score || 0) + 
-          (finalReport.compliance?.score || 0) +
-          (finalReport.contentStrategy?.score || 0)
+          (reportWithAuditId.seo?.score || 0) +
+          (reportWithAuditId.security?.score || 0) +
+          (reportWithAuditId.performance?.score || 0) +
+          (reportWithAuditId.accessibility?.score || 0) +
+          (reportWithAuditId.compliance?.score || 0) +
+          (reportWithAuditId.contentStrategy?.score || 0)
         ) / 6);
         
         // Technical optimization: Prune large fields before saving to stay under Firestore limits
@@ -219,13 +260,13 @@ export default function WebsiteAnalyzer() {
           body: JSON.stringify({
             url: targetUrl,
             score: avgScore,
-            results: JSON.stringify(finalReport),
+            results: JSON.stringify(reportWithAuditId),
             rawScrapeData: JSON.stringify(storageData),
-            seoScore: finalReport.seo?.score || 0,
-            performanceScore: finalReport.performance?.score || 0,
-            securityScore: finalReport.security?.score || 0,
-            accessibilityScore: finalReport.accessibility?.score || 0,
-            complianceScore: finalReport.compliance?.score || 0
+            seoScore: reportWithAuditId.seo?.score || 0,
+            performanceScore: reportWithAuditId.performance?.score || 0,
+            securityScore: reportWithAuditId.security?.score || 0,
+            accessibilityScore: reportWithAuditId.accessibility?.score || 0,
+            complianceScore: reportWithAuditId.compliance?.score || 0
           })
         });
 
@@ -252,7 +293,7 @@ export default function WebsiteAnalyzer() {
       const resp = await fetch('/api/auth/google/url');
       const { url } = await resp.json();
       window.open(url, 'GSC Auth', 'width=600,height=700');
-    } catch (err) {
+    } catch {
       setGscError('Fehler beim Starten der Google-Verbindung.');
     }
   };
@@ -298,7 +339,11 @@ export default function WebsiteAnalyzer() {
       <Sidebar 
         onLoadReport={handleLoadReport}
         onSelectProject={handleSelectProject}
+        onOpenDashboard={() => { setProjectInitialTab('overview'); setActiveView('analyzer'); }}
+        onOpenProjects={() => setActiveView('projects')}
+        onOpenProjectTab={(tab) => openProjectSection(tab as ProjectNavTab)}
         onOpenSettings={() => setActiveView('settings')}
+        onOpenTeam={() => setActiveView('team')}
         onOpenProfile={() => setActiveView('profile')}
         onOpenPricing={() => setActiveView('pricing')}
         isNotifOpen={isNotifOpen}
@@ -341,11 +386,11 @@ export default function WebsiteAnalyzer() {
               )}
               {user && userData && (
                 <div className="flex flex-col items-end opacity-80 mt-1">
-                   <span className="text-[11px] font-black tracking-tighter">{userData?.scanCount || 0} / {userData?.maxScans || 5} <span className="text-[9px] font-bold text-[#888] uppercase ml-1">Analysen übrig</span></span>
+                   <span className="text-[11px] font-black tracking-tighter">{scanCount} / {scanLimitMonthly} <span className="text-[9px] font-bold text-[#888] uppercase ml-1">Analysen genutzt</span></span>
                    <div className="w-32 h-1 bg-black/5 dark:bg-white/10 mt-1.5 overflow-hidden rounded-full">
-                     <div 
-                       className={`h-full transition-all duration-1000 ${ ((userData?.scanCount || 0) / (userData?.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
-                       style={{ width: `${Math.min(100, ((userData?.scanCount || 0) / (userData?.maxScans || 5)) * 100)}%` }}
+                      <div
+                        className={`h-full transition-all duration-1000 ${ scanUsageRatio > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`}
+                       style={{ width: `${Math.min(100, scanUsageRatio * 100)}%` }}
                      />
                    </div>
                 </div>
@@ -405,9 +450,13 @@ export default function WebsiteAnalyzer() {
             </>
           )}
 
+          {activeView === 'projects' && <ProjectsOverviewView onSelectProject={handleSelectProject} />}
+
           {activeView === 'project' && selectedProject && (
             <ProjectDashboardView 
+              key={`${selectedProject.id}-${projectInitialTab}`}
               project={selectedProject} 
+              initialTab={projectInitialTab}
               onStartScan={(url) => handleAnalyze(undefined, url)} 
               isLoading={isLoading} 
               report={report && lastAnalyzedUrl === selectedProject.url ? report : null} 

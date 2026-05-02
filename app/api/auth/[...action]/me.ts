@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { fetchWithRetry } from '@/lib/firestore-edge';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('wap_session')?.value;

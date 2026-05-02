@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { 
-  Settings, Save, Trash2, Globe, 
-  Bell, Clock, ShieldCheck, AlertCircle 
+import {
+  Settings, Trash2, Globe,
+  Clock, ShieldCheck, AlertCircle
 } from 'lucide-react';
 
 export default function ProjectSetupView({ project }: { project: any }) {

@@ -3,7 +3,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument } from '@/lib/firestore-edge';
 import { projectCreateSchema } from '@/lib/validations';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 // FIX: req als Parameter hinzugefügt
 export async function GET(req: Request) {

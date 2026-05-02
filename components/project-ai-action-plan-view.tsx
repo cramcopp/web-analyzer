@@ -1,9 +1,9 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { useMemo } from 'react';
 import { 
   Sparkles, ShieldAlert, AlertCircle, CheckCircle, 
-  Copy, Layout, Terminal, Globe, Shield 
+  Copy, Terminal
 } from 'lucide-react';
 import { AnalysisResult, PrioritizedTask } from '@/lib/scanner/types';
 

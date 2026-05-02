@@ -1,11 +1,5 @@
-
-export type PlanType = 'free' | 'pro' | 'agency';
-
-export const PLAN_CONFIG: Record<PlanType, { name: string; maxScans: number }> = {
-  free: { name: 'Free', maxScans: 5 },
-  pro: { name: 'Pro', maxScans: 50 },
-  agency: { name: 'Agency', maxScans: 500 },
-};
+export { PLAN_CONFIG, type PlanType } from './plans';
+import { getMonthlyScanLimit } from './plans';
 
 /**
  * Lightweight Stripe helper using fetch to avoid heavy SDK overhead.
@@ -28,6 +22,8 @@ export const stripeRequest = async (path: string, options: RequestInit = {}) => 
   }
   return response.json();
 };
+
+export const getPlanMaxScans = (plan?: string | null) => getMonthlyScanLimit(plan);
 
 /**
  * SEC-11: Manual Webhook Signature Verification
@@ -66,7 +62,7 @@ export async function verifyStripeSignature(body: string, sig: string, secret: s
   return expectedSignature === signature;
 }
 
-// Mocking the getStripe() structure for compatibility where possible
+// Lightweight getStripe-compatible facade for existing checkout code.
 export const getStripe = () => ({
   checkout: {
     sessions: {

@@ -23,11 +23,11 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   error: null,
   signIn: async () => {},
-  signInEmail: async (email: string, pass: string) => {},
-  signUpEmail: async (email: string, pass: string, name: string) => {},
+  signInEmail: async (_email: string, _pass: string) => {},
+  signUpEmail: async (_email: string, _pass: string, _name: string) => {},
   logOut: async () => {},
-  updateUser: async (data: { displayName?: string; email?: string; password?: string }) => {},
-  updateUserData: async (data: any) => {},
+  updateUser: async (_data: { displayName?: string; email?: string; password?: string }) => {},
+  updateUserData: async (_data: any) => {},
   deleteAccount: async () => {},
   clearError: () => {}
 });
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setUserData(null);
       }
-    } catch (e) {
+    } catch {
       setUser(null);
       setUserData(null);
     } finally {

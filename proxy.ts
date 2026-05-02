@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
  * SEC-10: CSRF Protection Middleware
  * Intercepts state-changing requests to ensure they originate from our own domain.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { method, nextUrl } = request;
   const pathname = nextUrl.pathname;
 

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { updateDocument } from '@/lib/firestore-edge';
 import { getSessionUser, getSessionToken, deleteUserAccount } from '@/lib/auth-server';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 const userUpdateSchema = z.object({
   displayName: z.string().max(100).optional(),

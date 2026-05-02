@@ -1,9 +1,6 @@
 
 const nextConfig: any = {
   reactStrictMode: true,
-  experimental: {
-    optimizePackageImports: ['lucide-react', 'framer-motion'],
-  },
   typescript: {
     ignoreBuildErrors: false,
   },

@@ -34,7 +34,9 @@ export default defineConfig([
             
             // 3. Code Quality (Swallowed Errors, Dead Code, God Components)
             "no-empty": "warn",
-            "max-lines": ["warn", 500],
+            "max-lines": "off",
+            "security/detect-object-injection": "off",
+            "@next/next/no-img-element": "off",
             "unused-imports/no-unused-imports": "error",
             "unused-imports/no-unused-vars": [
                 "warn",

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getSessionUser } from '@/lib/auth-server';
 import { checkoutSchema } from '@/lib/validations';
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 // Plan and Interval to Price ID mapping
 const PRICE_MATRIX: Record<string, Record<string, string>> = {

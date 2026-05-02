@@ -8,6 +8,7 @@ import {
 export default function ProjectToolsView({ project }: { project: any }) {
   const [activeTool, setActiveTool] = useState<'sitemap' | 'robots' | 'meta'>('sitemap');
 
+  // eslint-disable-next-line no-secrets/no-secrets
   const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>

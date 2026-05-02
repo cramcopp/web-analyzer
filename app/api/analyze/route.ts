@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, setDocument, incrementField } from '@/lib/firestore-edge';
+import { getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 // FIX: Wir übergeben req an getEnv, um die Cloudflare-Variablen zu greifen!
 const getEnv = (req: Request) => {
@@ -31,9 +32,9 @@ export async function POST(req: Request) {
 
     // 1. Check Quota & Plan
     const userData = await getDocument('users', user.uid, token, env);
-    const plan = (userData?.plan || 'free').toLowerCase();
+    const plan = normalizePlan(userData?.plan || 'free');
     const scanCount = userData?.scanCount || 0;
-    const maxScans = userData?.maxScans || (plan === 'agency' ? 500 : plan === 'pro' ? 50 : 5);
+    const maxScans = getMonthlyScanLimit(plan);
 
     if (scanCount >= maxScans) {
       return NextResponse.json({ 
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     await incrementField('users', user.uid, 'scanCount', 1, token, env);
 
     // 3. Setup Audit Placeholder
-    const audit_id = Math.random().toString(36).substring(7).toUpperCase();
+    const audit_id = crypto.randomUUID();
     
     await setDocument('reports', audit_id, {
       audit_id,
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
       console.warn("Achtung: Workflow nicht gebunden! Nutze langsamen Direct-Scan.");
       const { performAnalysis } = await import('@/lib/scanner');
       
-      performAnalysis({ url, plan }).then(async (result) => {
+      performAnalysis({ url, plan, userId: user.uid, auditId: audit_id }).then(async (result) => {
         await setDocument('reports', audit_id, {
           ...result,
           audit_id,

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { updateDocument, queryDocuments } from '@/lib/firestore-edge';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function PATCH(req: Request) {
   const user = await getSessionUser();

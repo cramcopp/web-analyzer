@@ -5,12 +5,14 @@ import { Search, Globe, Info, ShieldCheck, Share2, CodeXml, Activity } from 'luc
 import { CollapsibleSection } from './collapsible-section';
 import PrioritizedTasksSection from './task-section';
 import { DetailedSEO } from '../types/report';
+import { getCrawlLimit } from '../lib/plans';
 
 export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawlSummary: any, plan?: string }) => {
   if (!crawlSummary || !crawlSummary.scannedSubpages) return null;
 
-  const displayedPages = plan === 'free' ? crawlSummary.scannedSubpages.slice(0, 1) : crawlSummary.scannedSubpages;
-  const isLimited = plan === 'free' && crawlSummary.scannedSubpagesCount > 1;
+  const displayLimit = getCrawlLimit(plan);
+  const displayedPages = crawlSummary.scannedSubpages.slice(0, displayLimit);
+  const isLimited = crawlSummary.scannedSubpagesCount > displayedPages.length;
 
   return (
     <div className="mt-10 p-6 bg-[#F9F9F9] dark:bg-zinc-900/50 border-t-2 border-[#D4AF37] relative break-inside-avoid">
@@ -50,7 +52,7 @@ export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawl
             <div className="relative z-10 flex flex-col items-center">
               <ShieldCheck className="w-5 h-5 text-[#D4AF37] mb-1" />
               <span className="text-[9px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">
-                +{crawlSummary.scannedSubpagesCount - 1} Seiten gefunden
+                +{crawlSummary.scannedSubpagesCount - displayedPages.length} Seiten gefunden
               </span>
               <p className="text-[8px] text-[#888] font-bold mt-1">NUR IN PRO VERFÜGBAR</p>
             </div>
@@ -63,7 +65,7 @@ export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawl
           <Info className="w-4 h-4 text-[#D4AF37]" />
           <span>Gefundene interne Links: {crawlSummary.totalInternalLinks} | Tiefen-Audit von {crawlSummary.scannedSubpagesCount} Seiten.</span>
         </div>
-        {plan === 'free' && (
+        {isLimited && (
           <span className="text-[#D4AF37] flex items-center gap-2">
             <ShieldCheck className="w-3 h-3" /> EINGESCHRÄNKT
           </span>
@@ -168,7 +170,6 @@ function SeoDeepDiveModule({ detailedSeo, socialData, crawlSummary, plan = 'free
              <div className="bg-[#FFFFFF] dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 rounded-none overflow-hidden shadow-sm max-w-[450px]">
                {socialData.ogImage ? (
                  <div className="w-full h-[230px] relative bg-[#F5F5F3] dark:bg-zinc-900 border-b border-[#EEE] dark:border-zinc-800">
-                   {/* eslint-disable-next-line @next/next/no-img-element */}
                    <img 
                      src={socialData.ogImage} 
                      alt="Social Preview" 

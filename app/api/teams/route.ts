@@ -3,7 +3,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument, getDocument } from '@/lib/firestore-edge';
 import { teamCreateSchema } from '@/lib/validations';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function GET() {
   const user = await getSessionUser();

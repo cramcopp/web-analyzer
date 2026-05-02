@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getStripe, PLAN_CONFIG, PlanType, verifyStripeSignature } from '@/lib/stripe';
+import { getStripe, type PlanType, verifyStripeSignature } from '@/lib/stripe';
 import { updateStripeSubscription } from '@/lib/firestore-edge';
+import { getMonthlyScanLimit } from '@/lib/plans';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
 
         if (uid) {
           const subscription = await getStripe().subscriptions.retrieve(session.subscription as string);
-          const maxScans = PLAN_CONFIG[plan]?.maxScans || 5;
+          const maxScans = getMonthlyScanLimit(plan);
           
           await updateStripeSubscription(uid, {
             plan,
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
             plan: 'free',
             subscriptionId: null,
             trialUntil: null,
-            maxScans: PLAN_CONFIG.free.maxScans
+            maxScans: getMonthlyScanLimit('free')
           });
         }
         break;
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
         const plan = (subscription.metadata.plan || 'free') as PlanType;
 
         if (uid) {
-          const maxScans = PLAN_CONFIG[plan]?.maxScans || 5;
+          const maxScans = getMonthlyScanLimit(plan);
           await updateStripeSubscription(uid, {
             plan,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
       }
 
       default:
-        console.log(`Unhandled event type ${event.type}`);
+        console.warn(`Unhandled event type ${event.type}`);
     }
 
     return NextResponse.json({ received: true });

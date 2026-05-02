@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Check, 
   X, 
   Rocket, 
@@ -17,6 +17,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useAuth } from './auth-provider';
+import { PLAN_CONFIG, formatExports } from '@/lib/plans';
 
 interface FeatureRowProps {
   label: string;
@@ -54,6 +55,7 @@ export default function PricingSection() {
   const { user, userData } = useAuth();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
+  const { free, pro, agency } = PLAN_CONFIG;
 
 
   const handleCheckout = async (planName: string) => {
@@ -76,7 +78,12 @@ export default function PricingSection() {
 
       const data = await response.json();
       if (data.url) {
-        window.location.href = data.url;
+        const checkoutLink = document.createElement('a');
+        checkoutLink.href = data.url;
+        checkoutLink.rel = 'noopener noreferrer';
+        document.body.appendChild(checkoutLink);
+        checkoutLink.click();
+        checkoutLink.remove();
       } else {
         throw new Error(data.error || 'Checkout failed');
       }
@@ -136,7 +143,7 @@ export default function PricingSection() {
           <div className="p-10 flex flex-col border-b lg:border-b-0 lg:border-r border-[#EEE] dark:border-zinc-800 hover:bg-[#F9F9F9] dark:hover:bg-zinc-950/20 transition-colors">
             <div className="mb-10">
               <div className="text-[12px] font-black uppercase tracking-[3px] text-[#888] mb-1">Einstieg</div>
-              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">WAP Basic</h3>
+              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">{free.name}</h3>
               <div className="flex items-baseline gap-1 mb-2">
                 <span className="text-[48px] font-black text-[#1A1A1A] dark:text-white">0</span>
                 <span className="text-[20px] font-black text-[#1A1A1A] dark:text-white">€</span>
@@ -146,13 +153,13 @@ export default function PricingSection() {
 
             <ul className="flex-1 space-y-4 mb-10">
               <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> Single-Page Analyse
+                <Check className="w-4 h-4 text-[#27AE60]" /> {free.crawlLimit} Unterseiten-Crawl
               </li>
               <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
                 <Check className="w-4 h-4 text-[#27AE60]" /> WAP v1 Intelligence
               </li>
               <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400 opacity-50 italic">
-                <X className="w-4 h-4 text-[#EB5757]" /> Keine Site-Wide Crawls
+                <X className="w-4 h-4 text-[#EB5757]" /> Kein Monitoring
               </li>
             </ul>
 
@@ -169,7 +176,7 @@ export default function PricingSection() {
             
             <div className="mb-10 text-center">
               <div className="text-[12px] font-black uppercase tracking-[3px] text-[#D4AF37] mb-1">Strategisch</div>
-              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">WAP Premium</h3>
+              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">{pro.name}</h3>
               <div className="flex items-baseline justify-center gap-1 mb-2">
                 <span className="text-[48px] font-black text-[#1A1A1A] dark:text-white leading-none">
                   {billingInterval === 'yearly' ? '39' : '49'}
@@ -181,7 +188,7 @@ export default function PricingSection() {
 
             <ul className="flex-1 space-y-4 mb-10">
               <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Star className="w-4 h-4 text-[#D4AF37] fill-[#D4AF37]" /> 50 Unterseiten-Crawl
+                <Star className="w-4 h-4 text-[#D4AF37] fill-[#D4AF37]" /> {pro.crawlLimit} Unterseiten-Crawl
               </li>
               <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
                 <Check className="w-4 h-4 text-[#27AE60]" /> WAP v2 Intelligence
@@ -210,7 +217,7 @@ export default function PricingSection() {
           <div className="p-10 flex flex-col hover:bg-[#F9F9F9] dark:hover:bg-zinc-950/20 transition-colors">
             <div className="mb-10">
               <div className="text-[12px] font-black uppercase tracking-[3px] text-[#888] mb-1">Skalierbar</div>
-              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">WAP Agency</h3>
+              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">{agency.name}</h3>
               <div className="flex items-baseline gap-1 mb-2">
                 <span className="text-[48px] font-black text-[#1A1A1A] dark:text-white">
                   {billingInterval === 'yearly' ? '119' : '149'}
@@ -222,7 +229,7 @@ export default function PricingSection() {
 
             <ul className="flex-1 space-y-4 mb-10">
               <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Crown className="w-4 h-4 text-[#D4AF37] shadow-sm" /> 500 Unterseiten
+                <Crown className="w-4 h-4 text-[#D4AF37] shadow-sm" /> {agency.crawlLimit} Unterseiten
               </li>
               <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
                 <Users className="w-4 h-4 text-[#D4AF37]" /> Team Workspace
@@ -265,7 +272,7 @@ export default function PricingSection() {
                 </div>
 
                 <FeatureRow label="Analyse & Crawling" isMain={true} free="" pro="" agency="" />
-                <FeatureRow label="Unterseiten pro Crawl" free="5" pro="50" agency="500" />
+                <FeatureRow label="Unterseiten pro Crawl" free={String(free.crawlLimit)} pro={String(pro.crawlLimit)} agency={String(agency.crawlLimit)} />
                 <FeatureRow label="WAP Intelligence v." free="v1" pro="v2" agency="v3+" />
                 <FeatureRow label="Crawl-Häufigkeit" free="Manuell" pro="Täglich" agency="On-Demand+" />
                 <FeatureRow label="Automatisches Monitoring" free={false} pro={true} agency={true} />
@@ -273,15 +280,15 @@ export default function PricingSection() {
                 <FeatureRow label="SEO & Inhalte" isMain={true} free="" pro="" agency="" />
                 <FeatureRow label="Keyword Gap Analyse" free={false} pro={true} agency={true} />
                 <FeatureRow label="Sentiment Check (KI)" free={true} pro={true} agency={true} />
-                <FeatureRow label="Wettbewerbs-Tracker" free="0" pro="3" agency="unlimitiert" />
+                <FeatureRow label="Wettbewerbs-Tracker" free={String(free.competitors)} pro={String(pro.competitors)} agency={String(agency.competitors)} />
                 <FeatureRow label="TF-IDF Analyse" free={false} pro={true} agency={true} />
 
                 <FeatureRow label="Business & Team" isMain={true} free="" pro="" agency="" />
                 <FeatureRow label="Team Workspace" free={false} pro={false} agency={true} />
                 <FeatureRow label="Mitglieder Einladungen" free={false} pro={false} agency={true} />
-                <FeatureRow label="Export-Formate" free="Keine" pro="CSV, JSON" agency="CSV, JSON, PDF" />
-                <FeatureRow label="White-Label Reports" free={false} pro={false} agency={true} />
-                <FeatureRow label="Rest API Support" free={false} pro={false} agency="Alpha" />
+                <FeatureRow label="Export-Formate" free={formatExports(free.exports)} pro={formatExports(pro.exports)} agency={formatExports(agency.exports)} />
+                <FeatureRow label="White-Label Reports" free={free.whiteLabel} pro={pro.whiteLabel} agency={agency.whiteLabel} />
+                <FeatureRow label="Rest API Support" free={free.api} pro={pro.api} agency={agency.api ? 'Alpha' : false} />
 
                 <FeatureRow label="Support & Service" isMain={true} free="" pro="" agency="" />
                 <FeatureRow label="Ticket Support" free={true} pro={true} agency={true} />

@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
-export async function GET(req: Request) {
+export async function GET() {
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) {
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       const isNewMonth = now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear();
       
       if (isNewMonth) {
-        console.log(`Resetting scanCount for user ${user.uid} (New Month)`);
+        console.warn(`Resetting scanCount for user ${user.uid} (New Month)`);
         await updateDocument('users', user.uid, {
           scanCount: 0,
           lastScanReset: now.toISOString()

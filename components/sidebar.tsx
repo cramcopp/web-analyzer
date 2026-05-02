@@ -4,12 +4,24 @@ import React, { useState, useEffect, memo } from "react";
 import { useAuth } from "./auth-provider";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
+  BrainCircuit,
+  CreditCard,
+  FileText,
+  FolderKanban,
+  LayoutDashboard,
+  Network,
   Menu,
+  Search,
+  Settings,
+  ShieldCheck,
+  Trophy,
+  Users,
   Zap,
 } from "lucide-react";
-import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { Notification, Project, HistoryItem } from "../types/common";
+import { getMonthlyScanLimit } from "../lib/plans";
 
 // Sub-Components
 import { SidebarNotifications } from "./sidebar/notifications-popover";
@@ -21,6 +33,9 @@ import { SidebarAccountMenu } from "./sidebar/account-menu";
 export const Sidebar = memo(function Sidebar({
   onLoadReport,
   onSelectProject,
+  onOpenDashboard,
+  onOpenProjects,
+  onOpenProjectTab,
   onOpenSettings,
   onOpenTeam,
   onOpenProfile,
@@ -33,6 +48,9 @@ export const Sidebar = memo(function Sidebar({
 }: {
   onLoadReport?: (id: string) => void;
   onSelectProject?: (proj: Project) => void;
+  onOpenDashboard?: () => void;
+  onOpenProjects?: () => void;
+  onOpenProjectTab?: (tab: string) => void;
   onOpenSettings?: () => void;
   onOpenTeam?: () => void;
   onOpenProfile?: () => void;
@@ -44,6 +62,9 @@ export const Sidebar = memo(function Sidebar({
   setIsNotifOpen: (open: boolean) => void;
 }) {
   const { user, userData, loading } = useAuth();
+  const scanLimitMonthly = getMonthlyScanLimit(userData?.plan || 'free');
+  const scanCount = userData?.scanCount || 0;
+  const scanUsageRatio = scanLimitMonthly > 0 ? scanCount / scanLimitMonthly : 0;
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -62,6 +83,21 @@ export const Sidebar = memo(function Sidebar({
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
+
+  const mainNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, action: onOpenDashboard },
+    { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
+    { id: 'audit', label: 'Audit', icon: ShieldCheck, action: () => { onOpenProjectTab?.('audit'); } },
+    { id: 'monitoring', label: 'Monitoring', icon: Activity, action: () => { onOpenProjectTab?.('monitoring'); } },
+    { id: 'keywords', label: 'Keywords', icon: Search, action: () => { onOpenProjectTab?.('keywords'); } },
+    { id: 'linking', label: 'Interne Verlinkung', icon: Network, action: () => { onOpenProjectTab?.('linking'); } },
+    { id: 'competition', label: 'Wettbewerber', icon: Trophy, action: () => { onOpenProjectTab?.('competition'); } },
+    { id: 'ai_visibility', label: 'AI Visibility', icon: BrainCircuit, action: () => { onOpenProjectTab?.('ai_visibility'); } },
+    { id: 'reports', label: 'Reports', icon: FileText, action: () => { onOpenProjectTab?.('reports'); } },
+    { id: 'team', label: 'Team', icon: Users, action: onOpenTeam },
+    { id: 'billing', label: 'Billing', icon: CreditCard, action: onOpenPricing },
+    { id: 'settings', label: 'Settings', icon: Settings, action: onOpenSettings },
+  ];
 
 
   useEffect(() => {
@@ -199,6 +235,25 @@ export const Sidebar = memo(function Sidebar({
 
           {!loading && user ? (
             <>
+              <nav className="px-4 pt-4 pb-3 border-b border-[#E5E5E5] dark:border-zinc-800 mb-4">
+                <span className="text-[9px] font-black text-[#888] uppercase tracking-[3px] mb-3 block">Hauptnavigation</span>
+                <div className="flex flex-col gap-1">
+                  {mainNavItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => onItemClick(item.action)}
+                        className="group flex items-center gap-3 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#777] hover:text-[#1A1A1A] dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-left"
+                      >
+                        <Icon className="w-4 h-4 text-[#888] group-hover:text-[#D4AF37] transition-colors" />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+
               {/* USAGE AND TRIAL SECTION */}
               <div className="mx-4 mb-2 p-3 bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 rounded-sm flex flex-col gap-2 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]"></div>
@@ -212,14 +267,14 @@ export const Sidebar = memo(function Sidebar({
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center">
                      <span className="text-[14px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100 leading-none">
-                       {userData?.scanCount || 0} / {userData?.maxScans || 5}
+                       {scanCount} / {scanLimitMonthly}
                      </span>
                      <span className="text-[8px] font-bold text-[#888] uppercase tracking-widest">Scans genutzt</span>
                   </div>
                   <div className="w-full h-1 bg-black/5 dark:bg-white/5 overflow-hidden rounded-full">
-                    <div 
-                      className={`h-full transition-all duration-1000 rounded-full ${ ((userData?.scanCount || 0) / (userData?.maxScans || 5)) > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`} 
-                      style={{ width: `${Math.min(100, ((userData?.scanCount || 0) / (userData?.maxScans || 5)) * 100)}%` }}
+                     <div
+                       className={`h-full transition-all duration-1000 rounded-full ${ scanUsageRatio > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`}
+                      style={{ width: `${Math.min(100, scanUsageRatio * 100)}%` }}
                     />
                   </div>
                 </div>

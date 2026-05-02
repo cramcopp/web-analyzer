@@ -1,3 +1,8 @@
+import type { AuditIssue, AuditScoreBreakdown, EvidenceArtifact, LinkOccurrence, UrlSnapshot } from '@/types/audit';
+import type { AiVisibilityCheckSet } from '@/types/ai-visibility';
+import type { DataSourceMap } from '@/types/data-source';
+import type { AiVisibilityFact, BacklinkFact, CompetitorFact, KeywordFact, ProviderAvailability, ProviderStatus, RankFact, TrafficFact } from '@/types/provider-facts';
+
 export interface ScanOptions {
   url: string;
   plan?: string;
@@ -44,12 +49,19 @@ export interface SubpageResult {
   contentType?: string;
   strippedContent?: string;
   links?: string[];
+  externalLinks?: string[];
+  internalLinkDetails?: LinkOccurrence[];
+  externalLinkDetails?: LinkOccurrence[];
   xRobotsTag?: string;
   redirectLocation?: string;
   hasNextPrev?: boolean;
   isIndexable?: boolean;
+  indexabilityReason?: string;
+  headers?: Record<string, string>;
+  htmlLang?: string;
   headings?: { h1: string[]; h2: string[]; h3: string[] };
   images?: { src: string; alt: string }[];
+  textBasis?: string;
 }
 
 export interface PrioritizedTask {
@@ -140,6 +152,7 @@ export interface AnalysisResult {
   totalStylesheets: number;
   responseTimeMs: number;
   ttfbMs?: number;
+  responseTimeSource?: string;
   preflight?: PreflightData;
   psiMetricsStr: string;
   psiMetrics: PsiMetrics | null;
@@ -180,6 +193,19 @@ export interface AnalysisResult {
     brokenLinks: { url: string; status: number | string }[] 
   };
   apiEndpoints: string[];
+  issues?: AuditIssue[];
+  evidence?: EvidenceArtifact[];
+  urlSnapshots?: UrlSnapshot[];
+  scoreBreakdown?: AuditScoreBreakdown;
+  dataSources?: DataSourceMap;
+  providerAvailability?: ProviderAvailability;
+  providerStatuses?: ProviderStatus[];
+  keywordFacts?: KeywordFact[];
+  rankFacts?: RankFact[];
+  backlinkFacts?: BacklinkFact[];
+  competitorFacts?: CompetitorFact[];
+  trafficFacts?: TrafficFact[];
+  aiVisibilityFacts?: AiVisibilityFact[];
 
   // AI Generated Sections
   businessIntelligence?: BusinessIntelligence;
@@ -254,6 +280,10 @@ export interface AnalysisResult {
       readabilityAndTone: string;
       prioritizedTasks: PrioritizedTask[];
     }
+  };
+  aiVisibility?: AISection & {
+    sourceType?: 'heuristic' | 'provider' | 'unavailable';
+    checks?: AiVisibilityCheckSet;
   };
   adminSecret?: string;
 }

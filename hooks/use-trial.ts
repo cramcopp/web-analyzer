@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useAuth } from '../components/auth-provider';
+import { normalizePlan } from '../lib/plans';
 
 export function useTrial() {
   const { userData } = useAuth();
@@ -17,7 +18,7 @@ export function useTrial() {
 
     const isFreeAccount = !plan || plan === 'free';
     const showTrialBadge = isInTrial && isFreeAccount;
-    const effectivePlan = showTrialBadge ? 'pro' : (plan || 'free');
+    const effectivePlan = showTrialBadge ? 'pro' : normalizePlan(plan);
 
     return {
       isInTrial,

@@ -1,6 +1,12 @@
 'use client';
 
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
+
+const DIAGNOSTIC_TERMS = [
+  "FETCHING_HEADERS_SSL", "DEEP_CRAWL_IN_PROGRESS", "CSS_PARSING_METRICS", "DOM_DEPTH_CALCULATION",
+  "SCHEMA_LD_JSON_AUDIT", "WAP_INTEL_ORCHESTRATION", "SECURITY_HEADER_CHECK", "SSL_CERT_VALIDATION",
+  "GSC_DATA_AGGREGATION", "PSI_API_LATENCY_CHECK", "RESPONSIVE_VIEWPORT_AUDIT", "OG_SOCIAL_META_SCRAPE"
+];
 
 function FloatingScannerProgress({ progress }: { progress: number }) {
   return (
@@ -20,13 +26,7 @@ function LoadingDisplay({ plan = 'free' }: { plan?: string }) {
 
   const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
 
-  const diagnosticTerms = [
-    "FETCHING_HEADERS_SSL", "DEEP_CRAWL_IN_PROGRESS", "CSS_PARSING_METRICS", "DOM_DEPTH_CALCULATION", 
-    "SCHEMA_LD_JSON_AUDIT", "WAP_INTEL_ORCHESTRATION", "SECURITY_HEADER_CHECK", "SSL_CERT_VALIDATION",
-    "GSC_DATA_AGGREGATION", "PSI_API_LATENCY_CHECK", "RESPONSIVE_VIEWPORT_AUDIT", "OG_SOCIAL_META_SCRAPE"
-  ];
-
-  const steps = [
+  const steps = useMemo(() => [
     `Initialisiere ${modelName} Intelligence...`,
     "Analysiere mit Gemini-Power...",
     "Crawle Webseiteninhalte...",
@@ -36,7 +36,7 @@ function LoadingDisplay({ plan = 'free' }: { plan?: string }) {
     "Analysiere Performance-Metriken...",
     "Prüfe Barrierefreiheit...",
     "Kombiniere KI-Erkenntnisse..."
-  ];
+  ], [modelName]);
 
   useEffect(() => {
     const progressInterval = setInterval(() => {
@@ -53,7 +53,7 @@ function LoadingDisplay({ plan = 'free' }: { plan?: string }) {
 
     const termInterval = setInterval(() => {
       setTerminalLines(prev => {
-        const next = [...prev, diagnosticTerms[Math.floor(Math.random() * diagnosticTerms.length)]];
+        const next = [...prev, DIAGNOSTIC_TERMS[Math.floor(Math.random() * DIAGNOSTIC_TERMS.length)]];
         return next.slice(-4);
       });
     }, 1200);

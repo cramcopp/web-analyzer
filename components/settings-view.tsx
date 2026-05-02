@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, memo } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import { useAuth } from './auth-provider';
 import { ThemeToggle } from './theme-toggle';
+import ProductRoadmapPanel from './product-roadmap-panel';
 
 function SettingsView() {
+  const router = useRouter();
   const { deleteAccount, error: authError } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -14,8 +17,8 @@ function SettingsView() {
     setIsDeleting(true);
     try {
       await deleteAccount();
-      window.location.href = '/';
-    } catch (err) {
+      router.push('/');
+    } catch {
       setIsDeleting(false);
     }
   };
@@ -29,7 +32,7 @@ function SettingsView() {
         <p className="text-[14px] text-[#888] font-medium">Verwalte deine Präferenzen und Systemkonfigurationen.</p>
       </div>
 
-      <div className="max-w-[700px] flex flex-col gap-12 pb-20">
+      <div className="max-w-[1200px] flex flex-col gap-12 pb-20">
         <div className="flex flex-col gap-6">
           <h3 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 pb-2 border-b-2 border-[#1A1A1A] dark:border-zinc-100 w-fit">Allgemein</h3>
           <div className="flex flex-col gap-6">
@@ -42,6 +45,8 @@ function SettingsView() {
             </div>
           </div>
         </div>
+
+        <ProductRoadmapPanel />
 
         <div className="flex flex-col gap-6">
           <h3 className="text-[12px] font-black uppercase tracking-widest text-[#EB5757] pb-2 border-b-2 border-[#EB5757] w-fit">Gefahrenzone</h3>

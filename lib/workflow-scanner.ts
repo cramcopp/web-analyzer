@@ -2,15 +2,14 @@
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { 
   performPreflight, 
+  performAnalysis,
   scanSubpage, 
   calculateHeuristicScores, 
-  normalizeUrl,
-  isSameBaseDomain,
   checkIndexability,
   stripHtmlForAi
 } from './scanner';
 import { setDocument } from './firestore-edge';
-import { AnalysisResult, ScanOptions, SubpageResult } from './scanner/types';
+import { AnalysisResult, ScanOptions } from './scanner/types';
 import { parse } from 'node-html-parser';
 
 // IDE Helper
@@ -67,10 +66,10 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string, plan: st
     // Nutze stabile Modelle wie angefordert
     if (isPremium) return await fetchModel('gemini-3-flash-preview');
     return await fetchModel('gemini-3.1-flash-lite-preview');
-  } catch (error) {
+  } catch {
     try {
       return await fetchModel('gemini-3.1-flash-lite-preview'); // Fallback
-    } catch (fallbackError) {
+    } catch {
       return {
         seo: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
         performance: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
@@ -173,7 +172,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         const blockingScripts = scripts.filter((s: any) => !s.getAttribute('async') && !s.getAttribute('defer') && s.getAttribute('src')).length;
         const totalStylesheets = root.querySelectorAll('link[rel="stylesheet"]').length;
 
-        const scores = calculateHeuristicScores(root, mainIndex);
+        const scores = calculateHeuristicScores(root, mainIndex, preflightData.headers);
         const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
         // KI-Aufruf
@@ -191,35 +190,22 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         
         const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, plan);
 
-        // 1MB Firestore Crash-Schutz!
-        const slimSubpages = currentState.results.map((r: any) => {
-          const { strippedContent, links, ...safeData } = r; 
-          return safeData;
+        const groundedReport = await performAnalysis({
+          url: preflightData.mainUrlNormalized,
+          plan,
+          userId,
+          auditId,
         });
 
         const report: Partial<AnalysisResult> = {
-          audit_id: auditId || Math.random().toString(36).substring(7).toUpperCase(),
-          userId: userId,
-          createdAt: new Date().toISOString(),
-          url: preflightData.mainUrlNormalized,
-          urlObj: preflightData.mainUrlNormalized,
-          title: root.querySelector('title')?.text.trim() || '',
+          ...groundedReport,
           status: 'completed',
           progress: 100,
-          crawlSummary: {
-            totalInternalLinks: currentState.processed.length, 
-            scannedSubpagesCount: currentState.results.length,
-            indexablePagesCount: indexableUrls.length,
-            crawledUrls: currentState.processed,
-            indexableUrls: indexableUrls,
-            scannedSubpages: slimSubpages as any,
-            brokenLinks: []
-          },
-          seo: { score: scores.seo, insights: aiReport.seo.insights, recommendations: aiReport.seo.recommendations, detailedSeo: {} as any },
-          performance: { score: scores.performance, insights: aiReport.performance.insights, recommendations: aiReport.performance.recommendations, detailedPerformance: {} as any },
-          security: { score: scores.security, insights: aiReport.security.insights, recommendations: aiReport.security.recommendations, detailedSecurity: {} as any },
-          accessibility: { score: scores.accessibility, insights: aiReport.accessibility.insights, recommendations: aiReport.accessibility.recommendations, detailedAccessibility: {} as any },
-          compliance: { score: scores.compliance, insights: aiReport.compliance.insights, recommendations: aiReport.compliance.recommendations, detailedCompliance: {} as any },
+          seo: { ...groundedReport.seo!, insights: aiReport.seo.insights, recommendations: aiReport.seo.recommendations },
+          performance: { ...groundedReport.performance!, insights: aiReport.performance.insights, recommendations: aiReport.performance.recommendations },
+          security: { ...groundedReport.security!, insights: aiReport.security.insights, recommendations: aiReport.security.recommendations },
+          accessibility: { ...groundedReport.accessibility!, insights: aiReport.accessibility.insights, recommendations: aiReport.accessibility.recommendations },
+          compliance: { ...groundedReport.compliance!, insights: aiReport.compliance.insights, recommendations: aiReport.compliance.recommendations },
           adminSecret: this.env.INTERNAL_SECRET
         };
 
@@ -241,7 +227,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 }
 
 // NEU: Der HTTP-Empfänger, der den Workflow von außen startet!
-export default {
+const workflowHttpEntrypoint = {
   async fetch(req: Request, env: Env) {
     if (req.method === 'POST') {
       const params = await req.json();
@@ -252,3 +238,5 @@ export default {
     return new Response("Method not allowed", { status: 405 });
   }
 };
+
+export default workflowHttpEntrypoint;

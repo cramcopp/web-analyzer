@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, setDocument } from '@/lib/firestore-edge';
-import { PLAN_CONFIG } from '@/lib/stripe';
+import { getMonthlyScanLimit } from '@/lib/plans';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
-export async function POST(req: Request) {
+export async function POST() {
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         plan: existingUserData?.plan || 'free',
         reports: existingUserData?.reports || [],
         scanCount: existingUserData?.scanCount || 0,
-        maxScans: existingUserData?.maxScans || PLAN_CONFIG.free.maxScans,
+        maxScans: existingUserData?.maxScans || getMonthlyScanLimit('free'),
         lastScanReset: existingUserData?.lastScanReset || new Date().toISOString(),
         createdAt: existingUserData?.createdAt || new Date().toISOString()
       };

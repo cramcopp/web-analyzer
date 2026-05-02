@@ -1,13 +1,31 @@
 import { NextResponse } from 'next/server';
-import { queryDocuments, addDocument, updateDocument, incrementField } from '@/lib/firestore-edge';
+import { queryDocuments } from '@/lib/firestore-edge';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+
+async function hashValue(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function isAuthorizedSecret(secret: string | null) {
+  const expected = process.env.INTERNAL_SECRET;
+  if (!secret || !expected) return false;
+  const [providedHash, expectedHash] = await Promise.all([hashValue(secret), hashValue(expected)]);
+  let diff = providedHash.length ^ expectedHash.length;
+  const length = Math.max(providedHash.length, expectedHash.length);
+  for (let i = 0; i < length; i++) {
+    diff |= (providedHash.charCodeAt(i) || 0) ^ (expectedHash.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const secret = searchParams.get('secret');
 
-  if (secret !== process.env.INTERNAL_SECRET) {
+  if (!(await isAuthorizedSecret(secret))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -18,7 +36,7 @@ export async function GET(req: Request) {
       { field: 'cronEnabled', op: 'EQUAL', value: true }
     ], 'AND', process.env.INTERNAL_SECRET);
 
-    console.log(`Cron Monitor: Processing ${projects.length} projects`);
+    console.warn(`Cron Monitor: Processing ${projects.length} projects`);
 
     const results: any[] = [];
     const BATCH_SIZE = 3; // Reduced batch size for edge environment stability
@@ -27,7 +45,7 @@ export async function GET(req: Request) {
       const batch = projects.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(async (project) => {
         try {
-          console.log(`Triggering workflow for project: ${project.url}`);
+          console.warn(`Triggering workflow for project: ${project.url}`);
           
           // Trigger workflow instead of direct analysis to save bundle size
           const analyzeRes = await fetch(`${new URL(req.url).origin}/api/analyze`, {
