@@ -17,6 +17,7 @@ import DataSourceBadge from './data-source-badge';
 import { IssueList, ScoreDeltaList } from './monitoring/monitoring-ui';
 import { DEFAULT_ALERT_TYPES, alertLabel, isProviderBackedAlert, providerAvailable, ruleThreshold } from '@/lib/monitoring/config';
 import { compareScans } from '@/lib/monitoring/diff';
+import { normalizeStoredReports } from '@/lib/report-normalizer';
 import type { AuditIssue } from '@/types/audit';
 import type { AlertEvent, AlertRule, ScanDiff, ScheduledScan, UptimeCheck } from '@/types/monitoring';
 
@@ -40,32 +41,6 @@ type ScoreCarrier = {
   contentStrategy?: { score?: number };
   issues?: AuditIssue[];
 };
-
-function parseJson(value: unknown) {
-  if (typeof value !== 'string') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function parseReportPayload(report: any): ScoreCarrier {
-  const results = parseJson(report?.results) as any;
-  const raw = parseJson(report?.rawScrapeData) as any;
-  return {
-    ...results,
-    ...raw,
-    audit_id: raw?.audit_id || results?.audit_id || report?.audit_id || report?.id,
-    issues: raw?.issues || results?.issues || report?.issues || [],
-    seo: raw?.seo || results?.seo || report?.seo,
-    performance: raw?.performance || results?.performance || report?.performance,
-    security: raw?.security || results?.security || report?.security,
-    accessibility: raw?.accessibility || results?.accessibility || report?.accessibility,
-    compliance: raw?.compliance || results?.compliance || report?.compliance,
-    contentStrategy: raw?.contentStrategy || results?.contentStrategy || report?.contentStrategy,
-  };
-}
 
 function formatDate(value?: string) {
   if (!value) return 'Nicht verfuegbar';
@@ -91,7 +66,7 @@ function scoreValue(scan: ScoreCarrier, key: keyof Pick<ScoreCarrier, 'seo' | 'p
   }
 }
 
-export default function ProjectMonitoringView({ project, report }: { project: { id: string; url: string }; report: any }) {
+export default function ProjectMonitoringView({ project, report, plan = 'free' }: { project: { id: string; url: string }; report: any; plan?: string }) {
   const [scheduledScans, setScheduledScans] = useState<ScheduledScan[]>([]);
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
   const [alertEvents, setAlertEvents] = useState<AlertEvent[]>([]);
@@ -101,6 +76,7 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
   const [activeTab, setActiveTab] = useState<MonitoringTabId>('monitoring');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uptimeSaving, setUptimeSaving] = useState(false);
 
   useEffect(() => {
     async function loadMonitoring() {
@@ -122,7 +98,7 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
 
         if (reportsRes.ok) {
           const data = await reportsRes.json();
-          setReports(data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          setReports(normalizeStoredReports(data).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
         }
       } finally {
         setLoading(false);
@@ -134,7 +110,7 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
 
   const computedScanDiff = useMemo(() => {
     if (reports.length >= 2) {
-      return compareScans(project.id, parseReportPayload(reports[1]), parseReportPayload(reports[0]));
+      return compareScans(project.id, reports[1], reports[0]);
     }
     if (report?.issues?.length) {
       return compareScans(project.id, null, report);
@@ -149,6 +125,28 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
   const openCurrentIssues = currentIssues.filter((issue) => issue.status !== 'ignored' && issue.status !== 'fixed');
   const ignoredCurrentIssues = currentIssues.filter((issue) => issue.status === 'ignored');
 
+  const runUptimeCheck = async (showSaving = true) => {
+    if (showSaving) setUptimeSaving(true);
+    try {
+      const response = await fetch('/api/monitoring/uptime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id, url: project.url }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Uptime Check fehlgeschlagen');
+      if (data.check) {
+        setUptimeChecks((previous) => [data.check, ...previous]);
+      }
+      if (data.alertEvent) {
+        setAlertEvents((previous) => [data.alertEvent, ...previous]);
+      }
+      return data.check as UptimeCheck | undefined;
+    } finally {
+      if (showSaving) setUptimeSaving(false);
+    }
+  };
+
   const enableMonitoring = async () => {
     setSaving(true);
     try {
@@ -159,13 +157,14 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
         projectId: project.id,
         url: project.url,
         frequency: 'weekly',
+        plan,
         enabled: true,
         nextRunAt,
         createdAt: now,
         updatedAt: now,
       };
 
-      await fetch('/api/monitoring', {
+      const scheduleResponse = await fetch('/api/monitoring', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,6 +173,9 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
           data: schedule,
         }),
       });
+      const scheduleResult = await scheduleResponse.json();
+      if (!scheduleResponse.ok) throw new Error(scheduleResult.error || 'Monitoring konnte nicht gespeichert werden');
+      const persistedSchedule = { ...schedule, id: scheduleResult.id };
 
       const existingTypes = new Set(alertRules.map((rule) => rule.type));
       const newRules: AlertRule[] = DEFAULT_ALERT_TYPES
@@ -188,7 +190,8 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
           updatedAt: now,
         }));
 
-      await Promise.all(newRules.map((rule) => fetch('/api/monitoring', {
+      const persistedRules = await Promise.all(newRules.map(async (rule) => {
+        const response = await fetch('/api/monitoring', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,7 +199,11 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
           projectId: project.id,
           data: rule,
         }),
-      })));
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Alert-Regel konnte nicht gespeichert werden');
+        return { ...rule, id: data.id };
+      }));
 
       if (computedScanDiff) {
         await fetch('/api/monitoring', {
@@ -211,8 +218,10 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
         setScanDiffs((previous) => [computedScanDiff, ...previous.filter((diff) => diff.currentScanId !== computedScanDiff.currentScanId)]);
       }
 
-      setScheduledScans((previous) => [schedule, ...previous]);
-      setAlertRules((previous) => [...previous, ...newRules]);
+      await runUptimeCheck(false);
+
+      setScheduledScans((previous) => [persistedSchedule, ...previous]);
+      setAlertRules((previous) => [...previous, ...persistedRules]);
     } finally {
       setSaving(false);
     }
@@ -388,9 +397,20 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
 
       {activeTab === 'uptime' && (
         <section className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-6">
-          <h3 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 mb-5 flex items-center gap-2">
-            <ServerCrash className="w-4 h-4 text-[#D4AF37]" /> Uptime
-          </h3>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+            <h3 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-2">
+              <ServerCrash className="w-4 h-4 text-[#D4AF37]" /> Uptime
+            </h3>
+            <button
+              type="button"
+              onClick={() => runUptimeCheck()}
+              disabled={uptimeSaving}
+              className="px-4 py-3 bg-[#1A1A1A] dark:bg-white text-white dark:text-zinc-900 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
+            >
+              <Activity className="w-4 h-4" />
+              {uptimeSaving ? 'Prueft...' : 'Jetzt pruefen'}
+            </button>
+          </div>
           {uptimeChecks.length === 0 ? (
             <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch kein Uptime Check vorhanden. Keine Statuswerte werden simuliert.</p>
           ) : (
@@ -422,7 +442,7 @@ export default function ProjectMonitoringView({ project, report }: { project: { 
             ) : (
               <div className="space-y-3">
                 {reports.slice(0, 8).map((item) => {
-                  const payload = parseReportPayload(item);
+                  const payload = item;
                   return (
                     <div key={item.id || payload.audit_id} className="border border-[#EEE] dark:border-zinc-800 p-4">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">

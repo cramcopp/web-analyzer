@@ -1,4 +1,4 @@
-export async function generateReportClientSide(scrapeData: any, plan: string = 'free', retries: number = 2) {
+export async function generateReportClientSide(scrapeData: any, plan: string = 'free', retries: number = 0) {
   // 1. Data Validation & Self-Healing
   if (!scrapeData) {
     throw new Error('Validierungsfehler: Keine Daten für die Analyse gefunden.');

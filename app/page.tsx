@@ -19,6 +19,7 @@ import { AnalysisResult } from '../lib/scanner';
 import { Notification, Project } from '../types/common';
 import { useTrial } from '../hooks/use-trial';
 import { getMonthlyScanLimit } from '../lib/plans';
+import { normalizeStoredReport } from '../lib/report-normalizer';
 
 type ActiveView = 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
 type ProjectNavTab =
@@ -78,18 +79,11 @@ export default function WebsiteAnalyzer() {
       const resp = await fetch(`/api/reports/${id}`);
       if (!resp.ok) throw new Error('Report nicht gefunden.');
       const data = await resp.json();
-      
-      if (data.results) {
-        const parsedResults = typeof data.results === 'string' ? JSON.parse(data.results) : data.results;
-        setReport({ ...parsedResults, id: data.id, audit_id: parsedResults.audit_id || data.audit_id || data.id });
-      }
-      if (data.rawScrapeData) {
-        const parsedRaw = typeof data.rawScrapeData === 'string' ? JSON.parse(data.rawScrapeData) : data.rawScrapeData;
-        setRawScrapeData({ ...parsedRaw, id: data.id, audit_id: parsedRaw.audit_id || data.audit_id || data.id });
-      }
-      
-      setLastAnalyzedUrl(data.url);
-      setUrl(data.url);
+      const normalized = normalizeStoredReport(data);
+      setReport(normalized.results);
+      setRawScrapeData(normalized.rawScrapeData);
+      setLastAnalyzedUrl(normalized.url || data.url);
+      setUrl(normalized.url || data.url);
       setActiveView('analyzer');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e: unknown) {
@@ -113,15 +107,9 @@ export default function WebsiteAnalyzer() {
              const latest = reports.sort((a: any, b: any) => 
                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
              )[0];
-             
-             if (latest.results) {
-               const parsedResults = typeof latest.results === 'string' ? JSON.parse(latest.results) : latest.results;
-               setReport({ ...parsedResults, id: latest.id, audit_id: parsedResults.audit_id || latest.audit_id || latest.id });
-             }
-             if (latest.rawScrapeData) {
-               const parsedRaw = typeof latest.rawScrapeData === 'string' ? JSON.parse(latest.rawScrapeData) : latest.rawScrapeData;
-               setRawScrapeData({ ...parsedRaw, id: latest.id, audit_id: parsedRaw.audit_id || latest.audit_id || latest.id });
-             }
+             const normalized = normalizeStoredReport(latest);
+             setReport(normalized.results);
+             setRawScrapeData(normalized.rawScrapeData);
              setLastAnalyzedUrl(proj.url);
           } else {
              setReport(null);
@@ -191,7 +179,11 @@ export default function WebsiteAnalyzer() {
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, plan: effectivePlan }),
+        body: JSON.stringify({
+          url: targetUrl,
+          plan: effectivePlan,
+          projectId: selectedProject && (selectedProject.url === currentUrl || selectedProject.url === targetUrl) ? selectedProject.id : undefined,
+        }),
       });
 
       let scrapeData = await response.json();
@@ -254,21 +246,33 @@ export default function WebsiteAnalyzer() {
         const storageData = { ...scrapeData };
         delete storageData.bodyText; 
 
-        await fetch('/api/reports', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: targetUrl,
-            score: avgScore,
-            results: JSON.stringify(reportWithAuditId),
-            rawScrapeData: JSON.stringify(storageData),
-            seoScore: reportWithAuditId.seo?.score || 0,
-            performanceScore: reportWithAuditId.performance?.score || 0,
-            securityScore: reportWithAuditId.security?.score || 0,
-            accessibilityScore: reportWithAuditId.accessibility?.score || 0,
-            complianceScore: reportWithAuditId.compliance?.score || 0
-          })
-        });
+        const savePayload = {
+          url: targetUrl,
+          score: avgScore,
+          results: JSON.stringify(reportWithAuditId),
+          rawScrapeData: JSON.stringify(storageData),
+          seoScore: reportWithAuditId.seo?.score || 0,
+          performanceScore: reportWithAuditId.performance?.score || 0,
+          securityScore: reportWithAuditId.security?.score || 0,
+          accessibilityScore: reportWithAuditId.accessibility?.score || 0,
+          complianceScore: reportWithAuditId.compliance?.score || 0
+        };
+        const existingReportId = scrapeData.audit_id || reportWithAuditId.audit_id;
+        const saveResponse = existingReportId
+          ? await fetch(`/api/reports/${existingReportId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(savePayload)
+            })
+          : null;
+
+        if (!saveResponse?.ok) {
+          await fetch('/api/reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(savePayload)
+          });
+        }
 
         if (selectedProject && selectedProject.url === targetUrl) {
           await fetch(`/api/projects/${selectedProject.id}`, {
@@ -450,7 +454,7 @@ export default function WebsiteAnalyzer() {
             </>
           )}
 
-          {activeView === 'projects' && <ProjectsOverviewView onSelectProject={handleSelectProject} />}
+          {activeView === 'projects' && <ProjectsOverviewView onSelectProject={handleSelectProject} targetTab={projectInitialTab} />}
 
           {activeView === 'project' && selectedProject && (
             <ProjectDashboardView 

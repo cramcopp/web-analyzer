@@ -22,6 +22,7 @@ import {
 import { ThemeToggle } from "./theme-toggle";
 import { Notification, Project, HistoryItem } from "../types/common";
 import { getMonthlyScanLimit } from "../lib/plans";
+import { normalizeStoredReports } from "../lib/report-normalizer";
 
 // Sub-Components
 import { SidebarNotifications } from "./sidebar/notifications-popover";
@@ -114,7 +115,7 @@ export const Sidebar = memo(function Sidebar({
         const reportsRes = await fetch('/api/reports');
         if (reportsRes.ok) {
           const reportData = await reportsRes.json();
-          const formatted: HistoryItem[] = reportData.map((docData: any) => {
+          const formatted: HistoryItem[] = normalizeStoredReports(reportData).map((docData: any) => {
             const dateObj = new Date(docData.createdAt);
             const today = new Date();
             const isToday =

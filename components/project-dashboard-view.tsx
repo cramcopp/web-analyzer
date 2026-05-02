@@ -5,7 +5,7 @@ import {
   Zap, RefreshCw, LayoutDashboard, Search,
   ShieldCheck, TrendingUp, Network, Link, Trophy, 
   History, Settings, Sparkles, ChevronRight, CheckCircle2,
-  Activity, FileText, BrainCircuit, FileSearch, ListChecks
+  Activity, FileText, BrainCircuit, FileSearch, ListChecks, Wrench
 } from 'lucide-react';
 import LoadingDisplay from './loading-display';
 import ReportResultsView from './report-results-view';
@@ -63,8 +63,11 @@ const NAV_ITEMS = [
   { id: 'competition', label: 'Wettbewerber', icon: Trophy },
   { id: 'ai_visibility', label: 'AI Visibility', icon: BrainCircuit },
   { id: 'monitoring', label: 'Monitoring', icon: Activity },
+  { id: 'history', label: 'Scan History', icon: History },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'tasks', label: 'Tasks', icon: CheckCircle2 },
+  { id: 'ai_plan', label: 'AI Plan', icon: Sparkles },
+  { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
@@ -343,7 +346,7 @@ function ProjectDashboardView({
       case 'keywords': return <ProjectKeywordsView report={activeAuditData} />;
       case 'rankings': return <ProjectRankingsView report={activeAuditData} />;
       case 'linking': return <ProjectLinkingView report={activeAuditData} plan={plan} />;
-      case 'monitoring': return <ProjectMonitoringView project={project} report={activeAuditData} />;
+      case 'monitoring': return <ProjectMonitoringView project={project} report={activeAuditData} plan={plan} />;
       case 'ai_visibility': return <ProjectAiVisibilityView report={activeAuditData} />;
       case 'ai_plan': return <ProjectAiActionPlanView report={activeReport} />;
       case 'competition': return <ProjectCompetitionView report={activeAuditData} />;

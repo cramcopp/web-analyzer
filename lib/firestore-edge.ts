@@ -155,7 +155,7 @@ export async function addDocument<T = Record<string, any>>(collection: string, d
   if (!res.ok) throw new Error(`Firestore Error ${res.status}`);
   const result = await res.json();
   const id = result.name.split('/').pop();
-  return { id, ...documentFromFirestore(result) } as any;
+  return { ...documentFromFirestore(result), id } as any;
 }
 
 export async function updateDocument(collection: string, id: string, data: Record<string, any>, token?: string | null, env?: any): Promise<any> {
@@ -217,8 +217,8 @@ export async function queryDocuments<T = Record<string, any>>(collection: string
   if (!res.ok) throw new Error(`Firestore Query Error ${res.status}`);
   const results = await res.json();
   return results.filter((r: any) => r.document).map((r: any) => ({
-    id: r.document.name.split('/').pop(),
-    ...documentFromFirestore(r.document)
+    ...documentFromFirestore(r.document),
+    id: r.document.name.split('/').pop()
   }));
 }
 

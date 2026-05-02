@@ -54,7 +54,7 @@ export function getAiReportMode(env: RuntimeEnv): AiReportMode {
 export function shouldRunAiReport(env: RuntimeEnv, groundedData: any) {
   if (getAiReportMode(env) === 'off') return false;
   if (!env.GEMINI_API_KEY) return false;
-  return asArray(groundedData.issues).length > 0 || Boolean(groundedData.crawlSummary);
+  return asArray(groundedData.issues).length > 0;
 }
 
 export function getAiReportModels(plan: string, mode: AiReportMode, env: RuntimeEnv) {
@@ -67,9 +67,7 @@ export function getAiReportModels(plan: string, mode: AiReportMode, env: Runtime
       : ['gemini-2.5-flash', 'gemini-2.5-flash-lite-preview'];
   }
 
-  return plan === 'agency'
-    ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite-preview']
-    : ['gemini-2.5-flash-lite-preview'];
+  return ['gemini-2.5-flash-lite-preview'];
 }
 
 export function getAiAttemptLimit(mode: AiReportMode) {
@@ -121,9 +119,21 @@ export function buildGroundedReportPayload(scrapeData: any, url: string, plan: s
     crawlSummary: {
       startUrl: crawlSummary.startUrl,
       totalUrls: crawlSummary.totalUrls,
+      totalInternalLinks: crawlSummary.totalInternalLinks,
+      scannedSubpagesCount: crawlSummary.scannedSubpagesCount,
+      indexablePagesCount: crawlSummary.indexablePagesCount,
       crawledUrls: asArray(crawlSummary.crawledUrls).slice(0, 100),
+      indexableUrls: asArray(crawlSummary.indexableUrls).slice(0, 100),
       blockedUrls: asArray(crawlSummary.blockedUrls).slice(0, 50),
       brokenLinks: asArray(crawlSummary.brokenLinks).slice(0, 80),
+      scannedSubpages: asArray(crawlSummary.scannedSubpages).slice(0, 30).map((page: any) => ({
+        url: page.url,
+        title: truncate(page.title, 120),
+        h1Count: page.h1Count,
+        imagesWithoutAlt: page.imagesWithoutAlt,
+        status: page.status,
+        isIndexable: page.isIndexable,
+      })),
       sitemapUrls: asArray(crawlSummary.sitemapUrls).slice(0, 100),
       sourceType: crawlSummary.sourceType,
     },

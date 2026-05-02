@@ -54,6 +54,7 @@ function downloadCsv(filename: string, csv: string) {
 export default function ProjectLinkingView({ report, plan = 'free' }: { report: AnalysisResult | null; plan?: string }) {
   const [activeTab, setActiveTab] = useState<LinkingTabId>('overview');
   const [searchTerm, setSearchTerm] = useState('');
+  const [exportNotice, setExportNotice] = useState('');
   const planConfig = getPlanConfig(plan);
   const canExportCsv = (planConfig.exports as readonly string[]).includes('csv');
   const analysis = useMemo(() => (report ? analyzeInternalLinking(report) : null), [report]);
@@ -70,10 +71,11 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
 
   const handleExport = () => {
     if (!canExportCsv) {
-      alert('CSV Export ist in diesem Plan nicht freigeschaltet.');
+      setExportNotice('CSV Export ist in diesem Plan nicht freigeschaltet.');
       return;
     }
     if (!report) return;
+    setExportNotice('');
     downloadCsv(`wap_internal_link_jobs_${new Date().toISOString().split('T')[0]}.csv`, internalLinkingCsv(report));
   };
 
@@ -116,6 +118,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
           CSV Export
         </button>
       </div>
+      {exportNotice && <p className="text-[10px] text-[#888] font-black uppercase tracking-widest">{exportNotice}</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <StatCard label="URLs im LinkGraph" value={analysis.graph.length} />

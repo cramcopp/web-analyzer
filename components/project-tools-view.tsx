@@ -7,6 +7,7 @@ import {
 
 export default function ProjectToolsView({ project }: { project: any }) {
   const [activeTool, setActiveTool] = useState<'sitemap' | 'robots' | 'meta'>('sitemap');
+  const [copied, setCopied] = useState<string | null>(null);
 
   // eslint-disable-next-line no-secrets/no-secrets
   const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
@@ -23,9 +24,10 @@ export default function ProjectToolsView({ project }: { project: any }) {
 Allow: /
 Sitemap: ${project.url}/sitemap.xml`;
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('In die Zwischenablage kopiert!');
+  const handleCopy = async (text: string, label: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(label);
+    window.setTimeout(() => setCopied(null), 1800);
   };
 
   return (
@@ -71,10 +73,10 @@ Sitemap: ${project.url}/sitemap.xml`;
             <div className="flex items-center justify-between">
               <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">XML Sitemap Generator</h3>
               <button 
-                onClick={() => handleCopy(sitemapContent)}
+                onClick={() => handleCopy(sitemapContent, 'sitemap')}
                 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#D4AF37] hover:underline"
               >
-                <Copy className="w-3.5 h-3.5" /> Code kopieren
+                <Copy className="w-3.5 h-3.5" /> {copied === 'sitemap' ? 'Kopiert' : 'Code kopieren'}
               </button>
             </div>
             <div className="bg-[#1A1A1A] p-6 rounded-sm">
@@ -93,10 +95,10 @@ Sitemap: ${project.url}/sitemap.xml`;
             <div className="flex items-center justify-between">
               <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Robots.txt Generator</h3>
               <button 
-                onClick={() => handleCopy(robotsContent)}
+                onClick={() => handleCopy(robotsContent, 'robots')}
                 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#D4AF37] hover:underline"
               >
-                <Copy className="w-3.5 h-3.5" /> Code kopieren
+                <Copy className="w-3.5 h-3.5" /> {copied === 'robots' ? 'Kopiert' : 'Code kopieren'}
               </button>
             </div>
             <div className="bg-[#1A1A1A] p-6 rounded-sm">
@@ -126,7 +128,7 @@ Sitemap: ${project.url}/sitemap.xml`;
                     {project.url} <span className="text-[10px]">▼</span>
                   </div>
                   <div className="text-[13px] text-[#4d5156] dark:text-zinc-400 leading-snug">
-                    Analysieren Sie Ihre Webseite mit unserem KI-gestützten SEO Tool. Erhalten Sie sofortige Einblicke in Rankings, Backlinks und Technik...
+                    Platzhalter fuer eine manuell gepflegte Meta Description. Keine Ranking-, Traffic- oder Backlink-Fakten ohne Providerdaten.
                   </div>
                </div>
 

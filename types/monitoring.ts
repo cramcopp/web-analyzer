@@ -20,6 +20,7 @@ export interface ScheduledScan {
   projectId: string;
   url: string;
   frequency: ScheduleFrequency;
+  plan?: string;
   enabled: boolean;
   nextRunAt?: string;
   lastRunAt?: string;

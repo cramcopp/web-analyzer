@@ -7,8 +7,10 @@ export interface ScanOptions {
   url: string;
   plan?: string;
   userId?: string;
+  projectId?: string;
   token?: string;
   auditId?: string;
+  env?: Record<string, any>;
 }
 
 export interface PsiMetrics {

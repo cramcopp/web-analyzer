@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, ChevronRight, Zap, Search, ShieldCheck, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { normalizeStoredReports } from '@/lib/report-normalizer';
 
 export default function ProjectHistoryView({ url, onSelectReport }: { url: string, onSelectReport: (report: any) => void }) {
   const [reports, setReports] = useState<any[]>([]);
@@ -14,18 +15,7 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
         const res = await fetch(`/api/reports?url=${encodeURIComponent(url)}`);
         if (res.ok) {
           const data = await res.json();
-          const parsed = data.map((r: any) => {
-            const results = typeof r.results === 'string' ? JSON.parse(r.results) : r.results;
-            return {
-              ...r,
-              results,
-              seoScore: r.seoScore ?? results?.seo?.score ?? 0,
-              performanceScore: r.performanceScore ?? results?.performance?.score ?? 0,
-              securityScore: r.securityScore ?? results?.security?.score ?? 0,
-              accessibilityScore: r.accessibilityScore ?? results?.accessibility?.score ?? 0,
-              complianceScore: r.complianceScore ?? results?.compliance?.score ?? 0
-            };
-          });
+          const parsed = normalizeStoredReports(data);
           const sorted = parsed.sort((a: any, b: any) => 
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );

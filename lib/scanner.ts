@@ -1427,8 +1427,9 @@ export async function performPreflight(urlObj: URL, plan: string) {
   return { subpageLimit, domain, robotsTxt, sitemapUrls, mainUrlNormalized: mainUrlNormalizedInPreflight, initialQueue: Array.from(initialQueue), html, headers: Object.fromEntries(response.headers.entries()), responseTimeMs };
 }
 
-export async function performAnalysis({ url, plan = 'free', userId = '', auditId }: ScanOptions): Promise<AnalysisResult> {
+export async function performAnalysis({ url, plan = 'free', userId = '', auditId, env }: ScanOptions): Promise<AnalysisResult> {
   const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+  const runtimeEnv = env || process.env;
   const scanId = auditId || createScanId();
   const createdAt = nowIso();
   const preflight = await performPreflight(urlObj, plan);
@@ -1634,8 +1635,8 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
     matomo: /matomo/i.test(html),
   };
   const linkTexts = root.querySelectorAll('a[href]').map((link: any) => `${link.text} ${link.getAttribute('href') || ''}`.toLowerCase());
-  const providerAvailability = getProviderAvailability(process.env);
-  const providerStatuses = getProviderStatuses(process.env);
+  const providerAvailability = getProviderAvailability(runtimeEnv);
+  const providerStatuses = getProviderStatuses(runtimeEnv);
   const dataSources: DataSourceMap = {
     crawl: { type: 'real', label: 'Crawler' },
     issues: { type: 'real', label: 'Deterministische Regeln' },

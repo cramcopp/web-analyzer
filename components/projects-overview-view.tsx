@@ -7,12 +7,17 @@ import type { Project } from '@/types/common';
 
 export default function ProjectsOverviewView({
   onSelectProject,
+  targetTab,
 }: {
   onSelectProject: (project: Project) => void;
+  targetTab?: string;
 }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const targetLabel = targetTab && targetTab !== 'overview'
+    ? targetTab.replaceAll('_', ' ')
+    : null;
 
   useEffect(() => {
     async function loadProjects() {
@@ -44,7 +49,9 @@ export default function ProjectsOverviewView({
           </div>
           <h2 className="text-[32px] md:text-[46px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Projektübersicht</h2>
           <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest leading-relaxed max-w-xl mt-4">
-            Waehle ein Projekt aus. Danach oeffnet die App den gewuenschten Projektbereich mit echten Crawl- und Providerdaten.
+            {targetLabel
+              ? `Waehle ein Projekt aus. Danach oeffnet die App direkt den Bereich ${targetLabel}.`
+              : 'Waehle ein Projekt aus. Danach oeffnet die App den gewuenschten Projektbereich mit echten Crawl- und Providerdaten.'}
           </p>
         </div>
       </div>

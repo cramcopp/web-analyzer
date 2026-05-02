@@ -3,6 +3,7 @@
 import { useState, useEffect, memo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Calendar } from 'lucide-react';
+import { normalizeStoredReports } from '@/lib/report-normalizer';
 
 function ScoreTrend({ url }: { url: string }) {
   const [history, setHistory] = useState<any[]>([]);
@@ -14,7 +15,7 @@ function ScoreTrend({ url }: { url: string }) {
         const res = await fetch(`/api/reports?url=${encodeURIComponent(url)}`);
         if (res.ok) {
           const data = await res.json();
-          const sorted = data.map((p: any) => ({
+          const sorted = normalizeStoredReports(data).map((p: any) => ({
             score: p.score,
             date: new Date(p.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
             rawDate: new Date(p.createdAt)

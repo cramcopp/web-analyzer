@@ -60,11 +60,12 @@ export async function POST(req: Request) {
     }
 
     const now = new Date().toISOString();
+    const { id: _ignoredDataId, ...dataWithoutClientId } = body.data || {};
     const payload = {
-      ...body.data,
+      ...dataWithoutClientId,
       userId: user.uid,
-      projectId: body.projectId || body.data?.projectId,
-      createdAt: body.data?.createdAt || now,
+      projectId: body.projectId || dataWithoutClientId.projectId,
+      createdAt: dataWithoutClientId.createdAt || now,
       updatedAt: now,
     };
 

@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try {
     // FIX: req übergeben
     const env = getEnv();
-    const { url } = await req.json(); // req.json() statt request.json()
+    const { url, projectId } = await req.json(); // req.json() statt request.json()
     const token = await getSessionToken();
     const user = await getSessionUser();
 
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
     await setDocument('reports', audit_id, {
       audit_id,
       userId: user.uid,
+      projectId,
       url: url,
       urlObj: url,
       createdAt: new Date().toISOString(),
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
           url, 
           plan, 
           userId: user.uid,
-          token,
+          projectId,
           auditId: audit_id
         })
       }));
@@ -75,11 +76,12 @@ export async function POST(req: Request) {
       console.warn("Achtung: Workflow nicht gebunden! Nutze langsamen Direct-Scan.");
       const { performAnalysis } = await import('@/lib/scanner');
       
-      performAnalysis({ url, plan, userId: user.uid, auditId: audit_id }).then(async (result) => {
+      void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, env }).then(async (result) => {
         await setDocument('reports', audit_id, {
           ...result,
           audit_id,
           userId: user.uid,
+          projectId,
           status: 'completed',
           progress: 100,
           adminSecret: env.INTERNAL_SECRET

@@ -30,7 +30,7 @@ interface Team {
   admins: string[];
 }
 
-export function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
+function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
   const [team, setTeam] = useState<Team | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
