@@ -28,7 +28,6 @@ Use two Cloudflare Workers:
 
 Required GitHub Actions secrets:
 - `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
 
 The workflow still runs install, lint, audit, and build when secrets are missing, but it skips the Cloudflare upload step.
 
@@ -46,7 +45,7 @@ AI is intentionally budgeted:
 - `AI_REPORT_MODE=budget` by default
 - `AI_WORKFLOW_SUMMARY=false` so scans do not call Gemini automatically
 - AI reports are cached by a deterministic grounding hash in Firestore
-- If `CLOUDFLARE_ACCOUNT_ID` is set, Gemini requests route through Cloudflare AI Gateway for gateway-level caching, analytics, and rate limiting
+- Gemini requests route through Cloudflare AI Gateway when the configured Cloudflare account ID is present, enabling gateway-level caching, analytics, and rate limiting
 
 Secrets must be stored in Cloudflare, not committed:
 - `FIREBASE_API_KEY`
@@ -56,4 +55,4 @@ Secrets must be stored in Cloudflare, not committed:
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - Google OAuth/Search Console keys as needed
-- `CLOUDFLARE_ACCOUNT_ID` and optional `AI_GATEWAY_TOKEN` if AI Gateway is enabled
+- optional `AI_GATEWAY_TOKEN` if the AI Gateway is configured as authenticated

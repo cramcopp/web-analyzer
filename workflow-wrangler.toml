@@ -1,5 +1,6 @@
 "$schema" = "./node_modules/wrangler/config-schema.json"
 name = "scan-workflow"
+account_id = "6b1c9a4b9789c88e2404ab19a9c43ffa"
 main = "lib/workflow-scanner.ts"
 compatibility_date = "2026-05-02"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
