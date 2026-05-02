@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { queryDocuments } from '@/lib/firestore-edge';
 import { getProviderAvailability, getProviderStatuses } from '@/lib/providers';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
@@ -14,8 +15,8 @@ const factCollections = {
   aiVisibilityFacts: 'aiVisibilityFacts',
 } as const;
 
-function getEnv(req: Request) {
-  return (req as any).context?.env || process.env;
+function getEnv() {
+  return getRuntimeEnv();
 }
 
 async function loadFacts(projectId: string, userId: string, token: string, env: any) {
@@ -37,7 +38,7 @@ async function loadFacts(projectId: string, userId: string, token: string, env: 
 }
 
 export async function GET(req: Request) {
-  const env = getEnv(req);
+  const env = getEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });

@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { updateDocument, queryDocuments } from '@/lib/firestore-edge';
 import { teamInviteSchema, teamMemberSchema } from '@/lib/validations';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
     // Find team where user is owner or admin
     const teams = await queryDocuments('teams', [
       { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-    ], 'AND', token);
+    ], 'AND', token, env);
     
     if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     const team = teams[0];
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
     // Find user by email
     const users = await queryDocuments('users', [
       { field: 'email', op: 'EQUAL', value: email }
-    ], 'AND', token);
+    ], 'AND', token, env);
 
     if (!users || users.length === 0) {
       return NextResponse.json({ error: 'Nutzer nicht gefunden' }, { status: 404 });
@@ -54,7 +56,7 @@ export async function POST(req: Request) {
     }
 
     const updatedMembers = [...team.members, invitedUser.uid];
-    await updateDocument('teams', team.id, { members: updatedMembers }, token);
+    await updateDocument('teams', team.id, { members: updatedMembers }, token, env);
     
     return NextResponse.json({ success: true, user: invitedUser });
   } catch (error: any) {
@@ -64,6 +66,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -82,7 +85,7 @@ export async function DELETE(req: Request) {
     
     const teams = await queryDocuments('teams', [
       { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-    ], 'AND', token);
+    ], 'AND', token, env);
     
     if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     const team = teams[0];
@@ -102,7 +105,7 @@ export async function DELETE(req: Request) {
     await updateDocument('teams', team.id, { 
       members: updatedMembers,
       admins: updatedAdmins
-    }, token);
+    }, token, env);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

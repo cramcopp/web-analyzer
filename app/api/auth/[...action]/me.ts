@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { fetchWithRetry } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   try {
+    const env = getRuntimeEnv();
     const cookieStore = await cookies();
     const token = cookieStore.get('wap_session')?.value;
 
@@ -14,7 +16,7 @@ export async function GET() {
     }
 
     // Verify token with Firebase REST API (Edge compatible)
-    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY}`;
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`;
     const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

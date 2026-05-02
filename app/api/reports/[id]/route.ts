@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  // @ts-ignore
-  const env = (req as any).context?.env || process.env;
+  const env = getRuntimeEnv();
   
   const { id } = await params;
   const user = await getSessionUser();

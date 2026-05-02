@@ -1,7 +1,16 @@
+"$schema" = "./node_modules/wrangler/config-schema.json"
 name = "scan-workflow"
 main = "lib/workflow-scanner.ts"
-compatibility_date = "2025-12-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-05-02"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+keep_vars = true
+
+[vars]
+AI_WORKFLOW_SUMMARY = "false"
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
 
 [[workflows]]
 binding = "SCAN_WORKFLOW"

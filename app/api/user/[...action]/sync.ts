@@ -2,16 +2,18 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, setDocument } from '@/lib/firestore-edge';
 import { getMonthlyScanLimit } from '@/lib/plans';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function POST() {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const existingUserData = await getDocument('users', user.uid, token);
+    const existingUserData = await getDocument('users', user.uid, token, env);
 
     if (!existingUserData || !existingUserData.plan) {
       const newUser = {
@@ -30,7 +32,7 @@ export async function POST() {
       };
       // Merging is handled internally if setDocument uses {merge:true}, 
       // but passing the full object ensures everything is written.
-      await setDocument('users', user.uid, newUser, token);
+      await setDocument('users', user.uid, newUser, null, token, env);
       return NextResponse.json({ success: true, user: newUser });
     }
 

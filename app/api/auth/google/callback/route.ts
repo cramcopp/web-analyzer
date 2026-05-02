@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { fetchWithRetry } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
+  const env = getRuntimeEnv();
+  const origin = new URL(req.url).origin;
   const { searchParams } = new URL(req.url);
   const code = searchParams.get('code');
   const state = searchParams.get('state');
@@ -33,9 +36,9 @@ export async function GET(req: Request) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: process.env.GOOGLE_CLIENT_ID || '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL || new URL(req.url).origin}/api/auth/google/callback`,
+        client_id: env.GOOGLE_CLIENT_ID || '',
+        client_secret: env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: env.GOOGLE_REDIRECT_URI || `${env.APP_URL || origin}/api/auth/google/callback`,
         grant_type: 'authorization_code',
       }),
     });
@@ -50,13 +53,12 @@ export async function GET(req: Request) {
     const idToken = tokens.id_token;
 
     // Exchange Google ID Token for Firebase ID Token
-    const origin = new URL(req.url).origin;
-    const firebaseResp = await fetchWithRetry(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${process.env.FIREBASE_API_KEY}`, {
+    const firebaseResp = await fetchWithRetry(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${env.FIREBASE_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         postBody: `id_token=${idToken}&providerId=google.com`,
-        requestUri: `${process.env.APP_URL || origin}/api/auth/google/callback`,
+        requestUri: `${env.APP_URL || origin}/api/auth/google/callback`,
         returnIdpCredential: true,
         returnSecureToken: true
       })
@@ -94,15 +96,15 @@ export async function GET(req: Request) {
       const { updateDocument } = await import('@/lib/firestore-edge');
       await updateDocument('users', firebaseData.localId, {
         gscTokens: JSON.stringify(tokens),
-        adminSecret: process.env.INTERNAL_SECRET
-      });
+        adminSecret: env.INTERNAL_SECRET
+      }, null, env);
     } catch (dbErr) {
       console.error('Failed to store GSC tokens in Firestore:', dbErr);
     }
 
 
     // Return a simple HTML page that communicates success to the opener and closes
-    const appUrl = process.env.APP_URL || origin;
+    const appUrl = env.APP_URL || origin;
     const html = `
       <html>
         <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff;">

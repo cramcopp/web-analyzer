@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { getDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import type { ReportVisibility } from '@/types/reporting';
 
 export const runtime = 'nodejs';
 
-function getEnv(req: Request) {
-  return (req as any).context?.env || process.env;
+function getEnv() {
+  return getRuntimeEnv();
 }
 
 async function sha256(value: string) {
@@ -21,7 +22,7 @@ function normalizeVisibility(value: unknown): ReportVisibility {
 }
 
 export async function GET(req: Request) {
-  const env = getEnv(req);
+  const env = getEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
@@ -40,7 +41,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const env = getEnv(req);
+  const env = getEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });

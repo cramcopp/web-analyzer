@@ -1,5 +1,12 @@
 import { cookies } from 'next/headers';
 import { queryDocuments, deleteDocument } from './firestore-edge';
+import { getRuntimeEnv } from './cloudflare-env';
+
+function firebaseApiKey() {
+  const key = getRuntimeEnv().FIREBASE_API_KEY;
+  if (!key) throw new Error('FIREBASE_API_KEY is missing');
+  return key;
+}
 
 /**
  * Verifies the session cookie and returns the user information.
@@ -14,7 +21,7 @@ export async function getSessionToken() {
 
   // Basic check if token is valid via identitytoolkit lookup
   try {
-    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY}`;
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey()}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,7 +62,7 @@ export async function getSessionToken() {
 }
 
 async function refreshIdToken(refreshToken: string) {
-  const url = `https://securetoken.googleapis.com/v1/token?key=${process.env.FIREBASE_API_KEY}`;
+  const url = `https://securetoken.googleapis.com/v1/token?key=${firebaseApiKey()}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -83,7 +90,7 @@ export async function getSessionUser() {
   if (!token) return null;
 
   try {
-    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY}`;
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey()}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -115,7 +122,7 @@ export async function updateUserProfile(data: { displayName?: string; photoUrl?:
   const token = cookieStore.get('wap_session')?.value;
   if (!token) throw new Error('Not authenticated');
 
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${process.env.FIREBASE_API_KEY}`;
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${firebaseApiKey()}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -136,6 +143,7 @@ export async function updateUserProfile(data: { displayName?: string; photoUrl?:
 
 
 export async function deleteUserAccount() {
+  const env = getRuntimeEnv();
   const cookieStore = await cookies();
   const token = cookieStore.get('wap_session')?.value;
   if (!token) throw new Error('Not authenticated');
@@ -148,22 +156,22 @@ export async function deleteUserAccount() {
   // 2. Delete Firestore Data (GDPR - BIZ-10)
   try {
     // Delete Reports
-    const reports = await queryDocuments('reports', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token);
-    await Promise.all(reports.map(r => deleteDocument('reports', r.id, token)));
+    const reports = await queryDocuments('reports', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token, env);
+    await Promise.all(reports.map(r => deleteDocument('reports', r.id, token, env)));
 
     // Delete Projects
-    const projects = await queryDocuments('projects', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token);
-    await Promise.all(projects.map(p => deleteDocument('projects', p.id, token)));
+    const projects = await queryDocuments('projects', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token, env);
+    await Promise.all(projects.map(p => deleteDocument('projects', p.id, token, env)));
 
     // Delete User Profile
-    await deleteDocument('users', uid, token);
+    await deleteDocument('users', uid, token, env);
   } catch {
     console.error('Firestore cleanup failed during account deletion');
     // We continue with Auth deletion anyway to ensure the account is closed
   }
 
   // 3. Delete Firebase Auth User
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${process.env.FIREBASE_API_KEY}`;
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${firebaseApiKey()}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -184,7 +192,7 @@ export async function deleteUserAccount() {
 
 export async function signInWithEmailRest(email: string, password: string) {
   // eslint-disable-next-line no-secrets/no-secrets
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.FIREBASE_API_KEY}`;
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey()}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -204,7 +212,7 @@ export async function signInWithEmailRest(email: string, password: string) {
 }
 
 export async function signUpWithEmailRest(email: string, password: string) {
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${process.env.FIREBASE_API_KEY}`;
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseApiKey()}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

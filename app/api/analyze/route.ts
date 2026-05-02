@@ -2,26 +2,17 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, setDocument, incrementField } from '@/lib/firestore-edge';
 import { getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 // FIX: Wir übergeben req an getEnv, um die Cloudflare-Variablen zu greifen!
-const getEnv = (req: Request) => {
-  const cfEnv = (req as any).context?.env || process.env;
-  
-  return {
-    INTERNAL_SECRET: cfEnv.INTERNAL_SECRET,
-    SCAN_WORKFLOW_SERVICE: cfEnv.SCAN_WORKFLOW_SERVICE, 
-    FIREBASE_PROJECT_ID: cfEnv.FIREBASE_PROJECT_ID,
-    FIREBASE_API_KEY: cfEnv.FIREBASE_API_KEY,
-    FIREBASE_DATABASE_ID: cfEnv.FIREBASE_DATABASE_ID || '(default)'
-  };
-};
+const getEnv = getRuntimeEnv;
 
 export async function POST(req: Request) {
   try {
     // FIX: req übergeben
-    const env = getEnv(req);
+    const env = getEnv();
     const { url } = await req.json(); // req.json() statt request.json()
     const token = await getSessionToken();
     const user = await getSessionUser();
@@ -63,7 +54,6 @@ export async function POST(req: Request) {
 
     // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
-      // FIX: Wir kommunizieren über fetch() mit dem Service-Binding!
       await env.SCAN_WORKFLOW_SERVICE.fetch(new Request("https://worker/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { z } from 'zod';
 
 const competitorsSchema = z.object({
@@ -32,6 +33,7 @@ const fetchWithTimeout = async (url: string, ms = 5000) => {
 };
 
 export async function POST(req: Request) {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
 
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
     const { niche, domain } = result.data;
 
     // Rate Limiting (Throttle: 1 request per 10 seconds per user)
-    const userData = await getDocument('users', user.uid, token);
+    const userData = await getDocument('users', user.uid, token, env);
     const now = Date.now();
     const lastReq = userData?.lastCompetitorReqAt ? new Date(userData.lastCompetitorReqAt).getTime() : 0;
     
@@ -64,14 +66,14 @@ export async function POST(req: Request) {
     }
 
     // Update last request time
-    await updateDocument('users', user.uid, { lastCompetitorReqAt: new Date(now).toISOString() }, token);
+    await updateDocument('users', user.uid, { lastCompetitorReqAt: new Date(now).toISOString() }, token, env);
 
     if (!niche) {
       return NextResponse.json({ error: 'Niche is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY;
-    const cx = process.env.GOOGLE_CX;
+    const apiKey = env.GOOGLE_API_KEY;
+    const cx = env.GOOGLE_CX;
 
     if (!apiKey || !cx) {
        console.warn("GOOGLE_API_KEY or GOOGLE_CX missing. Skipping competitor search.");

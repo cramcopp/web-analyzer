@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDocument } from '@/lib/firestore-edge';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
-function getEnv(req: Request) {
-  return (req as any).context?.env || process.env;
+function getEnv() {
+  return getRuntimeEnv();
 }
 
 async function sha256(value: string) {
@@ -15,7 +16,7 @@ async function sha256(value: string) {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
-  const env = getEnv(req);
+  const env = getEnv();
   const { token } = await params;
   const { searchParams } = new URL(req.url);
 

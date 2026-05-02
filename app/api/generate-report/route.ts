@@ -2,20 +2,65 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyReportGrounding } from '@/lib/reporting/report-verifier';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { getDocument, setDocument } from '@/lib/firestore-edge';
+import {
+  buildDeterministicReport,
+  buildGeminiEndpoint,
+  buildGroundedReportPayload,
+  createAiReportCacheKey,
+  getAiAttemptLimit,
+  getAiReportMode,
+  getAiReportModels,
+  shouldRunAiReport,
+} from '@/lib/ai-cost-control';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const env = getRuntimeEnv();
     const { scrapeData, url, plan = 'free' } = await req.json();
 
     if (!scrapeData) {
       return NextResponse.json({ error: 'No scrape data provided' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY is missing');
+    const groundedData = buildGroundedReportPayload(scrapeData, url, plan);
+    const aiMode = getAiReportMode(env);
+    const cacheKey = await createAiReportCacheKey({
+      version: 'report-v2',
+      url,
+      plan,
+      aiMode,
+      groundedData,
+    });
+
+    const cached = await getDocument<any>('aiReportCache', cacheKey, null, env).catch(() => null);
+    if (cached?.report) {
+      return NextResponse.json({
+        ...cached.report,
+        aiCost: {
+          mode: aiMode,
+          cached: true,
+          cacheKey,
+        },
+      });
+    }
+
+    const apiKey = env.GEMINI_API_KEY;
+    if (!shouldRunAiReport(env, groundedData)) {
+      const reason = apiKey ? `AI_REPORT_MODE=${aiMode}` : 'Gemini API-Key nicht gesetzt';
+      const fallback = verifyReportGrounding(buildDeterministicReport(scrapeData, url, reason), scrapeData, url);
+      return NextResponse.json({
+        ...fallback,
+        aiCost: {
+          mode: aiMode,
+          cached: false,
+          skipped: true,
+          reason,
+        },
+      });
     }
 
     // Define the schema for the AI response
@@ -307,50 +352,13 @@ export async function POST(req: NextRequest) {
     let success = false;
     let lastModelError = null;
 
-    // Tier-based model selection based on YOUR exact AI Studio quotas
-    const TIER_MAPPING: Record<string, string[]> = {
-      'agency': ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash'],
-      'pro': ['gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash'],
-      'free': ['gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite-preview', 'gemini-1.5-flash-8b']
-    };
-
-    const models = TIER_MAPPING[plan] || TIER_MAPPING['free'];
+    const models = getAiReportModels(plan, aiMode, env);
+    const attemptsPerModel = getAiAttemptLimit(aiMode);
 
 
     for (const modelId of models) {
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
         try {
-          // Keep all critical data for deep analysis
-          const trimmedScrapeData = { ...scrapeData };
-          if (trimmedScrapeData.bodyText && trimmedScrapeData.bodyText.length > 300000) {
-             trimmedScrapeData.bodyText = trimmedScrapeData.bodyText.substring(0, 300000) + '...[TRUNCATED FOR ENTERPRISE DEPTH]';
-          }
-          const groundedData = {
-            url,
-            issues: trimmedScrapeData.issues || [],
-            evidence: (trimmedScrapeData.evidence || []).map((item: any) => ({
-              id: item.id,
-              type: item.type,
-              url: item.url,
-              inlineValue: typeof item.inlineValue === 'string' ? item.inlineValue.slice(0, 1500) : item.inlineValue,
-              createdAt: item.createdAt
-            })),
-            crawlSummary: trimmedScrapeData.crawlSummary || null,
-            scoreBreakdown: trimmedScrapeData.scoreBreakdown || null,
-            realProviderFacts: {
-              keywordFacts: trimmedScrapeData.keywordFacts || [],
-              rankFacts: trimmedScrapeData.rankFacts || [],
-              backlinkFacts: trimmedScrapeData.backlinkFacts || [],
-              competitorFacts: trimmedScrapeData.competitorFacts || [],
-              trafficFacts: trimmedScrapeData.trafficFacts || [],
-              aiVisibilityFacts: trimmedScrapeData.aiVisibilityFacts || []
-            },
-            gscData: trimmedScrapeData.gscData || null,
-            psiMetrics: trimmedScrapeData.psiMetrics || null,
-            cruxMetrics: trimmedScrapeData.cruxMetrics || null,
-            dataSources: trimmedScrapeData.dataSources || {}
-          };
-
           let prompt = plan === 'agency'
             ? `Du bist ein Senior Technical SEO Consultant fuer ein DACH Website-Governance-SaaS. Erstelle einen klaren, direkten Agenturbericht fuer ${url}.`
             : `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. Erstelle einen ehrlichen Bericht in deutscher Sprache fuer ${url}.`;
@@ -371,13 +379,11 @@ export async function POST(req: NextRequest) {
           ${JSON.stringify(groundedData)}`;
 
 
-          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+          const aiEndpoint = buildGeminiEndpoint(modelId, apiKey!, env);
           
-          const response = await fetch(apiUrl, {
+          const response = await fetch(aiEndpoint.url, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: aiEndpoint.headers,
             body: JSON.stringify({
               contents: [{
                 parts: [{ text: prompt }]
@@ -416,11 +422,30 @@ export async function POST(req: NextRequest) {
     }
 
     const verifiedReport = verifyReportGrounding(aiResponse, scrapeData, url);
+    const reportWithCost = {
+      ...verifiedReport,
+      aiCost: {
+        mode: aiMode,
+        cached: false,
+        cacheKey,
+        modelsTried: models,
+        gateway: env.CLOUDFLARE_ACCOUNT_ID ? 'cloudflare-ai-gateway' : 'direct-google-ai-studio',
+      },
+    };
 
-    return NextResponse.json(verifiedReport);
+    await setDocument('aiReportCache', cacheKey, {
+      report: reportWithCost,
+      url,
+      plan,
+      aiMode,
+      createdAt: new Date().toISOString(),
+    }, null, null, env).catch((error) => {
+      console.warn('AI report cache write skipped:', error instanceof Error ? error.message : 'Unknown error');
+    });
+
+    return NextResponse.json(reportWithCost);
   } catch (error: any) {
     console.error('Error generating report:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
-

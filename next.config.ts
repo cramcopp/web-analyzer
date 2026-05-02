@@ -1,8 +1,12 @@
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 
 const nextConfig: any = {
   reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
   // Allow access to remote image placeholder.
   images: {
@@ -62,3 +66,5 @@ const nextConfig: any = {
 };
 
 export default nextConfig;
+
+initOpenNextCloudflareForDev();

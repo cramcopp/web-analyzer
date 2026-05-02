@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { addDocument, queryDocuments, updateDocument } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 const monitoredCollections = ['scheduledScans', 'alertRules', 'alertEvents', 'uptimeChecks', 'scanDiffs'] as const;
 type MonitoredCollection = typeof monitoredCollections[number];
 
-function getEnv(req: Request) {
-  return (req as any).context?.env || process.env;
+function getEnv() {
+  return getRuntimeEnv();
 }
 
 function isMonitoredCollection(value: string | null): value is MonitoredCollection {
@@ -16,7 +17,7 @@ function isMonitoredCollection(value: string | null): value is MonitoredCollecti
 }
 
 export async function GET(req: Request) {
-  const env = getEnv(req);
+  const env = getEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const env = getEnv(req);
+  const env = getEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });

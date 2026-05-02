@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { queryDocuments } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +11,7 @@ async function hashValue(value: string) {
 }
 
 async function isAuthorizedSecret(secret: string | null) {
-  const expected = process.env.INTERNAL_SECRET;
+  const expected = getRuntimeEnv().INTERNAL_SECRET;
   if (!secret || !expected) return false;
   const [providedHash, expectedHash] = await Promise.all([hashValue(secret), hashValue(expected)]);
   let diff = providedHash.length ^ expectedHash.length;
@@ -22,6 +23,7 @@ async function isAuthorizedSecret(secret: string | null) {
 }
 
 export async function GET(req: Request) {
+  const env = getRuntimeEnv();
   const { searchParams } = new URL(req.url);
   const secret = searchParams.get('secret');
 
@@ -34,7 +36,7 @@ export async function GET(req: Request) {
     // We use the adminSecret bypass in firestore-edge
     const projects = await queryDocuments('projects', [
       { field: 'cronEnabled', op: 'EQUAL', value: true }
-    ], 'AND', process.env.INTERNAL_SECRET);
+    ], 'AND', env.INTERNAL_SECRET, env);
 
     console.warn(`Cron Monitor: Processing ${projects.length} projects`);
 

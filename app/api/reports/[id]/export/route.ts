@@ -3,11 +3,12 @@ import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { getDocument } from '@/lib/firestore-edge';
 import { publicReportCsv, publicReportJson, publicReportPdf } from '@/lib/reporting/exports';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
-function getEnv(req: Request) {
-  return (req as any).context?.env || process.env;
+function getEnv() {
+  return getRuntimeEnv();
 }
 
 function contentDisposition(filename: string) {
@@ -15,7 +16,7 @@ function contentDisposition(filename: string) {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const env = getEnv(req);
+  const env = getEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });

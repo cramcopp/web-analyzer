@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument } from '@/lib/firestore-edge';
 import { projectCreateSchema } from '@/lib/validations';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 // FIX: req als Parameter hinzugefügt
-export async function GET(req: Request) {
+export async function GET(_req: Request) {
   // FIX: Cloudflare env extrahieren
-  const env = (req as any).context?.env || process.env;
+  const env = getRuntimeEnv();
 
   const user = await getSessionUser();
   const token = await getSessionToken();
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
 
 // FIX: req als Parameter für POST beibehalten, aber env hinzufügen
 export async function POST(req: Request) {
-  const env = (req as any).context?.env || process.env;
+  const env = getRuntimeEnv();
   
   const user = await getSessionUser();
   const token = await getSessionToken();

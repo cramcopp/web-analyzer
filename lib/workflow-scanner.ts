@@ -21,6 +21,7 @@ export interface Env {
   FIREBASE_DATABASE_ID: string;
   FIREBASE_API_KEY: string;
   GEMINI_API_KEY: string;
+  AI_WORKFLOW_SUMMARY?: string;
   INTERNAL_SECRET: string;
 }
 
@@ -53,7 +54,7 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string, plan: st
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+        generationConfig: { response_mime_type: "application/json", temperature: 0.2 }
       })
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -63,12 +64,10 @@ async function generateAggregatedAiReport(metrics: any, apiKey: string, plan: st
   };
 
   try {
-    // Nutze stabile Modelle wie angefordert
-    if (isPremium) return await fetchModel('gemini-3-flash-preview');
-    return await fetchModel('gemini-3.1-flash-lite-preview');
+    return await fetchModel(isPremium ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite-preview');
   } catch {
     try {
-      return await fetchModel('gemini-3.1-flash-lite-preview'); // Fallback
+      return await fetchModel('gemini-2.5-flash-lite-preview');
     } catch {
       return {
         seo: { insights: ["KI-Analyse aktuell überlastet."], recommendations: [] },
@@ -162,7 +161,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         batchIndex++;
       }
 
-      // STEP 3: Scoring & Final Report (MIT FIRESTORE-1MB-FIX & KI)
+      // STEP 3: Scoring & Final Report
       const finalReport = await step.do('finalize report', async () => {
         const allImages = root.querySelectorAll('img');
         const imagesTotal = allImages.length;
@@ -175,7 +174,6 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         const scores = calculateHeuristicScores(root, mainIndex, preflightData.headers);
         const indexableUrls = [...(mainIndex.isIndexable ? [preflightData.mainUrlNormalized] : []), ...currentState.results.filter((r: any) => r.isIndexable).map((r: any) => r.url)];
 
-        // KI-Aufruf
         const aiMetrics = {
           domain: preflightData.domain, 
           crawledPages: currentState.processed.length,
@@ -188,7 +186,10 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           heuristicScores: scores
         };
         
-        const aiReport = await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, plan);
+        const workflowAiEnabled = this.env.AI_WORKFLOW_SUMMARY === 'true' && Boolean(this.env.GEMINI_API_KEY);
+        const aiReport = workflowAiEnabled
+          ? await generateAggregatedAiReport(aiMetrics, this.env.GEMINI_API_KEY, plan)
+          : null;
 
         const groundedReport = await performAnalysis({
           url: preflightData.mainUrlNormalized,
@@ -201,11 +202,11 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           ...groundedReport,
           status: 'completed',
           progress: 100,
-          seo: { ...groundedReport.seo!, insights: aiReport.seo.insights, recommendations: aiReport.seo.recommendations },
-          performance: { ...groundedReport.performance!, insights: aiReport.performance.insights, recommendations: aiReport.performance.recommendations },
-          security: { ...groundedReport.security!, insights: aiReport.security.insights, recommendations: aiReport.security.recommendations },
-          accessibility: { ...groundedReport.accessibility!, insights: aiReport.accessibility.insights, recommendations: aiReport.accessibility.recommendations },
-          compliance: { ...groundedReport.compliance!, insights: aiReport.compliance.insights, recommendations: aiReport.compliance.recommendations },
+          seo: aiReport ? { ...groundedReport.seo!, insights: aiReport.seo.insights, recommendations: aiReport.seo.recommendations } : groundedReport.seo,
+          performance: aiReport ? { ...groundedReport.performance!, insights: aiReport.performance.insights, recommendations: aiReport.performance.recommendations } : groundedReport.performance,
+          security: aiReport ? { ...groundedReport.security!, insights: aiReport.security.insights, recommendations: aiReport.security.recommendations } : groundedReport.security,
+          accessibility: aiReport ? { ...groundedReport.accessibility!, insights: aiReport.accessibility.insights, recommendations: aiReport.accessibility.recommendations } : groundedReport.accessibility,
+          compliance: aiReport ? { ...groundedReport.compliance!, insights: aiReport.compliance.insights, recommendations: aiReport.compliance.recommendations } : groundedReport.compliance,
           adminSecret: this.env.INTERNAL_SECRET
         };
 

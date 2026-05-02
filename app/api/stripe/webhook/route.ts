@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { getStripe, type PlanType, verifyStripeSignature } from '@/lib/stripe';
 import { updateStripeSubscription } from '@/lib/firestore-edge';
 import { getMonthlyScanLimit } from '@/lib/plans';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
 export async function POST(req: Request) {
+  const env = getRuntimeEnv();
   const body = await req.text();
   const sig = req.headers.get('stripe-signature');
+  const endpointSecret = env.STRIPE_WEBHOOK_SECRET;
 
   if (!sig || !endpointSecret) {
     return NextResponse.json({ error: 'Missing signature or endpoint secret' }, { status: 400 });
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
             subscriptionId: session.subscription as string,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             maxScans
-          });
+          }, env);
         }
         break;
       }
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
             subscriptionId: null,
             trialUntil: null,
             maxScans: getMonthlyScanLimit('free')
-          });
+          }, env);
         }
         break;
       }
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             subscriptionId: subscription.id,
             maxScans
-          });
+          }, env);
         }
         break;
       }

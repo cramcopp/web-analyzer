@@ -1,15 +1,28 @@
+"$schema" = "./node_modules/wrangler/config-schema.json"
 name = "web-analyzer-pro"
-pages_build_output_dir = ".vercel/output/static"
-
-compatibility_date = "2025-12-01"
-compatibility_flags = ["nodejs_compat"]
+main = ".open-next/worker.js"
+compatibility_date = "2026-05-02"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+keep_vars = true
 
 [vars]
-# Add non-sensitive vars here if needed
-# Sensitive vars (API keys) should be added in the Cloudflare Dashboard
+NEXTJS_ENV = "production"
+AI_REPORT_MODE = "budget"
+AI_WORKFLOW_SUMMARY = "false"
+AI_GATEWAY_ID = "default"
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "web-analyzer-pro"
 
 [[services]]
 binding = "SCAN_WORKFLOW_SERVICE"
 service = "scan-workflow"
-
-

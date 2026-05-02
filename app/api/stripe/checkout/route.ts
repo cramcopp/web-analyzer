@@ -2,23 +2,22 @@ import { NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { getSessionUser } from '@/lib/auth-server';
 import { checkoutSchema } from '@/lib/validations';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 export const runtime = 'nodejs';
 
-// Plan and Interval to Price ID mapping
-const PRICE_MATRIX: Record<string, Record<string, string>> = {
-  'pro': {
-    // eslint-disable-next-line no-secrets/no-secrets
-    'monthly': process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_1TOWNMAiEzlpZspHdnioXyTY',
-    // eslint-disable-next-line no-secrets/no-secrets
-    'yearly': process.env.STRIPE_PRICE_PRO_YEARLY || 'price_1TOWNyAiEzlpZspH4FazLWo1'
-  },
-  'agency': {
-    // eslint-disable-next-line no-secrets/no-secrets
-    'monthly': process.env.STRIPE_PRICE_AGENCY_MONTHLY || 'price_1TOWORAiEzlpZspH8oht4Gyz',
-    // eslint-disable-next-line no-secrets/no-secrets
-    'yearly': process.env.STRIPE_PRICE_AGENCY_YEARLY || 'price_1TOWOyAiEzlpZspH400JzRjm'
-  }
-};
+function getPriceMatrix() {
+  const env = getRuntimeEnv();
+  return {
+    pro: {
+      monthly: env.STRIPE_PRICE_PRO_MONTHLY || '',
+      yearly: env.STRIPE_PRICE_PRO_YEARLY || '',
+    },
+    agency: {
+      monthly: env.STRIPE_PRICE_AGENCY_MONTHLY || '',
+      yearly: env.STRIPE_PRICE_AGENCY_YEARLY || '',
+    },
+  } satisfies Record<string, Record<string, string>>;
+}
 
 export async function POST(req: Request) {
   try {
@@ -40,9 +39,11 @@ export async function POST(req: Request) {
     const uid = user.uid;
     const userEmail = user.email;
 
+    const env = getRuntimeEnv();
+    const priceMatrix = getPriceMatrix();
 
     // Get the correct Price ID from matrix or fallback to provided priceId
-    const stripePriceId = PRICE_MATRIX[planName]?.[interval] || priceId;
+    const stripePriceId = priceMatrix[planName]?.[interval] || priceId;
 
     if (!stripePriceId) {
       return NextResponse.json({ error: 'Invalid plan or interval' }, { status: 400 });
@@ -67,8 +68,8 @@ export async function POST(req: Request) {
       },
       client_reference_id: uid,
       customer_email: userEmail,
-      success_url: `${process.env.APP_URL || new URL(req.url).origin}/?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.APP_URL || new URL(req.url).origin}/`,
+      success_url: `${env.APP_URL || new URL(req.url).origin}/?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${env.APP_URL || new URL(req.url).origin}/`,
       metadata: {
         uid: uid,
         plan: planName,

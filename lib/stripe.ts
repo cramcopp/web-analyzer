@@ -1,11 +1,12 @@
 export { PLAN_CONFIG, type PlanType } from './plans';
 import { getMonthlyScanLimit } from './plans';
+import { getRuntimeEnv } from './cloudflare-env';
 
 /**
  * Lightweight Stripe helper using fetch to avoid heavy SDK overhead.
  */
 export const stripeRequest = async (path: string, options: RequestInit = {}) => {
-  const secret = process.env.STRIPE_SECRET_KEY;
+  const secret = getRuntimeEnv().STRIPE_SECRET_KEY;
   if (!secret) throw new Error('STRIPE_SECRET_KEY is missing');
 
   const url = `https://api.stripe.com/v1${path}`;

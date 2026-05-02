@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) {
@@ -12,7 +14,7 @@ export async function GET() {
   }
 
   try {
-    let userData = await getDocument('users', user.uid, token);
+    let userData = await getDocument('users', user.uid, token, env);
     
     // Monthly Scan Reset Logic
     if (userData) {
@@ -26,9 +28,9 @@ export async function GET() {
         await updateDocument('users', user.uid, {
           scanCount: 0,
           lastScanReset: now.toISOString()
-        }, token);
+        }, token, env);
         // Fetch updated data
-        userData = await getDocument('users', user.uid, token);
+        userData = await getDocument('users', user.uid, token, env);
       }
     }
     
@@ -44,6 +46,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) {
@@ -69,7 +72,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Keine gültigen Felder zum Aktualisieren angegeben' }, { status: 400 });
     }
     
-    await updateDocument('users', user.uid, filteredData, token);
+    await updateDocument('users', user.uid, filteredData, token, env);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

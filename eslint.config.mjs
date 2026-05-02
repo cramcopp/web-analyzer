@@ -16,6 +16,16 @@ const compat = new FlatCompat({
 });
 
 export default defineConfig([
+    {
+        ignores: [
+            ".next/**",
+            ".open-next/**",
+            ".wrangler/**",
+            "node_modules/**",
+            "eslint-report.*",
+            "tsconfig.tsbuildinfo",
+        ],
+    },
     ...next,
     securityPlugin.configs.recommended,
     regexpPlugin.configs["flat/recommended"],

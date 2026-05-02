@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument, fetchWithRetry } from '@/lib/firestore-edge';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
+  const env = getRuntimeEnv();
   const { searchParams } = new URL(req.url);
   const siteUrl = searchParams.get('url');
 
@@ -20,7 +22,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const userData = await getDocument('users', user.uid, token);
+    const userData = await getDocument('users', user.uid, token, env);
     const tokensRaw = userData?.gscTokens;
 
     if (!tokensRaw) {
@@ -48,8 +50,8 @@ export async function GET(req: Request) {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
-              client_id: process.env.GOOGLE_CLIENT_ID || '',
-              client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+              client_id: env.GOOGLE_CLIENT_ID || '',
+              client_secret: env.GOOGLE_CLIENT_SECRET || '',
               refresh_token: tokens.refresh_token,
               grant_type: 'refresh_token',
             })
@@ -63,8 +65,8 @@ export async function GET(req: Request) {
             // Save updated tokens back to Firestore
             await updateDocument('users', user.uid, {
               gscTokens: JSON.stringify(tokens),
-              adminSecret: process.env.INTERNAL_SECRET
-            }, token);
+              adminSecret: env.INTERNAL_SECRET
+            }, token, env);
 
             // Retry the original request
             return googleFetch(url, options, true);

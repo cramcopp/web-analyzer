@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument, getDocument } from '@/lib/firestore-edge';
 import { teamCreateSchema } from '@/lib/validations';
+import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -13,7 +15,7 @@ export async function GET() {
   try {
     const teams = await queryDocuments('teams', [
       { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-    ], 'AND', token);
+    ], 'AND', token, env);
     
     if (!teams || teams.length === 0) {
       return NextResponse.json(null);
@@ -24,7 +26,7 @@ export async function GET() {
     // Fetch member details individually (avoids IN query limitations)
     const memberUids: string[] = team.members || [];
     const memberDocs = await Promise.all(
-      memberUids.map((uid: string) => getDocument('users', uid, token))
+      memberUids.map((uid: string) => getDocument('users', uid, token, env))
     );
 
     const members = memberDocs
@@ -43,13 +45,14 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
   const token = await getSessionToken();
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     // BIZ-11: Verify Agency Plan on Server
-    const userData = await getDocument('users', user.uid, token);
+    const userData = await getDocument('users', user.uid, token, env);
     if (userData?.plan !== 'agency') {
        return NextResponse.json({ 
          error: 'Team-Funktionen sind nur im Agency-Plan verfügbar.' 
@@ -71,7 +74,7 @@ export async function POST(req: Request) {
       members: [user.uid],
       admins: [user.uid],
       createdAt: new Date().toISOString()
-    }, token);
+    }, token, env);
     
     return NextResponse.json(newTeam);
   } catch (error: any) {
