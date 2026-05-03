@@ -2,11 +2,12 @@
 
 import { memo } from 'react';
 import { Zap, Activity, Timer, Layout, MoveHorizontal, Lightbulb, BarChart3, MousePointer2 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useTheme } from 'next-themes';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import { useTheme } from './theme-provider';
 import { CollapsibleSection } from './collapsible-section';
 import PrioritizedTasksSection from './task-section';
 import { DetailedPerformance } from '../types/report';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 const METRIC_DEFINITIONS: Record<string, string> = {
   FCP: "First Contentful Paint (FCP) misst die Zeit, bis das erste DOM-Element gerendert wird.",
@@ -130,7 +131,7 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
                  <BarChart3 className="w-3 h-3" />
                  Estimated Vitals (ms)
                </span>
-               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+               <SafeResponsiveContainer height={160}>
                  <BarChart data={detailedPerformance.chartData.vitals} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                    <XAxis type="number" fontSize={10} tick={{ fill: isDark ? '#A1A1AA' : '#888' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
                    <YAxis dataKey="metric" type="category" width={50} fontSize={10} tick={{ fill: isDark ? '#F4F4F5' : '#1A1A1A' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
@@ -141,7 +142,7 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
                       ))}
                    </Bar>
                  </BarChart>
-               </ResponsiveContainer>
+               </SafeResponsiveContainer>
              </div>
            )}
 
@@ -151,14 +152,14 @@ function PerformanceDeepDiveModule({ detailedPerformance }: { detailedPerformanc
                  <MousePointer2 className="w-3 h-3" />
                  Resource Request Distribution
                </span>
-               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+               <SafeResponsiveContainer height={160}>
                  <BarChart data={detailedPerformance.chartData.resources} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                    <XAxis dataKey="name" fontSize={10} tick={{ fill: isDark ? '#A1A1AA' : '#1A1A1A' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
                    <YAxis fontSize={10} tick={{ fill: isDark ? '#A1A1AA' : '#888' }} stroke={isDark ? '#3F3F46' : '#E5E7EB'} />
                    <Tooltip content={<ResourceTooltip />} cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} />
                    <Bar dataKey="count" fill="#D4AF37" radius={[4, 4, 0, 0]} />
                  </BarChart>
-               </ResponsiveContainer>
+               </SafeResponsiveContainer>
              </div>
            )}
         </div>

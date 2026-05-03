@@ -12,8 +12,9 @@ import {
 } from 'lucide-react';
 import { AnalysisResult } from '@/lib/scanner/types';
 import { useProviderStatus } from '@/hooks/use-provider-status';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
 import DataSourceBadge from './data-source-badge';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 export default function ProjectKeywordsView({ report }: { report: AnalysisResult | null }) {
   const [researchInput, setResearchInput] = useState('');
@@ -68,8 +69,8 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
           <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 space-y-6">
             {topKeywordsFromPage.length > 0 ? (
               <>
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="w-full">
+                  <SafeResponsiveContainer height={300}>
                     <BarChart data={topKeywordsFromPage} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#EEE" />
                       <XAxis type="number" hide />
@@ -83,7 +84,7 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
                       />
                       <Bar dataKey="count" fill="#D4AF37" radius={[0, 4, 4, 0]} barSize={12} />
                     </BarChart>
-                  </ResponsiveContainer>
+                  </SafeResponsiveContainer>
                 </div>
                 <div className="mt-8 pt-6 border-t border-[#EEE] dark:border-zinc-800">
                   <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-950 p-4 border border-[#EEE] dark:border-zinc-800">

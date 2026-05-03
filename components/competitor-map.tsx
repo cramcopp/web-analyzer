@@ -1,9 +1,10 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip } from 'recharts';
 import { Target, Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import DataSourceBadge from './data-source-badge';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 // Custom dot that renders stably on hover (no CSS scale on SVG elements)
 function CustomDot(props: any) {
@@ -134,7 +135,7 @@ function CompetitorMap({ competitors, userScore, userName }: { competitors?: any
            <span className="text-[10px] font-black uppercase tracking-widest">Underdog</span>
         </div>
         
-        <ResponsiveContainer width="100%" height="100%">
+        <SafeResponsiveContainer height={300}>
           <ScatterChart margin={{ top: 20, right: 20, bottom: 30, left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#EEE" vertical={false} />
             <XAxis 
@@ -178,7 +179,7 @@ function CompetitorMap({ competitors, userScore, userName }: { competitors?: any
             />
             <Scatter name="Websites" data={data} shape={<CustomDot />} />
           </ScatterChart>
-        </ResponsiveContainer>
+        </SafeResponsiveContainer>
       </div>
 
       {/* Competitor Legend Table */}

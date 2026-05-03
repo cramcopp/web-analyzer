@@ -6,7 +6,6 @@ import {
   ShieldCheck, UserCheck, Scale, CodeXml, Copy
 } from 'lucide-react';
 import { 
-  ResponsiveContainer, 
   RadarChart, 
   PolarGrid, 
   PolarAngleAxis, 
@@ -14,9 +13,10 @@ import {
 } from 'recharts';
 import { motion, Variants } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { useTheme } from 'next-themes';
+import { useTheme } from './theme-provider';
 import { ReportData } from '../types/report';
 import ErrorBoundary from './error-boundary';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 // Dynamic Imports for Performance Optimization
 const SeoDeepDiveModule = dynamic(() => import('./seo-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
@@ -150,7 +150,7 @@ function ReportResultsView({
            <div className="absolute top-4 left-6">
               <span className="text-[10px] font-black uppercase tracking-[2px] text-[#888]">Audit Radar</span>
            </div>
-           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+           <SafeResponsiveContainer height={320}>
               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                 <PolarGrid stroke={isDark ? '#333' : '#EEE'} />
                 <PolarAngleAxis dataKey="subject" tick={{ fill: isDark ? '#888' : '#666', fontSize: 10, fontWeight: 'bold' }} />
@@ -162,7 +162,7 @@ function ReportResultsView({
                   fillOpacity={0.4}
                 />
               </RadarChart>
-           </ResponsiveContainer>
+           </SafeResponsiveContainer>
         </div>
       </motion.div>
 

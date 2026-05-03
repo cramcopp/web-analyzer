@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Calendar, ChevronRight, Zap, Search, ShieldCheck, RefreshCw } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from 'recharts';
 import { normalizeStoredReports } from '@/lib/report-normalizer';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 export default function ProjectHistoryView({ url, onSelectReport }: { url: string, onSelectReport: (report: any) => void }) {
   const [reports, setReports] = useState<any[]>([]);
@@ -62,8 +63,8 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
       {reports.length >= 2 && (
         <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 mb-8">
            <h4 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 mb-6">Projektentwicklung</h4>
-           <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+           <div className="w-full">
+              <SafeResponsiveContainer height={300}>
                  <LineChart data={[...reports].reverse()}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEE" />
                     <XAxis 
@@ -89,7 +90,7 @@ export default function ProjectHistoryView({ url, onSelectReport }: { url: strin
                     <Line type="monotone" name="Performance" dataKey="performanceScore" stroke="#27AE60" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
                     <Line type="monotone" name="Security" dataKey="securityScore" stroke="#2D9CDB" strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} />
                  </LineChart>
-              </ResponsiveContainer>
+              </SafeResponsiveContainer>
            </div>
         </div>
       )}

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, memo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { TrendingUp, Calendar } from 'lucide-react';
 import { normalizeStoredReports } from '@/lib/report-normalizer';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 function ScoreTrend({ url }: { url: string }) {
   const [history, setHistory] = useState<any[]>([]);
@@ -62,8 +63,8 @@ function ScoreTrend({ url }: { url: string }) {
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-[200px]">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+      <div className="flex-1 w-full min-w-0">
+        <SafeResponsiveContainer height={240}>
           <LineChart data={history}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEE" />
             <XAxis 
@@ -90,7 +91,7 @@ function ScoreTrend({ url }: { url: string }) {
               activeDot={{ r: 6, strokeWidth: 0 }}
             />
           </LineChart>
-        </ResponsiveContainer>
+        </SafeResponsiveContainer>
       </div>
     </div>
   );

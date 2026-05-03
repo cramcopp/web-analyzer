@@ -2,9 +2,10 @@
 
 import { memo } from 'react';
 import { Activity, Lock, ExternalLink, Loader2, AlertCircle, Info, Globe, LineChart as LineIcon } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useTheme } from 'next-themes';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { useTheme } from './theme-provider';
 import { CollapsibleSection } from './collapsible-section';
+import { SafeResponsiveContainer } from './safe-responsive-container';
 
 const GscTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -120,8 +121,8 @@ function SearchConsoleModule({ data, isLoading, onConnect, error, plan = 'free',
                  <LineIcon className="w-4 h-4" />
                  Performance-Trend (Letzte 30 Tage)
               </h4>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <div className="w-full">
+                <SafeResponsiveContainer height={250}>
                    <LineChart data={data.performance} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#3F3F46' : '#eee'} />
                       <XAxis 
@@ -169,7 +170,7 @@ function SearchConsoleModule({ data, isLoading, onConnect, error, plan = 'free',
                         opacity={0.8}
                       />
                    </LineChart>
-                </ResponsiveContainer>
+                </SafeResponsiveContainer>
               </div>
            </div>
 

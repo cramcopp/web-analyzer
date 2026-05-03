@@ -9,11 +9,47 @@ export const runtime = 'nodejs';
 // FIX: Wir übergeben req an getEnv, um die Cloudflare-Variablen zu greifen!
 const getEnv = getRuntimeEnv;
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unbekannter Fehler';
+}
+
+async function readAnalyzeBody(req: Request) {
+  try {
+    const body = await req.json();
+    const url = typeof body?.url === 'string' ? body.url.trim() : '';
+    const projectId = typeof body?.projectId === 'string' ? body.projectId : undefined;
+
+    if (!url) {
+      return { error: 'URL ist erforderlich' };
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return { error: 'Ungültige URL' };
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { error: 'Nur HTTP- und HTTPS-URLs können analysiert werden' };
+    }
+
+    return { url: parsedUrl.toString(), projectId };
+  } catch {
+    return { error: 'Ungültiges JSON im Request Body' };
+  }
+}
+
 export async function POST(req: Request) {
   try {
     // FIX: req übergeben
     const env = getEnv();
-    const { url, projectId } = await req.json(); // req.json() statt request.json()
+    const body = await readAnalyzeBody(req);
+    if ('error' in body) {
+      return NextResponse.json({ error: body.error }, { status: 400 });
+    }
+
+    const { url, projectId } = body;
     const token = await getSessionToken();
     const user = await getSessionUser();
 
@@ -35,27 +71,33 @@ export async function POST(req: Request) {
     }
 
     // 2. Counter hochzählen
-    await incrementField('users', user.uid, 'scanCount', 1, token, env);
+    try {
+      await incrementField('users', user.uid, 'scanCount', 1, token, env);
+    } catch (counterError) {
+      console.warn('Scan counter update skipped:', getErrorMessage(counterError));
+    }
 
     // 3. Setup Audit Placeholder
     const audit_id = crypto.randomUUID();
-    
-    await setDocument('reports', audit_id, {
+    const placeholderReport: Record<string, any> = {
       audit_id,
       userId: user.uid,
-      projectId,
-      url: url,
+      url,
       urlObj: url,
       createdAt: new Date().toISOString(),
       status: 'scanning',
       progress: 0,
-      planUsed: plan,
-      adminSecret: env.INTERNAL_SECRET
-    }, null, null, env);
+    };
+    
+    if (projectId) {
+      placeholderReport.projectId = projectId;
+    }
+
+    await setDocument('reports', audit_id, placeholderReport, null, token, env);
 
     // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
-      await env.SCAN_WORKFLOW_SERVICE.fetch(new Request("https://worker/start", {
+      const workflowResponse = await env.SCAN_WORKFLOW_SERVICE.fetch(new Request("https://worker/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -66,6 +108,11 @@ export async function POST(req: Request) {
           auditId: audit_id
         })
       }));
+
+      if (!workflowResponse.ok) {
+        const workflowError = await workflowResponse.text().catch(() => '');
+        throw new Error(`Workflow konnte nicht gestartet werden (${workflowResponse.status}). ${workflowError}`.trim());
+      }
       
       return NextResponse.json({ 
         audit_id,
@@ -97,6 +144,6 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error('Analyze API Error:', error);
-    return NextResponse.json({ error: 'Interner Server-Fehler', details: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Interner Server-Fehler', details: getErrorMessage(error) }, { status: 500 });
   }
 }
