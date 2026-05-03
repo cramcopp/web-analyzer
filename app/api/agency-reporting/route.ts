@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { addDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
+import { addServerDocument, queryServerDocuments, setServerDocument } from '@/lib/server-firestore';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
@@ -30,10 +30,10 @@ export async function GET(req: Request) {
 
   try {
     const [branding, issueTasks, issueComments, scheduledReports] = await Promise.all([
-      queryDocuments('reportBranding', filters, 'AND', token, env),
-      queryDocuments('issueTasks', filters, 'AND', token, env),
-      queryDocuments('issueComments', filters, 'AND', token, env),
-      queryDocuments('scheduledReports', filters, 'AND', token, env),
+      queryServerDocuments('reportBranding', filters, 'AND', token, env),
+      queryServerDocuments('issueTasks', filters, 'AND', token, env),
+      queryServerDocuments('issueComments', filters, 'AND', token, env),
+      queryServerDocuments('scheduledReports', filters, 'AND', token, env),
     ]);
 
     return NextResponse.json({ branding, issueTasks, issueComments, scheduledReports });
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     if (action === 'saveBranding') {
       const scope = body.data?.scope === 'team' ? 'team' : 'project';
       const id = docId(projectId, scope, body.data?.teamId || user.uid);
-      await setDocument('reportBranding', id, {
+      await setServerDocument('reportBranding', id, {
         ...body.data,
         id,
         userId: user.uid,
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
       const issueId = String(body.data?.issueId || '');
       if (!issueId) return NextResponse.json({ error: 'issueId fehlt' }, { status: 400 });
       const id = body.data?.id || docId(projectId, issueId);
-      await setDocument('issueTasks', id, {
+      await setServerDocument('issueTasks', id, {
         ...body.data,
         id,
         userId: user.uid,
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       const issueId = String(body.data?.issueId || '');
       const bodyText = String(body.data?.body || '').trim();
       if (!issueId || !bodyText) return NextResponse.json({ error: 'issueId und Kommentar fehlen' }, { status: 400 });
-      const created = await addDocument('issueComments', {
+      const created = await addServerDocument('issueComments', {
         projectId,
         issueId,
         body: bodyText,
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
 
     if (action === 'saveScheduledReport') {
       const id = body.data?.id || docId(projectId, 'scheduled_report', body.data?.frequency || 'weekly');
-      await setDocument('scheduledReports', id, {
+      await setServerDocument('scheduledReports', id, {
         ...body.data,
         id,
         userId: user.uid,

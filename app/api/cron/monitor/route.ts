@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { queryDocuments, setDocument, updateDocument } from '@/lib/firestore-edge';
+import { setDocument, updateDocument } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { canUseFirestoreAdmin, createServerDocumentWithId, queryServerDocuments, updateServerDocument } from '@/lib/server-firestore';
 
 export const runtime = 'nodejs';
 
@@ -47,12 +48,12 @@ function nextRunAt(frequency: ScanJob['frequency'] = 'weekly') {
 
 async function loadDueJobs(env: any): Promise<ScanJob[]> {
   const [schedules, legacyProjects] = await Promise.all([
-    queryDocuments<any>('scheduledScans', [
+    queryServerDocuments<any>('scheduledScans', [
       { field: 'enabled', op: 'EQUAL', value: true },
-    ], 'AND', env.INTERNAL_SECRET, env).catch(() => []),
-    queryDocuments<any>('projects', [
+    ], 'AND', null, env).catch(() => []),
+    queryServerDocuments<any>('projects', [
       { field: 'cronEnabled', op: 'EQUAL', value: true },
-    ], 'AND', env.INTERNAL_SECRET, env).catch(() => []),
+    ], 'AND', null, env).catch(() => []),
   ]);
 
   const scheduledJobs = schedules
@@ -89,7 +90,7 @@ async function triggerWorkflow(env: any, job: ScanJob) {
 
   const auditId = crypto.randomUUID();
   const now = new Date().toISOString();
-  await setDocument('reports', auditId, {
+  const placeholder = {
     audit_id: auditId,
     userId: job.userId,
     projectId: job.projectId,
@@ -98,10 +99,18 @@ async function triggerWorkflow(env: any, job: ScanJob) {
     createdAt: now,
     status: 'scanning',
     progress: 0,
-    planUsed: job.plan || 'pro',
-    source: 'scheduledScans',
-    adminSecret: env.INTERNAL_SECRET,
-  }, null, null, env);
+  };
+
+  if (canUseFirestoreAdmin(env)) {
+    await createServerDocumentWithId('reports', auditId, placeholder, null, env);
+  } else {
+    await setDocument('reports', auditId, {
+      ...placeholder,
+      planUsed: job.plan || 'pro',
+      source: 'scheduledScans',
+      adminSecret: env.INTERNAL_SECRET,
+    }, null, null, env);
+  }
 
   const response = await env.SCAN_WORKFLOW_SERVICE.fetch(new Request('https://scan-workflow/start', {
     method: 'POST',
@@ -120,11 +129,18 @@ async function triggerWorkflow(env: any, job: ScanJob) {
   }
 
   if (job.source === 'scheduledScans' && job.id) {
-    await updateDocument('scheduledScans', job.id, {
+    await updateServerDocument('scheduledScans', job.id, {
       lastRunAt: now,
       nextRunAt: nextRunAt(job.frequency),
       updatedAt: now,
-    }, env.INTERNAL_SECRET, env).catch((error) => {
+    }, null, env).catch(async (error) => {
+      if (!canUseFirestoreAdmin(env)) {
+        await updateDocument('scheduledScans', job.id!, {
+          lastRunAt: now,
+          nextRunAt: nextRunAt(job.frequency),
+          updatedAt: now,
+        }, env.INTERNAL_SECRET, env).catch(() => null);
+      }
       console.warn('Scheduled scan timestamp update skipped:', error instanceof Error ? error.message : 'Unknown error');
     });
   }

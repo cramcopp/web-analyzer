@@ -15,6 +15,8 @@ export type RuntimeEnv = NodeJS.ProcessEnv & {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
+  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
+  FIREBASE_SERVICE_ACCOUNT_JSON?: string;
   INTERNAL_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

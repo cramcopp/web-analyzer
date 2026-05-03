@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { getDocument, queryDocuments, setDocument } from '@/lib/firestore-edge';
+import { getDocument } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { queryServerDocuments, setServerDocument } from '@/lib/server-firestore';
 import type { ReportVisibility } from '@/types/reporting';
 
 export const runtime = 'nodejs';
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
   if (reportId) filters.push({ field: 'reportId', op: 'EQUAL', value: reportId });
 
   try {
-    const shares = await queryDocuments('reportShares', filters, 'AND', token, env);
+    const shares = await queryServerDocuments('reportShares', filters, 'AND', token, env);
     return NextResponse.json(shares.map((share: any) => ({ ...share, passwordHash: undefined })));
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Share Links konnten nicht geladen werden' }, { status: 500 });
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
 
     const tokenId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    await setDocument('reportShares', tokenId, {
+    await setServerDocument('reportShares', tokenId, {
       token: tokenId,
       reportId,
       projectId: body.projectId || null,

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, updateDocument, fetchWithRetry } from '@/lib/firestore-edge';
+import { getDocument, fetchWithRetry } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { updateServerDocument } from '@/lib/server-firestore';
 
 export const runtime = 'nodejs';
 
@@ -63,9 +64,8 @@ export async function GET(req: Request) {
             accessToken = tokens.access_token;
 
             // Save updated tokens back to Firestore
-            await updateDocument('users', user.uid, {
+            await updateServerDocument('users', user.uid, {
               gscTokens: JSON.stringify(tokens),
-              adminSecret: env.INTERNAL_SECRET
             }, token, env);
 
             // Retry the original request

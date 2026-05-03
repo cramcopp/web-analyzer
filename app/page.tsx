@@ -187,7 +187,7 @@ export default function WebsiteAnalyzer() {
       });
 
       let scrapeData = await response.json();
-      if (!response.ok) throw new Error(scrapeData.error || 'Website konnte nicht geladen werden.');
+      if (!response.ok) throw new Error(scrapeData.details || scrapeData.error || 'Website konnte nicht geladen werden.');
       
       // --- ASYNC POLLING FOR WORKFLOW ---
       if (scrapeData.status === 'processing' && scrapeData.audit_id) {

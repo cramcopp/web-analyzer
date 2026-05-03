@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyReportGrounding } from '@/lib/reporting/report-verifier';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { getDocument, setDocument } from '@/lib/firestore-edge';
+import { getServerDocument, setServerDocument } from '@/lib/server-firestore';
 import {
   buildDeterministicReport,
   buildGeminiEndpoint,
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       groundedData,
     });
 
-    const cached = await getDocument<any>('aiReportCache', cacheKey, null, env).catch(() => null);
+    const cached = await getServerDocument<any>('aiReportCache', cacheKey, null, env).catch(() => null);
     if (cached?.report) {
       return NextResponse.json({
         ...cached.report,
@@ -433,7 +433,7 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    await setDocument('aiReportCache', cacheKey, {
+    await setServerDocument('aiReportCache', cacheKey, {
       report: reportWithCost,
       url,
       plan,

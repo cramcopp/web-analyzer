@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDocument } from '@/lib/firestore-edge';
+import { getServerDocument } from '@/lib/server-firestore';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const { searchParams } = new URL(req.url);
 
   try {
-    const share = await getDocument('reportShares', token, null, env) as any;
+    const share = await getServerDocument('reportShares', token, null, env) as any;
     if (!share) return NextResponse.json({ error: 'Report Share nicht gefunden' }, { status: 404 });
     if (share.visibility === 'private') return NextResponse.json({ error: 'Report ist privat' }, { status: 403 });
 
@@ -37,7 +37,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       }
     }
 
-    const report = await getDocument('reports', share.reportId, null, env);
+    const report = await getServerDocument('reports', share.reportId, null, env);
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
 
     return NextResponse.json({

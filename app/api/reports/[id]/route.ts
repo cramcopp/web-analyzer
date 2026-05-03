@@ -6,6 +6,15 @@ import { reportSaveSchema } from '@/lib/validations';
 
 export const runtime = 'nodejs';
 
+function parseMaybeJson(value: unknown) {
+  if (typeof value !== 'string') return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const env = getRuntimeEnv();
   
@@ -25,7 +34,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
     }
 
-    return NextResponse.json(report);
+    const rawScrapeData = parseMaybeJson(report.rawScrapeData);
+    const mergedReport = rawScrapeData
+      ? { ...rawScrapeData, ...report, rawScrapeData }
+      : report;
+
+    delete (mergedReport as any).adminSecret;
+    return NextResponse.json(mergedReport);
   } catch (error: any) {
     const msg = error instanceof Error ? error.message : 'Unknown Firestore Error';
     console.error(`[API] Error fetching report ${id}:`, msg);

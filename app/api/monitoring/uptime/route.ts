@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { addDocument } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { addServerDocument } from '@/lib/server-firestore';
 
 export const runtime = 'nodejs';
 
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString();
     const result = await fetchUptime(target);
-    const check = await addDocument('uptimeChecks', {
+    const check = await addServerDocument('uptimeChecks', {
       projectId,
       userId: user.uid,
       url: target.toString(),
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
 
     let alertEvent = null;
     if (result.status === 'down') {
-      alertEvent = await addDocument('alertEvents', {
+      alertEvent = await addServerDocument('alertEvents', {
         projectId,
         userId: user.uid,
         type: 'website_down',

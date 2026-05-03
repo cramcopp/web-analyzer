@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, setDocument, incrementField } from '@/lib/firestore-edge';
+import { getDocument, incrementField } from '@/lib/firestore-edge';
 import { getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { canUseFirestoreAdmin, createServerDocumentWithId, setServerDocument } from '@/lib/server-firestore';
+import { toStoredReportDocument } from '@/lib/report-storage';
 
 export const runtime = 'nodejs';
 
@@ -93,7 +95,7 @@ export async function POST(req: Request) {
       placeholderReport.projectId = projectId;
     }
 
-    await setDocument('reports', audit_id, placeholderReport, null, token, env);
+    await createServerDocumentWithId('reports', audit_id, placeholderReport, token, env);
 
     // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
@@ -105,6 +107,7 @@ export async function POST(req: Request) {
           plan, 
           userId: user.uid,
           projectId,
+          token: canUseFirestoreAdmin(env) ? undefined : token,
           auditId: audit_id
         })
       }));
@@ -124,15 +127,8 @@ export async function POST(req: Request) {
       const { performAnalysis } = await import('@/lib/scanner');
       
       void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, env }).then(async (result) => {
-        await setDocument('reports', audit_id, {
-          ...result,
-          audit_id,
-          userId: user.uid,
-          projectId,
-          status: 'completed',
-          progress: 100,
-          adminSecret: env.INTERNAL_SECRET
-        }, null, null, env);
+        const reportDocument = toStoredReportDocument(result, audit_id, user.uid, projectId);
+        await setServerDocument('reports', audit_id, reportDocument, Object.keys(reportDocument), token, env);
       }).catch(console.error);
 
       return NextResponse.json({ 

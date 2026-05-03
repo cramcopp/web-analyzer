@@ -50,9 +50,23 @@ AI is intentionally budgeted:
 Secrets must be stored in Cloudflare, not committed:
 - `FIREBASE_API_KEY`
 - `FIREBASE_PROJECT_ID`
+- `FIREBASE_DATABASE_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON` for server-side Firestore writes from Workers and Workflows
 - `GEMINI_API_KEY`
 - `INTERNAL_SECRET`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - Google OAuth/Search Console keys as needed
 - optional `AI_GATEWAY_TOKEN` if the AI Gateway is configured as authenticated
+
+## Firestore Server Writes
+Long-running scans and scheduled scans should use a Google service account instead of broad Firestore rules or `adminSecret` fields in documents.
+
+Create a Firebase/GCP service account with Firestore access, download the JSON key, then set the full JSON as a Cloudflare secret on both Workers:
+
+```bash
+wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON -c wrangler.toml
+wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON -c workflow-wrangler.toml
+```
+
+When `GOOGLE_SERVICE_ACCOUNT_JSON` is present, server code uses OAuth service-account credentials for Firestore writes and bypasses Security Rules through IAM. User-facing reads and normal user edits still use Firebase user tokens, so Firestore rules can stay strict. Without this secret, the app falls back to user-token writes for interactive scans so production does not hard-fail during migration.

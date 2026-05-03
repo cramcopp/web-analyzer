@@ -1,8 +1,9 @@
 // @ts-ignore cloudflare:workers is provided by Wrangler for the workflow worker.
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { performAnalysis } from './scanner';
-import { setDocument } from './firestore-edge';
-import type { AnalysisResult, ScanOptions } from './scanner/types';
+import { setServerDocument } from './server-firestore';
+import { toStoredReportDocument } from './report-storage';
+import type { ScanOptions } from './scanner/types';
 
 type WorkflowBinding = {
   create(options: { params: ScanOptions }): Promise<unknown>;
@@ -13,6 +14,8 @@ export interface Env {
   FIREBASE_PROJECT_ID: string;
   FIREBASE_DATABASE_ID: string;
   FIREBASE_API_KEY: string;
+  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
+  FIREBASE_SERVICE_ACCOUNT_JSON?: string;
   GEMINI_API_KEY?: string;
   AI_WORKFLOW_SUMMARY?: string;
   INTERNAL_SECRET: string;
@@ -26,24 +29,22 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
   declare env: Env;
 
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
-    const { url, plan = 'free', auditId, userId, projectId } = event.payload;
+    const { url, plan = 'free', auditId, userId, projectId, token } = event.payload;
     const targetUrl = normalizeTargetUrl(url);
     const reportId = auditId || crypto.randomUUID();
 
     try {
       await step.do('mark scan started', async () => {
-        await setDocument('reports', reportId, {
+        await setServerDocument('reports', reportId, {
           audit_id: reportId,
           userId,
-          projectId,
           url: targetUrl,
           urlObj: targetUrl,
+          createdAt: new Date().toISOString(),
           status: 'scanning',
           progress: 10,
-          planUsed: plan,
-          updatedAt: new Date().toISOString(),
-          adminSecret: this.env.INTERNAL_SECRET,
-        }, null, null, this.env);
+          ...(projectId ? { projectId } : {}),
+        }, ['audit_id', 'userId', 'url', 'urlObj', 'createdAt', 'status', 'progress', ...(projectId ? ['projectId'] : [])], token, this.env);
       });
 
       const finalReport = await step.do('perform single deterministic scan', async () => {
@@ -56,17 +57,9 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           env: this.env,
         });
 
-        const report: AnalysisResult & { projectId?: string } = {
-          ...result,
-          audit_id: reportId,
-          userId: userId || result.userId,
-          projectId,
-          status: 'completed',
-          progress: 100,
-          adminSecret: this.env.INTERNAL_SECRET,
-        };
+        const report = toStoredReportDocument(result, reportId, userId, projectId);
 
-        await setDocument('reports', reportId, report as any, null, null, this.env);
+        await setServerDocument('reports', reportId, report, Object.keys(report), token, this.env);
         return report;
       });
 
@@ -74,18 +67,17 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
     } catch (err: any) {
       const message = err instanceof Error ? err.message : 'Workflow scan failed';
       console.error('Workflow Error:', message);
-      await setDocument('reports', reportId, {
+      await setServerDocument('reports', reportId, {
         audit_id: reportId,
         userId,
-        projectId,
         url: targetUrl,
         urlObj: targetUrl,
+        createdAt: new Date().toISOString(),
         status: 'error',
         progress: 100,
-        error: message,
-        updatedAt: new Date().toISOString(),
-        adminSecret: this.env.INTERNAL_SECRET,
-      }, null, null, this.env);
+        results: JSON.stringify({ error: message }),
+        ...(projectId ? { projectId } : {}),
+      }, ['audit_id', 'userId', 'url', 'urlObj', 'createdAt', 'status', 'progress', 'results', ...(projectId ? ['projectId'] : [])], token, this.env);
       throw err;
     }
   }

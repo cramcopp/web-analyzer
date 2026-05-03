@@ -93,11 +93,10 @@ export async function GET(req: Request) {
 
     // SEC-08 Fix: Store GSC tokens in Firestore instead of cookies to avoid 4KB limit
     try {
-      const { updateDocument } = await import('@/lib/firestore-edge');
-      await updateDocument('users', firebaseData.localId, {
+      const { updateServerDocument } = await import('@/lib/server-firestore');
+      await updateServerDocument('users', firebaseData.localId, {
         gscTokens: JSON.stringify(tokens),
-        adminSecret: env.INTERNAL_SECRET
-      }, null, env);
+      }, firebaseData.idToken, env);
     } catch (dbErr) {
       console.error('Failed to store GSC tokens in Firestore:', dbErr);
     }

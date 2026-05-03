@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { addDocument, queryDocuments, updateDocument } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { addServerDocument, queryServerDocuments, updateServerDocument } from '@/lib/server-firestore';
 
 export const runtime = 'nodejs';
 
@@ -33,11 +33,11 @@ export async function GET(req: Request) {
     ];
 
     const [scheduledScans, alertRules, alertEvents, uptimeChecks, scanDiffs] = await Promise.all([
-      queryDocuments('scheduledScans', filters, 'AND', token, env),
-      queryDocuments('alertRules', filters, 'AND', token, env),
-      queryDocuments('alertEvents', filters, 'AND', token, env),
-      queryDocuments('uptimeChecks', filters, 'AND', token, env),
-      queryDocuments('scanDiffs', filters, 'AND', token, env),
+      queryServerDocuments('scheduledScans', filters, 'AND', token, env),
+      queryServerDocuments('alertRules', filters, 'AND', token, env),
+      queryServerDocuments('alertEvents', filters, 'AND', token, env),
+      queryServerDocuments('uptimeChecks', filters, 'AND', token, env),
+      queryServerDocuments('scanDiffs', filters, 'AND', token, env),
     ]);
 
     return NextResponse.json({ scheduledScans, alertRules, alertEvents, uptimeChecks, scanDiffs });
@@ -74,11 +74,11 @@ export async function POST(req: Request) {
     }
 
     if (body.id) {
-      await updateDocument(collection, body.id, payload, token, env);
+      await updateServerDocument(collection, body.id, payload, token, env);
       return NextResponse.json({ id: body.id, success: true });
     }
 
-    const created = await addDocument(collection, payload, token, env);
+    const created = await addServerDocument(collection, payload, token, env);
     return NextResponse.json({ id: created.id, success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Monitoring konnte nicht gespeichert werden' }, { status: 500 });
