@@ -63,11 +63,11 @@ export function getAiReportModels(plan: string, mode: AiReportMode, env: Runtime
 
   if (mode === 'full') {
     return plan === 'free'
-      ? ['gemini-2.5-flash-lite-preview', 'gemini-2.5-flash']
-      : ['gemini-2.5-flash', 'gemini-2.5-flash-lite-preview'];
+      ? ['gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview']
+      : ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash'];
   }
 
-  return ['gemini-2.5-flash-lite-preview'];
+  return ['gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite'];
 }
 
 export function getAiAttemptLimit(mode: AiReportMode) {
@@ -79,12 +79,10 @@ export function buildGeminiEndpoint(modelId: string, apiKey: string, env: Runtim
     'Content-Type': 'application/json',
   };
 
-  if (env.CLOUDFLARE_ACCOUNT_ID) {
+  if (env.CLOUDFLARE_ACCOUNT_ID && env.AI_GATEWAY_TOKEN) {
     const gatewayId = env.AI_GATEWAY_ID || 'default';
     headers['x-goog-api-key'] = apiKey;
-    if (env.AI_GATEWAY_TOKEN) {
-      headers['cf-aig-authorization'] = `Bearer ${env.AI_GATEWAY_TOKEN}`;
-    }
+    headers['cf-aig-authorization'] = `Bearer ${env.AI_GATEWAY_TOKEN}`;
 
     return {
       url: `https://gateway.ai.cloudflare.com/v1/${env.CLOUDFLARE_ACCOUNT_ID}/${gatewayId}/google-ai-studio/v1beta/models/${modelId}:generateContent`,

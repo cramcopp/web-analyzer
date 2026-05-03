@@ -9,6 +9,7 @@ keep_vars = true
 [vars]
 NEXTJS_ENV = "production"
 AI_REPORT_MODE = "budget"
+AI_REPORT_MODELS = "gemini-3.1-flash-lite-preview,gemini-2.5-flash-lite,gemini-3-flash-preview"
 AI_WORKFLOW_SUMMARY = "false"
 AI_GATEWAY_ID = "default"
 CLOUDFLARE_ACCOUNT_ID = "6b1c9a4b9789c88e2404ab19a9c43ffa"
