@@ -32,6 +32,30 @@ export type QueueBinding = {
   send(message: unknown, options?: Record<string, unknown>): Promise<void>;
 };
 
+export type AiGatewayBinding = {
+  run(
+    data: {
+      provider: string;
+      endpoint: string;
+      headers: Record<string, string>;
+      query: unknown;
+    },
+    options?: {
+      gateway?: {
+        cacheKey?: string;
+        cacheTtl?: number;
+        collectLog?: boolean;
+        metadata?: Record<string, string | number | boolean | null>;
+      };
+      signal?: AbortSignal;
+    },
+  ): Promise<Response>;
+};
+
+export type AiBinding = {
+  gateway(gatewayId: string): AiGatewayBinding;
+};
+
 export type RuntimeEnv = NodeJS.ProcessEnv & {
   APP_URL?: string;
   FIREBASE_API_KEY?: string;
@@ -61,6 +85,7 @@ export type RuntimeEnv = NodeJS.ProcessEnv & {
   REPORT_EXPORTS?: R2Binding;
   CACHE?: KVBinding;
   SCAN_FANOUT_QUEUE?: QueueBinding;
+  AI?: AiBinding;
 };
 
 export function getRuntimeEnv(): RuntimeEnv {

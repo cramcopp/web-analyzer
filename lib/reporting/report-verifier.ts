@@ -23,6 +23,8 @@ type GroundingData = {
 export type VerificationAction =
   | 'scores_restored'
   | 'ungrounded_recommendation_removed'
+  | 'ungrounded_claim_replaced'
+  | 'ungrounded_task_removed'
   | 'provider_section_cleared'
   | 'performance_metrics_cleared'
   | 'missing_data_label_applied';
@@ -70,6 +72,23 @@ function hasGroundingReference(value: string, grounding: GroundingData) {
   return false;
 }
 
+function hasExplicitGroundingReference(value: string, grounding: GroundingData) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('nicht verfuegbar') || normalized.includes('provider nicht verbunden')) return true;
+
+  for (const issue of grounding.issues) {
+    const tokens = [
+      issue.id,
+      issue.issueType,
+      ...issue.affectedUrls,
+      ...issue.evidenceRefs,
+    ].map((token) => token.toLowerCase());
+    if (tokens.some((token) => token && normalized.includes(token))) return true;
+  }
+
+  return grounding.evidence.some((item) => normalized.includes(item.id.toLowerCase()));
+}
+
 function filterRecommendations(section: any, path: string, grounding: GroundingData, notices: VerificationNotice[]) {
   if (!section) return;
   const recommendations = asArray<string>(section.recommendations);
@@ -99,6 +118,74 @@ function normalizeTaskList(tasks: unknown, path: string, grounding: GroundingDat
     }
     return isGrounded;
   });
+}
+
+function buildIssueTasks(grounding: GroundingData) {
+  const tasks = grounding.issues.slice(0, 5).map((issue) => `${issue.id}: ${issue.fixHint}`);
+  return tasks.length ? tasks : [MISSING];
+}
+
+function scrubImplementationPlan(report: any, grounding: GroundingData, notices: VerificationNotice[]) {
+  if (!report.implementationPlan) return;
+
+  const issueTasks = buildIssueTasks(grounding);
+  ['phase1', 'phase2', 'phase3'].forEach((phase, index) => {
+    const section = report.implementationPlan[phase] || {};
+    const title = typeof section.title === 'string' && section.title.trim() ? section.title : `Phase ${index + 1}`;
+    const tasks = asArray<string>(section.tasks);
+    const groundedTasks = tasks.filter((task) => hasExplicitGroundingReference(task, grounding));
+
+    if (groundedTasks.length !== tasks.length) {
+      notices.push({
+        action: 'ungrounded_task_removed',
+        path: `implementationPlan.${phase}.tasks`,
+        reason: 'Tasks ohne explizite Issue-, Evidence- oder Provider-Referenz entfernt.',
+      });
+    }
+
+    report.implementationPlan[phase] = {
+      title,
+      tasks: groundedTasks.length ? groundedTasks : (phase === 'phase1' ? issueTasks : [MISSING]),
+    };
+  });
+
+  report.implementationPlan.developerPrompt = 'Nutze nur vorhandene Issue IDs, Evidence IDs, CrawlSummary und echte Provider-Facts.';
+}
+
+function scrubNarrativeClaims(report: any, grounding: GroundingData, notices: VerificationNotice[]) {
+  const industryNews = asArray<string>(report.industryNews);
+  if (industryNews.some((item) => !hasExplicitGroundingReference(item, grounding))) {
+    report.industryNews = [MISSING];
+    notices.push({
+      action: 'ungrounded_claim_replaced',
+      path: 'industryNews',
+      reason: 'Keine angebundene News- oder Provider-Quelle vorhanden.',
+    });
+  }
+
+  if (report.businessIntelligence) {
+    for (const key of ['businessNiche', 'targetAudienceProfile'] as const) {
+      const value = report.businessIntelligence[key];
+      if (typeof value === 'string' && !hasExplicitGroundingReference(value, grounding)) {
+        report.businessIntelligence[key] = MISSING;
+        notices.push({
+          action: 'ungrounded_claim_replaced',
+          path: `businessIntelligence.${key}`,
+          reason: 'Narrativer Claim ohne explizite Grounding-Referenz ersetzt.',
+        });
+      }
+    }
+
+    const usps = asArray<string>(report.businessIntelligence.uniqueSellingPropositions);
+    if (usps.some((item) => !hasExplicitGroundingReference(item, grounding))) {
+      report.businessIntelligence.uniqueSellingPropositions = [MISSING];
+      notices.push({
+        action: 'ungrounded_claim_replaced',
+        path: 'businessIntelligence.uniqueSellingPropositions',
+        reason: 'USPs ohne Provider- oder Evidence-Grounding ersetzt.',
+      });
+    }
+  }
 }
 
 function scrubProviderClaims(report: any, grounding: GroundingData, notices: VerificationNotice[]) {
@@ -239,6 +326,8 @@ export function verifyReportGrounding(report: any, scrapeData: any, url?: string
   const grounding = buildGroundingData(scrapeData, url);
 
   restoreScannerScores(verified, scrapeData, notices);
+  scrubNarrativeClaims(verified, grounding, notices);
+  scrubImplementationPlan(verified, grounding, notices);
   scrubProviderClaims(verified, grounding, notices);
   scrubPerformanceClaims(verified, grounding, notices);
 
@@ -270,7 +359,8 @@ export function verifyReportGrounding(report: any, scrapeData: any, url?: string
 
   attachGrounding(verified, scrapeData);
   verified.verification = {
-    grounded: notices.length === 0,
+    grounded: true,
+    correctionsApplied: notices.length > 0,
     notices,
     verifiedAt: new Date().toISOString(),
   };

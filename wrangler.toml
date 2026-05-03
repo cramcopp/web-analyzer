@@ -22,6 +22,10 @@ binding = "ASSETS"
 enabled = true
 head_sampling_rate = 0.1
 
+[ai]
+binding = "AI"
+remote = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "web-analyzer-db"

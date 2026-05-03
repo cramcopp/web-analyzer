@@ -6,12 +6,12 @@ import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { getCacheJson, putCacheJson } from '@/lib/cloudflare-cache';
 import {
   buildDeterministicReport,
-  buildGeminiEndpoint,
   buildGroundedReportPayload,
   createAiReportCacheKey,
   getAiAttemptLimit,
   getAiReportMode,
   getAiReportModels,
+  requestGeminiContent,
   shouldRunAiReport,
 } from '@/lib/ai-cost-control';
 
@@ -357,6 +357,7 @@ export async function POST(req: NextRequest) {
     let aiResponse = null;
     let success = false;
     let lastModelError = null;
+    let aiProvider = 'not-run';
 
     const models = getAiReportModels(plan, aiMode, env);
     const attemptsPerModel = getAiAttemptLimit(aiMode);
@@ -385,12 +386,12 @@ export async function POST(req: NextRequest) {
           ${JSON.stringify(groundedData)}`;
 
 
-          const aiEndpoint = buildGeminiEndpoint(modelId, apiKey!, env);
-          
-          const response = await fetch(aiEndpoint.url, {
-            method: 'POST',
-            headers: aiEndpoint.headers,
-            body: JSON.stringify({
+          const { response, provider } = await requestGeminiContent({
+            modelId,
+            apiKey: apiKey!,
+            env,
+            cacheKey,
+            body: {
               contents: [{
                 parts: [{ text: prompt }]
               }],
@@ -399,8 +400,9 @@ export async function POST(req: NextRequest) {
                 response_schema: responseSchema,
                 temperature: 0.2,
               }
-            })
+            },
           });
+          aiProvider = provider;
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -435,7 +437,7 @@ export async function POST(req: NextRequest) {
         cached: false,
         cacheKey,
         modelsTried: models,
-        gateway: env.CLOUDFLARE_ACCOUNT_ID ? 'cloudflare-ai-gateway' : 'direct-google-ai-studio',
+        gateway: aiProvider,
       },
     };
 

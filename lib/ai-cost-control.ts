@@ -98,6 +98,65 @@ export function buildGeminiEndpoint(modelId: string, apiKey: string, env: Runtim
   };
 }
 
+export async function requestGeminiContent({
+  modelId,
+  apiKey,
+  env,
+  body,
+  cacheKey,
+}: {
+  modelId: string;
+  apiKey: string;
+  env: RuntimeEnv;
+  body: unknown;
+  cacheKey?: string;
+}) {
+  const gatewayId = env.AI_GATEWAY_ID || 'default';
+
+  if (env.AI?.gateway && env.CLOUDFLARE_ACCOUNT_ID) {
+    const response = await env.AI.gateway(gatewayId).run(
+      {
+        provider: 'google-ai-studio',
+        endpoint: `v1beta/models/${modelId}:generateContent`,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        query: body,
+      },
+      {
+        gateway: {
+          cacheKey: cacheKey ? `report:${modelId}:${cacheKey}` : undefined,
+          cacheTtl: 60 * 60 * 24 * 7,
+          collectLog: true,
+          metadata: {
+            app: 'web-analyzer',
+            feature: 'agency-report',
+            model: modelId,
+          },
+        },
+      },
+    );
+
+    return {
+      response,
+      provider: 'cloudflare-ai-gateway-binding',
+    };
+  }
+
+  const aiEndpoint = buildGeminiEndpoint(modelId, apiKey, env);
+  const response = await fetch(aiEndpoint.url, {
+    method: 'POST',
+    headers: aiEndpoint.headers,
+    body: JSON.stringify(body),
+  });
+
+  return {
+    response,
+    provider: aiEndpoint.provider,
+  };
+}
+
 export function buildGroundedReportPayload(scrapeData: any, url: string, plan: string) {
   const crawlSummary = scrapeData.crawlSummary || {};
   const evidence = asArray(scrapeData.evidence).slice(0, 80).map((item: any) => ({
