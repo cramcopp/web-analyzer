@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyReportGrounding } from '@/lib/reporting/report-verifier';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { getServerDocument, setServerDocument } from '@/lib/server-firestore';
+import { getCacheJson, putCacheJson } from '@/lib/cloudflare-cache';
 import {
   buildDeterministicReport,
   buildGeminiEndpoint,
@@ -16,6 +16,12 @@ import {
 } from '@/lib/ai-cost-control';
 
 export const runtime = 'nodejs';
+
+function getAiReportCacheTtl(env: Record<string, any>) {
+  const configured = Number(env.AI_REPORT_CACHE_TTL_SECONDS);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return 60 * 60 * 24 * 7;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,7 +42,7 @@ export async function POST(req: NextRequest) {
       groundedData,
     });
 
-    const cached = await getServerDocument<any>('aiReportCache', cacheKey, null, env).catch(() => null);
+    const cached = await getCacheJson<any>(env, `ai-report:${cacheKey}`).catch(() => null);
     if (cached?.report) {
       return NextResponse.json({
         ...cached.report,
@@ -433,13 +439,13 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    await setServerDocument('aiReportCache', cacheKey, {
+    await putCacheJson(env, `ai-report:${cacheKey}`, {
       report: reportWithCost,
       url,
       plan,
       aiMode,
       createdAt: new Date().toISOString(),
-    }, null, null, env).catch((error) => {
+    }, getAiReportCacheTtl(env)).catch((error) => {
       console.warn('AI report cache write skipped:', error instanceof Error ? error.message : 'Unknown error');
     });
 

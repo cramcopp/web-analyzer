@@ -1,8 +1,6 @@
 // @ts-ignore cloudflare:workers is provided by Wrangler for the workflow worker.
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { performAnalysis } from './scanner';
-import { setServerDocument } from './server-firestore';
-import { toStoredReportDocument } from './report-storage';
 import {
   createCloudflareScanPlaceholder,
   markCloudflareScanError,
@@ -17,11 +15,6 @@ type WorkflowBinding = {
 
 export interface Env {
   SCAN_WORKFLOW: WorkflowBinding;
-  FIREBASE_PROJECT_ID: string;
-  FIREBASE_DATABASE_ID: string;
-  FIREBASE_API_KEY: string;
-  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
-  FIREBASE_SERVICE_ACCOUNT_JSON?: string;
   GEMINI_API_KEY?: string;
   AI_WORKFLOW_SUMMARY?: string;
   INTERNAL_SECRET: string;
@@ -40,13 +33,13 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
   declare env: Env;
 
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
-    const { url, plan = 'free', auditId, userId, projectId, token } = event.payload;
+    const { url, plan = 'free', auditId, userId = '', projectId } = event.payload;
     const targetUrl = normalizeTargetUrl(url);
     const reportId = auditId || crypto.randomUUID();
 
     try {
       await step.do('mark scan started', async () => {
-        await createCloudflareScanPlaceholder(this.env, {
+        const created = await createCloudflareScanPlaceholder(this.env, {
           id: reportId,
           userId,
           projectId,
@@ -54,21 +47,14 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           plan,
           status: 'scanning',
           progress: 10,
-        }).catch((error) => console.warn('D1 scan placeholder skipped:', error instanceof Error ? error.message : 'unknown'));
+        });
 
-        await setServerDocument('reports', reportId, {
-          audit_id: reportId,
-          userId,
-          url: targetUrl,
-          urlObj: targetUrl,
-          createdAt: new Date().toISOString(),
-          status: 'scanning',
-          progress: 10,
-          ...(projectId ? { projectId } : {}),
-        }, ['audit_id', 'userId', 'url', 'urlObj', 'createdAt', 'status', 'progress', ...(projectId ? ['projectId'] : [])], token, this.env);
+        if (!created) {
+          throw new Error('D1 scan placeholder could not be created');
+        }
       });
 
-      const finalReport = await step.do('perform single deterministic scan', async () => {
+      const finalReport = await step.do('perform deterministic scan', async () => {
         const result = await performAnalysis({
           url: targetUrl,
           plan,
@@ -79,17 +65,12 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         });
 
         const storedResult = await storeCloudflareScanArtifacts(this.env, result, { scanId: reportId, userId });
-        await writeCloudflareScanResult(this.env, storedResult, { scanId: reportId, userId, projectId, plan })
-          .catch((error) => console.warn('D1/R2 scan write skipped:', error instanceof Error ? error.message : 'unknown'));
-
-        const report = toStoredReportDocument(storedResult, reportId, userId, projectId);
-
-        await setServerDocument('reports', reportId, report, Object.keys(report), token, this.env);
-        return report;
+        await writeCloudflareScanResult(this.env, storedResult, { scanId: reportId, userId, projectId, plan });
+        return storedResult;
       });
 
       return finalReport;
-    } catch (err: any) {
+    } catch (err) {
       const message = err instanceof Error ? err.message : 'Workflow scan failed';
       console.error('Workflow Error:', message);
       await markCloudflareScanError(this.env, {
@@ -99,19 +80,8 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         url: targetUrl,
         plan,
         message,
-      }).catch((error) => console.warn('D1 scan error mark skipped:', error instanceof Error ? error.message : 'unknown'));
+      }).catch((error) => console.warn('D1 scan error mark failed:', error instanceof Error ? error.message : 'unknown'));
 
-      await setServerDocument('reports', reportId, {
-        audit_id: reportId,
-        userId,
-        url: targetUrl,
-        urlObj: targetUrl,
-        createdAt: new Date().toISOString(),
-        status: 'error',
-        progress: 100,
-        results: JSON.stringify({ error: message }),
-        ...(projectId ? { projectId } : {}),
-      }, ['audit_id', 'userId', 'url', 'urlObj', 'createdAt', 'status', 'progress', 'results', ...(projectId ? ['projectId'] : [])], token, this.env);
       throw err;
     }
   }

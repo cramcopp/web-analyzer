@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getRuntimeEnv, hasCloudflareContext } from '@/lib/cloudflare-env';
 import { hasCloudflareCache } from '@/lib/cloudflare-cache';
-import { hasFirestoreAdminCredentials } from '@/lib/firestore-edge';
 import { hasCloudflareAuditR2, hasCloudflareD1, hasCloudflareReportR2 } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
@@ -28,9 +27,7 @@ export async function GET(_req: Request) {
       kvCache: hasCloudflareCache(env),
       queueProducer: !!env?.SCAN_FANOUT_QUEUE,
     },
-    firestoreAdmin: {
-      configured: hasFirestoreAdminCredentials(env),
-    }
+    authProvider: 'firebase-auth',
   };
 
   return NextResponse.json(debugInfo);

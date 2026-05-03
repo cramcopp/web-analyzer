@@ -1,9 +1,8 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { z } from 'zod';
-import { updateDocument } from '@/lib/firestore-edge';
-import { getSessionUser, getSessionToken, deleteUserAccount } from '@/lib/auth-server';
+import { getSessionUser, deleteUserAccount } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { patchCloudflareUserProfile } from '@/lib/cloudflare-storage';
+import { hasCloudflareD1, patchCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -16,8 +15,11 @@ const userUpdateSchema = z.object({
 export async function PATCH(req: NextRequest) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const body = await req.json();
@@ -27,16 +29,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Ungültige Felder' }, { status: 400 });
     }
 
-    // Only update validated fields to prevent privilege escalation
-    const d1Updated = await patchCloudflareUserProfile(env, user.uid, result.data).catch((error) => {
-      console.warn('[PATCH /api/user/management] D1 update skipped:', error instanceof Error ? error.message : 'unknown');
-      return false;
-    });
-    try {
-      await updateDocument('users', user.uid, result.data, token, env);
-    } catch (firestoreError) {
-      if (!d1Updated) throw firestoreError;
-      console.warn('[PATCH /api/user/management] Firestore skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+    const d1Updated = await patchCloudflareUserProfile(env, user.uid, result.data);
+    if (!d1Updated) {
+      return NextResponse.json({ error: 'User-Profil konnte nicht in D1 aktualisiert werden' }, { status: 503 });
     }
     return NextResponse.json({ success: true });
   } catch (error: any) {

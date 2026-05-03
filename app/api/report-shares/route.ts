@@ -1,20 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { getDocument } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { queryServerDocuments, setServerDocument } from '@/lib/server-firestore';
 import type { ReportVisibility } from '@/types/reporting';
 import {
   getCloudflareReport,
+  hasCloudflareD1,
   queryCloudflareReportShares,
   upsertCloudflareReportShare,
 } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
-
-function getEnv() {
-  return getRuntimeEnv();
-}
 
 async function sha256(value: string) {
   const data = new TextEncoder().encode(value);
@@ -28,48 +23,41 @@ function normalizeVisibility(value: unknown): ReportVisibility {
 }
 
 export async function GET(req: Request) {
-  const env = getEnv();
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   const { searchParams } = new URL(req.url);
   const reportId = searchParams.get('reportId');
-  const filters: any[] = [{ field: 'userId', op: 'EQUAL', value: user.uid }];
-  if (reportId) filters.push({ field: 'reportId', op: 'EQUAL', value: reportId });
 
   try {
-    const d1Shares = await queryCloudflareReportShares(env, { userId: user.uid, reportId }).catch((error) => {
-      console.warn('D1 report shares lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return [];
-    });
-    if (d1Shares.length > 0) {
-      return NextResponse.json(d1Shares.map((share: any) => ({ ...share, passwordHash: undefined })));
-    }
-
-    const shares = await queryServerDocuments('reportShares', filters, 'AND', token, env);
+    const shares = await queryCloudflareReportShares(env, { userId: user.uid, reportId });
     return NextResponse.json(shares.map((share: any) => ({ ...share, passwordHash: undefined })));
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Share Links konnten nicht geladen werden' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Share Links konnten nicht geladen werden' }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  const env = getEnv();
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const body = await req.json();
     const reportId = String(body.reportId || '');
     if (!reportId) return NextResponse.json({ error: 'reportId fehlt' }, { status: 400 });
 
-    const d1Report = await getCloudflareReport(env, reportId, user.uid).catch(() => null);
-    const report = d1Report && !('forbidden' in d1Report)
-      ? d1Report
-      : await getDocument('reports', reportId, token, env).catch(() => null);
-    if (!report || (report as any).userId !== user.uid) {
+    const report = await getCloudflareReport(env, reportId, user.uid);
+    if (!report || 'forbidden' in report) {
       return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
     }
 
@@ -93,16 +81,9 @@ export async function POST(req: Request) {
       builder: body.builder ? { ...body.builder, includeDebugData: false, updatedAt: createdAt } : null,
     };
 
-    const d1Saved = await upsertCloudflareReportShare(env, sharePayload).catch((error) => {
-      console.warn('D1 report share save skipped:', error instanceof Error ? error.message : 'unknown');
-      return false;
-    });
-
-    try {
-      await setServerDocument('reportShares', tokenId, sharePayload, null, token, env);
-    } catch (firestoreError) {
-      if (!d1Saved) throw firestoreError;
-      console.warn('Firestore report share save skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+    const saved = await upsertCloudflareReportShare(env, sharePayload);
+    if (!saved) {
+      return NextResponse.json({ error: 'Share Link konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
     return NextResponse.json({
@@ -112,7 +93,7 @@ export async function POST(req: Request) {
       visibility,
       createdAt,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Share Link konnte nicht erstellt werden' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Share Link konnte nicht erstellt werden' }, { status: 500 });
   }
 }

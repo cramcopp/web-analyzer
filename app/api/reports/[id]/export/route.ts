@@ -1,41 +1,33 @@
 import { NextResponse } from 'next/server';
-import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { getDocument } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { publicReportCsv, publicReportJson, publicReportPdf } from '@/lib/reporting/exports';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { getCloudflareReport, putReportExportText } from '@/lib/cloudflare-storage';
+import { getCloudflareReport, hasCloudflareD1, putReportExportText } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
-
-function getEnv() {
-  return getRuntimeEnv();
-}
 
 function contentDisposition(filename: string) {
   return `attachment; filename="${filename.replace(/"/g, '')}"`;
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const env = getEnv();
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   const { id } = await params;
   const { searchParams } = new URL(req.url);
   const format = searchParams.get('format') || 'json';
 
   try {
-    const d1Report = await getCloudflareReport(env, id, user.uid).catch((error) => {
-      console.warn('D1 export report lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return null;
-    });
-    const report = d1Report && !('forbidden' in d1Report)
-      ? d1Report
-      : await getDocument('reports', id, token, env) as any;
+    const report = await getCloudflareReport(env, id, user.uid);
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
-    if (report.userId !== user.uid) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
+    if ('forbidden' in report) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
 
     const sanitized = sanitizeReportForClient(report);
     const baseName = `wap_report_${id}`;
@@ -70,7 +62,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         'Content-Disposition': contentDisposition(`${baseName}.json`),
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Report Export fehlgeschlagen' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Report Export fehlgeschlagen' }, { status: 500 });
   }
 }

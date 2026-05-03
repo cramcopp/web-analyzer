@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, fetchWithRetry } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
+import { fetchWithRetry } from '@/lib/http';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { updateServerDocument } from '@/lib/server-firestore';
-import { getCloudflareUserProfile, patchCloudflareUserProfile } from '@/lib/cloudflare-storage';
+import { getCloudflareUserProfile, hasCloudflareD1, patchCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -17,14 +16,16 @@ export async function GET(req: Request) {
   }
 
   const user = await getSessionUser();
-  const token = await getSessionToken();
-
-  if (!user || !token) {
+  if (!user) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
+
   try {
-    const userData = await getCloudflareUserProfile(env, user.uid).catch(() => null) || await getDocument('users', user.uid, token, env);
+    const userData = await getCloudflareUserProfile(env, user.uid);
     const tokensRaw = userData?.gscTokens;
 
     if (!tokensRaw) {
@@ -34,17 +35,16 @@ export async function GET(req: Request) {
     let tokens = typeof tokensRaw === 'string' ? JSON.parse(tokensRaw) : tokensRaw;
     let accessToken = tokens.access_token;
 
-    // Helper for API calls with automatic refresh
-    const googleFetch = async (url: string, options: any = {}, isRetry = false): Promise<any> => {
+    const googleFetch = async (url: string, options: RequestInit = {}, isRetry = false): Promise<any> => {
+      const headers = new Headers(options.headers);
+      headers.set('Authorization', `Bearer ${accessToken}`);
+      headers.set('Content-Type', 'application/json');
+
       const res = await fetchWithRetry(url, {
         ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
-      
+
       if (!res.ok) {
         if (res.status === 401 && !isRetry && tokens.refresh_token) {
           console.warn('Google Access Token expired, attempting refresh...');
@@ -56,7 +56,7 @@ export async function GET(req: Request) {
               client_secret: env.GOOGLE_CLIENT_SECRET || '',
               refresh_token: tokens.refresh_token,
               grant_type: 'refresh_token',
-            })
+            }),
           });
 
           if (refreshRes.ok) {
@@ -64,15 +64,10 @@ export async function GET(req: Request) {
             tokens = { ...tokens, ...newTokens };
             accessToken = tokens.access_token;
 
-            // Save updated tokens back to Firestore
             await patchCloudflareUserProfile(env, user.uid, {
               gscTokens: JSON.stringify(tokens),
-            }).catch(() => false);
-            await updateServerDocument('users', user.uid, {
-              gscTokens: JSON.stringify(tokens),
-            }, token, env);
+            });
 
-            // Retry the original request
             return googleFetch(url, options, true);
           }
         }
@@ -85,23 +80,16 @@ export async function GET(req: Request) {
       return res.json();
     };
 
-    // 1. Find the property (Search Console Sites)
     const siteListData = await googleFetch('https://www.googleapis.com/webmasters/v3/sites');
-
     const sites = siteListData.siteEntry || [];
-    
-    // Simple matching: find a site that is a prefix of the provided URL or matches the domain
-    const matchedSite = sites.find((s: any) => siteUrl.startsWith(s.siteUrl || '')) || sites[0]; 
+    const matchedSite = sites.find((site: any) => siteUrl.startsWith(site.siteUrl || '')) || sites[0];
 
-    if (!matchedSite || !matchedSite.siteUrl) {
+    if (!matchedSite?.siteUrl) {
       return NextResponse.json({ error: 'Keine passende Search Console Property gefunden.' }, { status: 404 });
     }
 
     const targetProperty = matchedSite.siteUrl;
     const encodedProperty = encodeURIComponent(targetProperty);
-
-    // 2. Fetch Performance Data (Last 30 days)
-    // API: https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -111,34 +99,30 @@ export async function GET(req: Request) {
         startDate,
         endDate,
         dimensions: ['date'],
-        rowLimit: 31
-      })
+        rowLimit: 31,
+      }),
     });
 
     const performanceData = performanceResponse.rows || [];
     const performanceTotals = performanceData.reduce((acc: any, row: any) => ({
       clicks: acc.clicks + (row.clicks || 0),
-      impressions: acc.impressions + (row.impressions || 0)
+      impressions: acc.impressions + (row.impressions || 0),
     }), { clicks: 0, impressions: 0 });
 
-    // 3. Inspect the specific URL (Requires URL Inspection API)
-    // API: https://searchconsole.googleapis.com/v1/urlInspection/index:inspect
     let inspectionResult = null;
     try {
-      const inspectRes = await googleFetch(`https://searchconsole.googleapis.com/v1/urlInspection/index:inspect`, {
+      const inspectRes = await googleFetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
         method: 'POST',
         body: JSON.stringify({
           inspectionUrl: siteUrl,
-          siteUrl: targetProperty
-        })
+          siteUrl: targetProperty,
+        }),
       });
       inspectionResult = inspectRes.inspectionResult;
-    } catch (e) {
-      console.warn("URL Inspection API failed (common for non-owner or restricted accounts):", e);
+    } catch (error) {
+      console.warn('URL Inspection API failed:', error instanceof Error ? error.message : 'unknown');
     }
 
-    // 4. Get Sitemaps
-    // API: https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/sitemaps
     const sitemapsRes = await googleFetch(`https://www.googleapis.com/webmasters/v3/sites/${encodedProperty}/sitemaps`);
 
     return NextResponse.json({
@@ -146,13 +130,12 @@ export async function GET(req: Request) {
       performance: performanceData,
       performanceTotals,
       inspection: inspectionResult,
-      sitemaps: sitemapsRes.sitemap || []
+      sitemaps: sitemapsRes.sitemap || [],
     });
-
-  } catch (error: any) {
+  } catch (error) {
     console.error('Search Console API Error:', error);
-    if (error.message === 'AUTH_EXPIRED') {
-       return NextResponse.json({ error: 'Session abgelaufen. Bitte erneut verbinden.' }, { status: 401 });
+    if (error instanceof Error && error.message === 'AUTH_EXPIRED') {
+      return NextResponse.json({ error: 'Session abgelaufen. Bitte erneut verbinden.' }, { status: 401 });
     }
     return NextResponse.json({ error: 'Fehler beim Abrufen der Search Console Daten.' }, { status: 500 });
   }

@@ -36,15 +36,12 @@ export type RuntimeEnv = NodeJS.ProcessEnv & {
   APP_URL?: string;
   FIREBASE_API_KEY?: string;
   FIREBASE_PROJECT_ID?: string;
-  FIREBASE_DATABASE_ID?: string;
   GEMINI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   GOOGLE_CX?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
-  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
-  FIREBASE_SERVICE_ACCOUNT_JSON?: string;
   INTERNAL_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

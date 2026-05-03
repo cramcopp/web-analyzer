@@ -8,7 +8,6 @@ export interface ScanOptions {
   plan?: string;
   userId?: string;
   projectId?: string;
-  token?: string;
   auditId?: string;
   env?: Record<string, any>;
 }
@@ -287,5 +286,4 @@ export interface AnalysisResult {
     sourceType?: 'heuristic' | 'provider' | 'unavailable';
     checks?: AiVisibilityCheckSet;
   };
-  adminSecret?: string;
 }

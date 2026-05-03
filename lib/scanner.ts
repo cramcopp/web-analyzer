@@ -147,7 +147,6 @@ function buildTextBasis(page: {
     .trim();
 }
 
-// FIX: Rekursiver Sitemap-Scanner!
 async function getAllUrlsBeforeCrawl(origin: string, robotsTxt: string): Promise<string[]> {
   const sitemaps: string[] = [];
   robotsTxt.split('\n').forEach(line => {
@@ -1431,7 +1430,6 @@ export async function performPreflight(urlObj: URL, plan: string, env?: Record<s
   const initialQueue = new Set<string>();
   sitemapUrls.forEach(u => {
     const norm = normalizeUrl(u, urlObj.origin);
-    // FIX: XMLs, Bilder und PDFs knallhart aus der Warteschlange werfen!
     if (norm && isSameBaseDomain(new URL(norm).hostname, domain) && norm !== mainUrlNormalizedInPreflight && !norm.match(/\.(xml|pdf|png|jpg|jpeg|gif|css|js)$/i)) {
       initialQueue.add(norm);
     }

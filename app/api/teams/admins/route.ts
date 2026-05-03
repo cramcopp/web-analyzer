@@ -1,38 +1,43 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { updateDocument, queryDocuments } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { hasCloudflareD1, queryCloudflareTeamForMember, updateCloudflareTeam } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
 export async function PATCH(req: Request) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const { uid, isAdmin } = await req.json();
-    
-    // Find team where user is owner (only owners can change admins)
-    const teams = await queryDocuments('teams', [
-      { field: 'ownerId', op: 'EQUAL', value: user.uid }
-    ], 'AND', token, env);
-    
-    if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found or not owner' }, { status: 403 });
-    const team = teams[0];
+    const team: any = await queryCloudflareTeamForMember(env, user.uid);
 
-    let updatedAdmins = team.admins || [];
-    if (isAdmin) {
-      if (!updatedAdmins.includes(uid)) updatedAdmins.push(uid);
-    } else {
-      updatedAdmins = updatedAdmins.filter((a: string) => a !== uid);
+    if (!team || team.ownerId !== user.uid) {
+      return NextResponse.json({ error: 'Team not found or not owner' }, { status: 403 });
     }
-    
-    await updateDocument('teams', team.id, { admins: updatedAdmins }, token, env);
-    
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (isAdmin && !team.members.includes(uid)) {
+      return NextResponse.json({ error: 'Nutzer ist kein Team-Mitglied' }, { status: 400 });
+    }
+
+    const admins = new Set<string>(team.admins || []);
+    if (isAdmin) admins.add(uid);
+    else admins.delete(uid);
+    admins.add(team.ownerId);
+
+    const updated = await updateCloudflareTeam(env, team.id, { admins: Array.from(admins) });
+    if (!updated) {
+      return NextResponse.json({ error: 'Team Admins konnten nicht in D1 aktualisiert werden' }, { status: 503 });
+    }
+
+    return NextResponse.json({ success: true, storage: 'cloudflare' });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Team Admins konnten nicht aktualisiert werden' }, { status: 500 });
   }
 }

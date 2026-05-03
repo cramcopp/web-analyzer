@@ -440,6 +440,85 @@ export async function patchCloudflareUserProfile(
   return true;
 }
 
+export async function updateCloudflareStripeSubscription(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  userId: string,
+  data: Record<string, unknown> & { plan?: string; maxScans?: number }
+) {
+  const db = getDb(env);
+  if (!db) return false;
+
+  const existing = await getCloudflareUserProfile(env, userId);
+  const now = nowIso();
+  const plan = String(data.plan || existing?.plan || 'free');
+  const maxScans = typeof data.maxScans === 'number' ? data.maxScans : getMonthlyScanLimit(plan);
+  const merged = {
+    ...(existing || { uid: userId, id: userId, role: 'user', scanCount: 0 }),
+    ...data,
+    plan,
+    maxScans,
+    lastScanReset: data.lastScanReset || now,
+    updatedAt: now,
+  };
+
+  await db.prepare(`
+    INSERT INTO users (
+      id, email, display_name, photo_url, role, plan, scan_count, max_scans,
+      last_scan_reset, stripe_customer_id, gsc_tokens_json, profile_json, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      plan = excluded.plan,
+      max_scans = excluded.max_scans,
+      last_scan_reset = excluded.last_scan_reset,
+      stripe_customer_id = COALESCE(excluded.stripe_customer_id, users.stripe_customer_id),
+      profile_json = excluded.profile_json,
+      updated_at = excluded.updated_at
+  `).bind(
+    userId,
+    existing?.email || null,
+    existing?.displayName || null,
+    existing?.photoURL || null,
+    existing?.role || 'user',
+    plan,
+    existing?.scanCount || 0,
+    maxScans,
+    String(data.lastScanReset || now),
+    data.stripeCustomerId || existing?.stripeCustomerId || null,
+    existing?.gscTokens || null,
+    safeJson(merged),
+    existing?.createdAt || now,
+    now
+  ).run();
+
+  return true;
+}
+
+export async function getCloudflareUserByEmail(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  email: string
+) {
+  const db = getDb(env);
+  if (!db) return null;
+
+  const row = await db.prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1').bind(email).first<Record<string, unknown>>();
+  return toUserProfile(row);
+}
+
+export async function getCloudflareUsersByIds(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  userIds: string[]
+) {
+  const db = getDb(env);
+  const ids = Array.from(new Set(userIds.filter(Boolean))).slice(0, 50);
+  if (!db || ids.length === 0) return [];
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const response = await db.prepare(`SELECT * FROM users WHERE id IN (${placeholders})`).bind(...ids).all<Record<string, unknown>>();
+  const rows = Array.isArray(response) ? response : response.results || [];
+  return rows.map(toUserProfile).filter(Boolean);
+}
+
 export async function deleteCloudflareUserData(
   env: CloudflareStorageEnv | Record<string, unknown> | undefined,
   userId: string
@@ -473,6 +552,7 @@ export async function deleteCloudflareUserData(
   ];
 
   await runBatch(db, tables.map((table) => db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).bind(userId)), 20);
+  await db.prepare('DELETE FROM teams WHERE owner_id = ? OR members_json LIKE ?').bind(userId, `%${userId}%`).run();
   await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
   return true;
 }
@@ -628,6 +708,115 @@ export async function deleteCloudflareProject(
   if (!existing || 'forbidden' in existing) return false;
 
   await db.prepare('DELETE FROM projects WHERE id = ?').bind(projectId).run();
+  return true;
+}
+
+function teamFromRow(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    name: row.name,
+    ownerId: row.owner_id,
+    members: parseMaybeJson<string[]>(row.members_json) || [],
+    admins: parseMaybeJson<string[]>(row.admins_json) || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function queryCloudflareTeamForMember(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  userId: string
+) {
+  const db = getDb(env);
+  if (!db) return null;
+
+  const row = await db.prepare(`
+    SELECT * FROM teams
+    WHERE owner_id = ? OR members_json LIKE ?
+    ORDER BY datetime(created_at) DESC
+    LIMIT 1
+  `).bind(userId, `%${userId}%`).first<Record<string, unknown>>();
+
+  return row ? teamFromRow(row) : null;
+}
+
+export async function getCloudflareTeam(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  teamId: string
+) {
+  const db = getDb(env);
+  if (!db) return null;
+
+  const row = await db.prepare('SELECT * FROM teams WHERE id = ? LIMIT 1').bind(teamId).first<Record<string, unknown>>();
+  return row ? teamFromRow(row) : null;
+}
+
+export async function createCloudflareTeam(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  team: { id: string; name: string; ownerId: string; members: string[]; admins: string[]; createdAt?: string }
+) {
+  const db = getDb(env);
+  if (!db) return false;
+
+  const now = nowIso();
+  await db.prepare(`
+    INSERT INTO teams (id, owner_id, name, members_json, admins_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    team.id,
+    team.ownerId,
+    team.name,
+    safeJson(team.members),
+    safeJson(team.admins),
+    team.createdAt || now,
+    now
+  ).run();
+  return true;
+}
+
+export async function updateCloudflareTeam(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  teamId: string,
+  data: { name?: string; members?: string[]; admins?: string[] }
+) {
+  const db = getDb(env);
+  if (!db) return false;
+
+  const existing = await getCloudflareTeam(env, teamId);
+  if (!existing) return false;
+
+  const updated = {
+    name: data.name || String(existing.name),
+    members: data.members || existing.members,
+    admins: data.admins || existing.admins,
+  };
+
+  await db.prepare(`
+    UPDATE teams
+    SET name = ?, members_json = ?, admins_json = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(
+    updated.name,
+    safeJson(updated.members),
+    safeJson(updated.admins),
+    nowIso(),
+    teamId
+  ).run();
+  return true;
+}
+
+export async function deleteCloudflareTeam(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  teamId: string,
+  ownerId: string
+) {
+  const db = getDb(env);
+  if (!db) return false;
+
+  const team = await getCloudflareTeam(env, teamId);
+  if (!team || team.ownerId !== ownerId) return false;
+
+  await db.prepare('DELETE FROM teams WHERE id = ?').bind(teamId).run();
   return true;
 }
 
@@ -1712,6 +1901,127 @@ export async function queryCloudflareReportShares(
   `).bind(...values).all<Record<string, unknown>>();
   const rows = Array.isArray(response) ? response : response.results || [];
   return rows.map(shareFromRow);
+}
+
+function factRows<T>(response: { results?: T[] } | T[]) {
+  return Array.isArray(response) ? response : response.results || [];
+}
+
+export async function queryCloudflareProviderFacts(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  input: { userId: string; projectId: string }
+) {
+  const db = getDb(env);
+  if (!db) {
+    return {
+      keywordFacts: [],
+      rankFacts: [],
+      backlinkFacts: [],
+      competitorFacts: [],
+      trafficFacts: [],
+      aiVisibilityFacts: [],
+    };
+  }
+
+  const [keywordRows, rankRows, backlinkRows, competitorRows, trafficRows, aiVisibilityRows] = await Promise.all([
+    db.prepare('SELECT * FROM keyword_facts WHERE user_id = ? AND project_id = ? ORDER BY datetime(fetched_at) DESC LIMIT 500')
+      .bind(input.userId, input.projectId).all<Record<string, unknown>>(),
+    db.prepare('SELECT * FROM rank_facts WHERE user_id = ? AND project_id = ? ORDER BY datetime(checked_at) DESC LIMIT 500')
+      .bind(input.userId, input.projectId).all<Record<string, unknown>>(),
+    db.prepare('SELECT * FROM backlink_facts WHERE user_id = ? AND project_id = ? ORDER BY datetime(fetched_at) DESC LIMIT 500')
+      .bind(input.userId, input.projectId).all<Record<string, unknown>>(),
+    db.prepare('SELECT * FROM competitor_facts WHERE user_id = ? AND project_id = ? ORDER BY datetime(created_at) DESC LIMIT 200')
+      .bind(input.userId, input.projectId).all<Record<string, unknown>>(),
+    db.prepare('SELECT * FROM traffic_facts WHERE user_id = ? AND project_id = ? ORDER BY datetime(fetched_at) DESC LIMIT 200')
+      .bind(input.userId, input.projectId).all<Record<string, unknown>>(),
+    db.prepare('SELECT * FROM ai_visibility_facts WHERE user_id = ? AND project_id = ? ORDER BY datetime(checked_at) DESC LIMIT 200')
+      .bind(input.userId, input.projectId).all<Record<string, unknown>>(),
+  ]);
+
+  return {
+    keywordFacts: factRows(keywordRows).map((row) => ({
+      type: 'keyword_fact',
+      projectId: row.project_id,
+      userId: row.user_id,
+      keyword: row.keyword,
+      region: row.region,
+      language: row.language,
+      device: row.device,
+      volume: row.volume,
+      cpc: row.cpc,
+      competition: row.competition,
+      difficulty: row.difficulty,
+      intent: row.intent || undefined,
+      provider: row.provider,
+      fetchedAt: row.fetched_at,
+      confidence: row.confidence,
+    })),
+    rankFacts: factRows(rankRows).map((row) => ({
+      type: 'rank_fact',
+      projectId: row.project_id,
+      userId: row.user_id,
+      keyword: row.keyword,
+      domain: row.domain,
+      url: row.url || undefined,
+      rank: row.rank,
+      previousRank: row.previous_rank,
+      serpFeatures: parseMaybeJson<string[]>(row.serp_features_json) || [],
+      region: row.region,
+      device: row.device,
+      provider: row.provider,
+      checkedAt: row.checked_at,
+      confidence: row.confidence,
+    })),
+    backlinkFacts: factRows(backlinkRows).map((row) => ({
+      type: 'backlink_fact',
+      projectId: row.project_id,
+      userId: row.user_id,
+      sourceUrl: row.source_url,
+      sourceDomain: row.source_domain,
+      targetUrl: row.target_url,
+      anchor: row.anchor || undefined,
+      nofollow: row.nofollow === 1,
+      firstSeen: row.first_seen || undefined,
+      lastSeen: row.last_seen || undefined,
+      lost: row.lost === 1,
+      authorityMetric: row.authority_metric,
+      provider: row.provider,
+      fetchedAt: row.fetched_at,
+      confidence: row.confidence,
+    })),
+    competitorFacts: factRows(competitorRows).map((row) => ({
+      type: 'competitor_fact',
+      projectId: row.project_id,
+      userId: row.user_id,
+      competitorDomain: row.competitor_domain,
+      source: row.source,
+      createdAt: row.created_at,
+    })),
+    trafficFacts: factRows(trafficRows).map((row) => ({
+      type: 'traffic_fact',
+      projectId: row.project_id,
+      userId: row.user_id,
+      domain: row.domain,
+      channel: row.channel,
+      visitsEstimate: row.visits_estimate,
+      region: row.region,
+      provider: row.provider,
+      fetchedAt: row.fetched_at,
+      confidence: row.confidence,
+    })),
+    aiVisibilityFacts: factRows(aiVisibilityRows).map((row) => ({
+      type: 'ai_visibility_fact',
+      projectId: row.project_id,
+      userId: row.user_id,
+      prompt: row.prompt,
+      brandMentioned: row.brand_mentioned === 1,
+      competitorsMentioned: parseMaybeJson<string[]>(row.competitors_mentioned_json) || [],
+      source: row.source,
+      provider: row.provider,
+      checkedAt: row.checked_at,
+      confidence: row.confidence,
+    })),
+  };
 }
 
 export async function upsertCloudflareReportShare(

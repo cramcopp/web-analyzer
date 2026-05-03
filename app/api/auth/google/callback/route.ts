@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { fetchWithRetry } from '@/lib/firestore-edge';
+import { fetchWithRetry } from '@/lib/http';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
       path: '/'
     });
 
-    // SEC-08 Fix: Store GSC tokens in Firestore instead of cookies to avoid 4KB limit
+    // Store GSC tokens in D1 instead of cookies to avoid the 4KB cookie limit.
     try {
       const { patchCloudflareUserProfile, upsertCloudflareUserProfile } = await import('@/lib/cloudflare-storage');
       await upsertCloudflareUserProfile(env, {
@@ -103,13 +103,8 @@ export async function GET(req: Request) {
       await patchCloudflareUserProfile(env, firebaseData.localId, {
         gscTokens: JSON.stringify(tokens),
       }).catch(() => false);
-
-      const { updateServerDocument } = await import('@/lib/server-firestore');
-      await updateServerDocument('users', firebaseData.localId, {
-        gscTokens: JSON.stringify(tokens),
-      }, firebaseData.idToken, env);
     } catch (dbErr) {
-      console.error('Failed to store GSC tokens in Firestore:', dbErr);
+      console.error('Failed to store GSC tokens in D1:', dbErr);
     }
 
 

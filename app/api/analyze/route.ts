@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, incrementField } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { canUseFirestoreAdmin, createServerDocumentWithId, setServerDocument } from '@/lib/server-firestore';
-import { toStoredReportDocument } from '@/lib/report-storage';
 import {
   createCloudflareScanPlaceholder,
+  defaultUserProfile,
   getCloudflareUserProfile,
-  hasCloudflareD1,
   incrementCloudflareUserScanCount,
   storeCloudflareScanArtifacts,
   upsertCloudflareUserProfile,
@@ -16,9 +13,6 @@ import {
 } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
-
-// FIX: Wir übergeben req an getEnv, um die Cloudflare-Variablen zu greifen!
-const getEnv = getRuntimeEnv;
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unbekannter Fehler';
@@ -38,89 +32,73 @@ async function readAnalyzeBody(req: Request) {
     try {
       parsedUrl = new URL(url);
     } catch {
-      return { error: 'Ungültige URL' };
+      return { error: 'Ungueltige URL' };
     }
 
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      return { error: 'Nur HTTP- und HTTPS-URLs können analysiert werden' };
+      return { error: 'Nur HTTP- und HTTPS-URLs koennen analysiert werden' };
     }
 
     return { url: parsedUrl.toString(), projectId };
   } catch {
-    return { error: 'Ungültiges JSON im Request Body' };
+    return { error: 'Ungueltiges JSON im Request Body' };
   }
 }
 
 export async function POST(req: Request) {
   try {
-    // FIX: req übergeben
-    const env = getEnv();
+    const env = getRuntimeEnv();
     const body = await readAnalyzeBody(req);
     if ('error' in body) {
       return NextResponse.json({ error: body.error }, { status: 400 });
     }
 
     const { url, projectId } = body;
-    const token = await getSessionToken();
     const user = await getSessionUser();
 
-    if (!user || !token) {
+    if (!user) {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
 
-    // 1. Check Quota & Plan
-    const cloudflareUserData = await getCloudflareUserProfile(env, user.uid).catch((error) => {
-      console.warn('D1 user lookup skipped:', getErrorMessage(error));
+    let userData: any = await getCloudflareUserProfile(env, user.uid).catch((error) => {
+      console.warn('D1 user lookup failed:', getErrorMessage(error));
       return null;
     });
-    if (!cloudflareUserData && hasCloudflareD1(env)) {
-      await upsertCloudflareUserProfile(env, user).catch((error) => {
-        console.warn('D1 user sync skipped:', getErrorMessage(error));
+
+    if (!userData) {
+      userData = defaultUserProfile(user);
+      const synced = await upsertCloudflareUserProfile(env, user, userData).catch((error) => {
+        console.warn('D1 user sync failed:', getErrorMessage(error));
+        return false;
       });
+
+      if (!synced) {
+        return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+      }
     }
 
-    const userData = (cloudflareUserData || await getDocument('users', user.uid, token, env)) as any;
     const plan = normalizePlan(userData?.plan || 'free');
     const scanCount = userData?.scanCount || 0;
     const maxScans = getMonthlyScanLimit(plan);
 
     if (scanCount >= maxScans) {
-      return NextResponse.json({ 
-        error: 'Scan-Limit erreicht', 
-        details: `Du hast ${scanCount}/${maxScans} Scans verbraucht. Bitte upgrade deinen Plan.` 
+      return NextResponse.json({
+        error: 'Scan-Limit erreicht',
+        details: `Du hast ${scanCount}/${maxScans} Scans verbraucht. Bitte upgrade deinen Plan.`,
       }, { status: 403 });
     }
 
-    // 2. Counter hochzählen
     const d1CounterUpdated = await incrementCloudflareUserScanCount(env, user, 1).catch((counterError) => {
-      console.warn('D1 scan counter update skipped:', getErrorMessage(counterError));
+      console.warn('D1 scan counter update failed:', getErrorMessage(counterError));
       return false;
     });
 
     if (!d1CounterUpdated) {
-      try {
-        await incrementField('users', user.uid, 'scanCount', 1, token, env);
-      } catch (counterError) {
-        console.warn('Scan counter update skipped:', getErrorMessage(counterError));
-      }
+      return NextResponse.json({ error: 'Scan-Counter konnte nicht in D1 aktualisiert werden' }, { status: 503 });
     }
 
-    // 3. Setup Audit Placeholder
     const audit_id = crypto.randomUUID();
-    const placeholderReport: Record<string, any> = {
-      audit_id,
-      userId: user.uid,
-      url,
-      urlObj: url,
-      createdAt: new Date().toISOString(),
-      status: 'scanning',
-      progress: 0,
-    };
-    
-    if (projectId) {
-      placeholderReport.projectId = projectId;
-    }
-
+    const createdAt = new Date().toISOString();
     const d1PlaceholderCreated = await createCloudflareScanPlaceholder(env, {
       id: audit_id,
       userId: user.uid,
@@ -129,65 +107,56 @@ export async function POST(req: Request) {
       plan,
       status: 'scanning',
       progress: 0,
-      createdAt: placeholderReport.createdAt,
+      createdAt,
     }).catch((placeholderError) => {
-      console.warn('D1 scan placeholder skipped:', getErrorMessage(placeholderError));
+      console.warn('D1 scan placeholder failed:', getErrorMessage(placeholderError));
       return false;
     });
 
-    try {
-      await createServerDocumentWithId('reports', audit_id, placeholderReport, token, env);
-    } catch (placeholderError) {
-      if (!d1PlaceholderCreated) throw placeholderError;
-      console.warn('Firestore scan placeholder skipped during D1 transition:', getErrorMessage(placeholderError));
+    if (!d1PlaceholderCreated) {
+      return NextResponse.json({ error: 'Scan konnte nicht in D1 vorbereitet werden' }, { status: 503 });
     }
 
-    // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
-      const workflowResponse = await env.SCAN_WORKFLOW_SERVICE.fetch(new Request("https://worker/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const workflowResponse = await env.SCAN_WORKFLOW_SERVICE.fetch(new Request('https://worker/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url, 
-          plan, 
+          url,
+          plan,
           userId: user.uid,
           projectId,
-          token: canUseFirestoreAdmin(env) ? undefined : token,
-          auditId: audit_id
-        })
+          auditId: audit_id,
+        }),
       }));
 
       if (!workflowResponse.ok) {
         const workflowError = await workflowResponse.text().catch(() => '');
         throw new Error(`Workflow konnte nicht gestartet werden (${workflowResponse.status}). ${workflowError}`.trim());
       }
-      
-      return NextResponse.json({ 
+
+      return NextResponse.json({
         audit_id,
         mode: 'workflow',
-        status: 'processing'
-      });
-    } else {
-      console.warn("Achtung: Workflow nicht gebunden! Nutze langsamen Direct-Scan.");
-      const { performAnalysis } = await import('@/lib/scanner');
-      
-      void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, env }).then(async (result) => {
-        const storedResult = await storeCloudflareScanArtifacts(env, result, { scanId: audit_id, userId: user.uid });
-        await writeCloudflareScanResult(env, storedResult, { scanId: audit_id, userId: user.uid, projectId, plan })
-          .catch((storageError) => console.warn('D1/R2 scan write skipped:', getErrorMessage(storageError)));
-        const reportDocument = toStoredReportDocument(storedResult, audit_id, user.uid, projectId);
-        await setServerDocument('reports', audit_id, reportDocument, Object.keys(reportDocument), token, env)
-          .catch((firestoreError) => console.warn('Firestore direct report write skipped:', getErrorMessage(firestoreError)));
-      }).catch(console.error);
-
-      return NextResponse.json({ 
-        audit_id,
-        mode: 'background-direct',
-        status: 'processing'
+        status: 'processing',
       });
     }
 
-  } catch (error: any) {
+    console.warn('Workflow nicht gebunden. Nutze langsamen Direct-Scan.');
+    const { performAnalysis } = await import('@/lib/scanner');
+
+    void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, env }).then(async (result) => {
+      const storedResult = await storeCloudflareScanArtifacts(env, result, { scanId: audit_id, userId: user.uid });
+      await writeCloudflareScanResult(env, storedResult, { scanId: audit_id, userId: user.uid, projectId, plan })
+        .catch((storageError) => console.warn('D1/R2 scan write failed:', getErrorMessage(storageError)));
+    }).catch(console.error);
+
+    return NextResponse.json({
+      audit_id,
+      mode: 'background-direct',
+      status: 'processing',
+    });
+  } catch (error) {
     console.error('Analyze API Error:', error);
     return NextResponse.json({ error: 'Interner Server-Fehler', details: getErrorMessage(error) }, { status: 500 });
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { fetchWithRetry } from '@/lib/firestore-edge';
+import { fetchWithRetry } from '@/lib/http';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';

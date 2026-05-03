@@ -1,5 +1,4 @@
 import { cookies } from 'next/headers';
-import { queryDocuments, deleteDocument } from './firestore-edge';
 import { getRuntimeEnv } from './cloudflare-env';
 
 function firebaseApiKey() {
@@ -153,24 +152,12 @@ export async function deleteUserAccount() {
   if (!user) throw new Error('User not found');
   const uid = user.uid;
 
-  // 2. Delete Firestore Data (GDPR - BIZ-10)
+  // 2. Delete Cloudflare app data (GDPR - BIZ-10). Firebase remains Auth-only.
   try {
     const { deleteCloudflareUserData } = await import('./cloudflare-storage');
     await deleteCloudflareUserData(env, uid).catch(() => false);
-
-    // Delete Reports
-    const reports = await queryDocuments('reports', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token, env);
-    await Promise.all(reports.map(r => deleteDocument('reports', r.id, token, env)));
-
-    // Delete Projects
-    const projects = await queryDocuments('projects', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token, env);
-    await Promise.all(projects.map(p => deleteDocument('projects', p.id, token, env)));
-
-    // Delete User Profile
-    await deleteDocument('users', uid, token, env);
   } catch {
-    console.error('Firestore cleanup failed during account deletion');
-    // We continue with Auth deletion anyway to ensure the account is closed
+    console.error('Cloudflare data cleanup failed during account deletion');
   }
 
   // 3. Delete Firebase Auth User

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, updateDocument } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { z } from 'zod';
+import { getCacheJson, putCacheJson } from '@/lib/cloudflare-cache';
 
 const competitorsSchema = z.object({
   niche: z.string().min(1, "Nische ist erforderlich"),
@@ -35,9 +35,8 @@ const fetchWithTimeout = async (url: string, ms = 5000) => {
 export async function POST(req: Request) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
 
-  if (!user || !token) {
+  if (!user) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
@@ -53,20 +52,18 @@ export async function POST(req: Request) {
 
     const { niche, domain } = result.data;
 
-    // Rate Limiting (Throttle: 1 request per 10 seconds per user)
-    const userData = await getDocument('users', user.uid, token, env);
     const now = Date.now();
-    const lastReq = userData?.lastCompetitorReqAt ? new Date(userData.lastCompetitorReqAt).getTime() : 0;
+    const rateKey = `rate:competitors:${user.uid}`;
+    const lastReq = await getCacheJson<number>(env, rateKey) || 0;
     
-    if (now - lastReq < 10000) { // 10 seconds
+    if (now - lastReq < 10000) {
       return NextResponse.json({ 
         error: 'Zu viele Anfragen', 
         details: 'Bitte warte einen Moment, bevor du eine neue Wettbewerber-Suche startest.' 
       }, { status: 429 });
     }
 
-    // Update last request time
-    await updateDocument('users', user.uid, { lastCompetitorReqAt: new Date(now).toISOString() }, token, env);
+    await putCacheJson(env, rateKey, now, 10).catch(() => false);
 
     if (!niche) {
       return NextResponse.json({ error: 'Niche is required' }, { status: 400 });
@@ -80,9 +77,6 @@ export async function POST(req: Request) {
        return NextResponse.json({ competitors: [] }, { status: 200 });
     }
 
-    // Prepare Custom Search query
-    // We add a broad search pattern if the global toggle is off, 
-    // although the API often respects the query regardless of the toggle for JSON API users.
     const queryStr = `${niche}`;
     const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(queryStr)}&num=10`;
 

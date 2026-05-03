@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSessionToken, getSessionUser } from '@/lib/auth-server';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { addServerDocument } from '@/lib/server-firestore';
-import { upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
+import { hasCloudflareD1, upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -63,8 +62,11 @@ async function fetchUptime(url: URL) {
 export async function POST(req: Request) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const body = await req.json();
@@ -93,26 +95,23 @@ export async function POST(req: Request) {
       checkedAt: now,
       createdAt: now,
     };
-    const d1CheckSaved = await upsertCloudflareMonitoringItem(env, {
+
+    const checkSaved = await upsertCloudflareMonitoringItem(env, {
       collection: 'uptimeChecks',
       id: checkId,
       userId: user.uid,
       projectId,
       data: checkPayload,
-    }).catch(() => false);
+    });
 
-    let check: any = checkPayload;
-    try {
-      check = await addServerDocument('uptimeChecks', checkPayload, token, env);
-    } catch (firestoreError) {
-      if (!d1CheckSaved) throw firestoreError;
-      console.warn('Firestore uptime check skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+    if (!checkSaved) {
+      return NextResponse.json({ error: 'Uptime Check konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
     let alertEvent = null;
     if (result.status === 'down') {
       const alertId = crypto.randomUUID();
-      const alertPayload = {
+      alertEvent = {
         id: alertId,
         projectId,
         userId: user.uid,
@@ -129,16 +128,15 @@ export async function POST(req: Request) {
         id: alertId,
         userId: user.uid,
         projectId,
-        data: alertPayload,
-      }).catch(() => false);
-      alertEvent = await addServerDocument('alertEvents', alertPayload, token, env).catch(() => alertPayload);
+        data: alertEvent,
+      });
     }
 
     return NextResponse.json({
-      check: { ...check, id: check.id },
+      check: checkPayload,
       alertEvent,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Uptime Check fehlgeschlagen' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Uptime Check fehlgeschlagen' }, { status: 500 });
   }
 }

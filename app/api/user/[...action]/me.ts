@@ -1,85 +1,68 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, updateDocument } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { getCloudflareUserProfile, patchCloudflareUserProfile, upsertCloudflareUserProfile } from '@/lib/cloudflare-storage';
+import { defaultUserProfile, getCloudflareUserProfile, hasCloudflareD1, patchCloudflareUserProfile, upsertCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) {
+  if (!user) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
+
   try {
-    let userData: any = await getCloudflareUserProfile(env, user.uid).catch((error) => {
-      console.warn('D1 user lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return null;
-    });
+    let userData: any = await getCloudflareUserProfile(env, user.uid);
     if (!userData) {
-      userData = await getDocument('users', user.uid, token, env).catch(() => null);
-      if (userData) {
-        await upsertCloudflareUserProfile(env, user, userData).catch((error) => {
-          console.warn('D1 user backfill skipped:', error instanceof Error ? error.message : 'unknown');
-        });
-      }
+      userData = defaultUserProfile(user);
+      await upsertCloudflareUserProfile(env, user, userData);
     }
-    
-    // Monthly Scan Reset Logic
-    if (userData) {
-      const now = new Date();
-      const lastReset = userData.lastScanReset ? new Date(userData.lastScanReset) : new Date(userData.createdAt || now);
-      
-      const isNewMonth = now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear();
-      
-      if (isNewMonth) {
-        console.warn(`Resetting scanCount for user ${user.uid} (New Month)`);
-        const resetData = {
-          scanCount: 0,
-          lastScanReset: now.toISOString()
-        };
-        await patchCloudflareUserProfile(env, user.uid, resetData).catch((error) => {
-          console.warn('D1 monthly scan reset skipped:', error instanceof Error ? error.message : 'unknown');
-        });
-        await updateDocument('users', user.uid, resetData, token, env).catch((error) => {
-          console.warn('Firestore monthly scan reset skipped:', error instanceof Error ? error.message : 'unknown');
-        });
-        // Fetch updated data
-        userData = await getCloudflareUserProfile(env, user.uid).catch(() => null) || await getDocument('users', user.uid, token, env).catch(() => null);
-      }
+
+    const now = new Date();
+    const lastReset = userData.lastScanReset ? new Date(userData.lastScanReset) : new Date(userData.createdAt || now);
+    const isNewMonth = now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear();
+
+    if (isNewMonth) {
+      const resetData = {
+        scanCount: 0,
+        lastScanReset: now.toISOString(),
+      };
+      await patchCloudflareUserProfile(env, user.uid, resetData);
+      userData = await getCloudflareUserProfile(env, user.uid);
     }
-    
+
     return NextResponse.json({
       authenticated: true,
-      user: user,
-      userData: userData
+      user,
+      userData,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Fetch Me Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'User konnte nicht geladen werden' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) {
+  if (!user) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  }
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
   }
 
   try {
     const data = await req.json();
-    
-    // SEC-02: Privilege Escalation Fix
-    // Only allow updating non-sensitive profile fields.
-    // Specifically block: role, plan, maxScans, scanCount, subscriptionId, etc.
     const allowedFields = ['displayName', 'photoURL', 'brandLogo'];
-    const filteredData: any = {};
-    
+    const filteredData: Record<string, unknown> = {};
+
     for (const key of allowedFields) {
       if (data[key] !== undefined) {
         filteredData[key] = data[key];
@@ -87,24 +70,17 @@ export async function PATCH(req: Request) {
     }
 
     if (Object.keys(filteredData).length === 0) {
-      return NextResponse.json({ error: 'Keine gültigen Felder zum Aktualisieren angegeben' }, { status: 400 });
-    }
-    
-    const d1Updated = await patchCloudflareUserProfile(env, user.uid, filteredData).catch((error) => {
-      console.warn('D1 user profile update skipped:', error instanceof Error ? error.message : 'unknown');
-      return false;
-    });
-
-    try {
-      await updateDocument('users', user.uid, filteredData, token, env);
-    } catch (firestoreError) {
-      if (!d1Updated) throw firestoreError;
-      console.warn('Firestore user profile update skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      return NextResponse.json({ error: 'Keine gueltigen Felder zum Aktualisieren angegeben' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Update User Firestore Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const updated = await patchCloudflareUserProfile(env, user.uid, filteredData);
+    if (!updated) {
+      return NextResponse.json({ error: 'User-Profil konnte nicht in D1 aktualisiert werden' }, { status: 503 });
+    }
+
+    return NextResponse.json({ success: true, storage: 'cloudflare' });
+  } catch (error) {
+    console.error('Update User Error:', error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'User konnte nicht aktualisiert werden' }, { status: 500 });
   }
 }

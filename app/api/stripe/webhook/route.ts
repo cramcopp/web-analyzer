@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getStripe, type PlanType, verifyStripeSignature } from '@/lib/stripe';
-import { updateStripeSubscription } from '@/lib/firestore-edge';
 import { getMonthlyScanLimit } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { updateCloudflareStripeSubscription } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -36,12 +36,13 @@ export async function POST(req: Request) {
           const subscription = await getStripe().subscriptions.retrieve(session.subscription as string);
           const maxScans = getMonthlyScanLimit(plan);
           
-          await updateStripeSubscription(uid, {
+          const updated = await updateCloudflareStripeSubscription(env, uid, {
             plan,
             subscriptionId: session.subscription as string,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             maxScans
-          }, env);
+          });
+          if (!updated) throw new Error('Cloudflare D1 ist nicht verfuegbar');
         }
         break;
       }
@@ -51,12 +52,13 @@ export async function POST(req: Request) {
         const uid = subscription.metadata.uid;
 
         if (uid) {
-          await updateStripeSubscription(uid, {
+          const updated = await updateCloudflareStripeSubscription(env, uid, {
             plan: 'free',
             subscriptionId: null,
             trialUntil: null,
             maxScans: getMonthlyScanLimit('free')
-          }, env);
+          });
+          if (!updated) throw new Error('Cloudflare D1 ist nicht verfuegbar');
         }
         break;
       }
@@ -68,12 +70,13 @@ export async function POST(req: Request) {
 
         if (uid) {
           const maxScans = getMonthlyScanLimit(plan);
-          await updateStripeSubscription(uid, {
+          const updated = await updateCloudflareStripeSubscription(env, uid, {
             plan,
             trialUntil: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
             subscriptionId: subscription.id,
             maxScans
-          }, env);
+          });
+          if (!updated) throw new Error('Cloudflare D1 ist nicht verfuegbar');
         }
         break;
       }
@@ -84,7 +87,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error: any) {
-    console.error('Firestore Update Error:', error instanceof Error ? error.message : 'Unknown error');
-    return NextResponse.json({ error: 'Firestore Update Error' }, { status: 500 });
+    console.error('Cloudflare subscription update error:', error instanceof Error ? error.message : 'Unknown error');
+    return NextResponse.json({ error: 'Cloudflare subscription update error' }, { status: 500 });
   }
 }

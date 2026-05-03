@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { getDocument, updateDocument, deleteDocument } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { deleteCloudflareProject, getCloudflareProject, patchCloudflareProject } from '@/lib/cloudflare-storage';
+import { deleteCloudflareProject, getCloudflareProject, hasCloudflareD1, patchCloudflareProject } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -10,76 +9,56 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const env = getRuntimeEnv();
   const { id } = await params;
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const data = await req.json();
-    const d1Existing = await getCloudflareProject(env, id, user.uid).catch((error) => {
-      console.warn('[PATCH /api/projects/:id] D1 lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return null;
-    });
-    if (d1Existing && 'forbidden' in d1Existing) {
+    const existingProject = await getCloudflareProject(env, id, user.uid);
+
+    if (!existingProject || 'forbidden' in existingProject) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const existingProject = await getDocument('projects', id, token, env).catch(() => null) || d1Existing;
-
-    if (!existingProject || (existingProject.userId !== user.uid && !existingProject.members?.includes(user.uid))) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const saved = await patchCloudflareProject(env, id, user.uid, data);
+    if (!saved) {
+      return NextResponse.json({ error: 'Projekt konnte nicht in D1 aktualisiert werden' }, { status: 503 });
     }
 
-    const d1Saved = await patchCloudflareProject(env, id, user.uid, data).catch((error) => {
-      console.warn('[PATCH /api/projects/:id] D1 update skipped:', error instanceof Error ? error.message : 'unknown');
-      return false;
-    });
-
-    try {
-      await updateDocument('projects', id, { ...data, updatedAt: new Date().toISOString() }, token, env);
-    } catch (firestoreError) {
-      if (!d1Saved) throw firestoreError;
-      console.warn('[PATCH /api/projects/:id] Firestore skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
-    }
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, storage: 'cloudflare' });
+  } catch (error) {
     console.error('[PATCH /api/projects/:id] Update error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Projekt konnte nicht aktualisiert werden' }, { status: 500 });
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const env = getRuntimeEnv();
   const { id } = await params;
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
-    const d1Existing = await getCloudflareProject(env, id, user.uid).catch(() => null);
-    if (d1Existing && 'forbidden' in d1Existing) {
+    const existingProject = await getCloudflareProject(env, id, user.uid);
+    if (!existingProject || 'forbidden' in existingProject) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const existingProject = await getDocument('projects', id, token, env).catch(() => null) || d1Existing;
-
-    if (!existingProject || (existingProject.userId !== user.uid && !existingProject.members?.includes(user.uid))) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const deleted = await deleteCloudflareProject(env, id, user.uid);
+    if (!deleted) {
+      return NextResponse.json({ error: 'Projekt konnte nicht aus D1 geloescht werden' }, { status: 503 });
     }
 
-    const d1Deleted = await deleteCloudflareProject(env, id, user.uid).catch((error) => {
-      console.warn('[DELETE /api/projects/:id] D1 delete skipped:', error instanceof Error ? error.message : 'unknown');
-      return false;
-    });
-
-    try {
-      await deleteDocument('projects', id, token, env);
-    } catch (firestoreError) {
-      if (!d1Deleted) throw firestoreError;
-      console.warn('[DELETE /api/projects/:id] Firestore skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
-    }
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, storage: 'cloudflare' });
+  } catch (error) {
     console.error('[DELETE /api/projects/:id] Delete error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Projekt konnte nicht geloescht werden' }, { status: 500 });
   }
 }

@@ -1,96 +1,89 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser, getSessionToken } from '@/lib/auth-server';
-import { updateDocument, queryDocuments } from '@/lib/firestore-edge';
+import { getSessionUser } from '@/lib/auth-server';
 import { teamInviteSchema, teamMemberSchema } from '@/lib/validations';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import {
+  getCloudflareUserByEmail,
+  hasCloudflareD1,
+  queryCloudflareTeamForMember,
+  updateCloudflareTeam,
+} from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const body = await req.json();
     const result = teamInviteSchema.safeParse(body);
 
     if (!result.success) {
-      return NextResponse.json({ 
-        error: result.error.issues[0]?.message || 'Ungültige E-Mail' 
+      return NextResponse.json({
+        error: result.error.issues[0]?.message || 'Ungueltige E-Mail',
       }, { status: 400 });
     }
 
-    const { email } = result.data;
-    
-    // Find team where user is owner or admin
-    const teams = await queryDocuments('teams', [
-      { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-    ], 'AND', token, env);
-    
-    if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-    const team = teams[0];
+    const team: any = await queryCloudflareTeamForMember(env, user.uid);
+    if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
 
-    // Security check: Only owners or admins can invite others.
     const isOwner = team.ownerId === user.uid;
     const isAdmin = team.admins?.includes(user.uid);
-
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden: Only owners and admins can invite members.' }, { status: 403 });
     }
 
-    // Find user by email
-    const users = await queryDocuments('users', [
-      { field: 'email', op: 'EQUAL', value: email }
-    ], 'AND', token, env);
-
-    if (!users || users.length === 0) {
+    const invitedUser = await getCloudflareUserByEmail(env, result.data.email);
+    if (!invitedUser) {
       return NextResponse.json({ error: 'Nutzer nicht gefunden' }, { status: 404 });
     }
 
-    const invitedUser = users[0];
-    
-    if (team.members.includes(invitedUser.uid)) {
+    if (team.members.includes(String(invitedUser.uid))) {
       return NextResponse.json({ error: 'Nutzer ist bereits im Team' }, { status: 400 });
     }
 
-    const updatedMembers = [...team.members, invitedUser.uid];
-    await updateDocument('teams', team.id, { members: updatedMembers }, token, env);
-    
-    return NextResponse.json({ success: true, user: invitedUser });
-  } catch (error: any) {
+    const updatedMembers = [...team.members, String(invitedUser.uid)];
+    const updated = await updateCloudflareTeam(env, team.id, { members: updatedMembers });
+    if (!updated) {
+      return NextResponse.json({ error: 'Team-Mitglieder konnten nicht in D1 aktualisiert werden' }, { status: 503 });
+    }
+
+    return NextResponse.json({ success: true, user: invitedUser, storage: 'cloudflare' });
+  } catch (error) {
     console.error('[POST /api/teams/members] Invite error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Mitglied konnte nicht eingeladen werden' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: Request) {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const body = await req.json();
     const result = teamMemberSchema.safeParse(body);
 
     if (!result.success) {
-      return NextResponse.json({ 
-        error: result.error.issues[0]?.message || 'Ungültige UID' 
+      return NextResponse.json({
+        error: result.error.issues[0]?.message || 'Ungueltige UID',
       }, { status: 400 });
     }
 
     const { uid } = result.data;
-    
-    const teams = await queryDocuments('teams', [
-      { field: 'members', op: 'ARRAY_CONTAINS', value: user.uid }
-    ], 'AND', token, env);
-    
-    if (!teams || teams.length === 0) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-    const team = teams[0];
+    const team: any = await queryCloudflareTeamForMember(env, user.uid);
+    if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
 
-    // Security check: Only owners or admins can remove others. Anyone can remove themselves.
     const isOwner = team.ownerId === user.uid;
     const isAdmin = team.admins?.includes(user.uid);
     const isSelf = uid === user.uid;
@@ -99,17 +92,24 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const updatedMembers = team.members.filter((m: string) => m !== uid);
-    const updatedAdmins = (team.admins || []).filter((a: string) => a !== uid);
-    
-    await updateDocument('teams', team.id, { 
-      members: updatedMembers,
-      admins: updatedAdmins
-    }, token, env);
+    if (uid === team.ownerId) {
+      return NextResponse.json({ error: 'Owner kann nicht aus dem Team entfernt werden' }, { status: 400 });
+    }
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
+    const updatedMembers = team.members.filter((memberId: string) => memberId !== uid);
+    const updatedAdmins = (team.admins || []).filter((adminId: string) => adminId !== uid);
+    const updated = await updateCloudflareTeam(env, team.id, {
+      members: updatedMembers,
+      admins: updatedAdmins,
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Team-Mitglieder konnten nicht in D1 aktualisiert werden' }, { status: 503 });
+    }
+
+    return NextResponse.json({ success: true, storage: 'cloudflare' });
+  } catch (error) {
     console.error('[DELETE /api/teams/members] Removal error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Mitglied konnte nicht entfernt werden' }, { status: 500 });
   }
 }

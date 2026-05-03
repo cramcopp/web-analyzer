@@ -242,7 +242,7 @@ export default function WebsiteAnalyzer() {
           (reportWithAuditId.contentStrategy?.score || 0)
         ) / 6);
         
-        // Technical optimization: Prune large fields before saving to stay under Firestore limits
+        // Keep API payloads small; full scan artifacts are stored in R2.
         const storageData = { ...scrapeData };
         delete storageData.bodyText; 
 

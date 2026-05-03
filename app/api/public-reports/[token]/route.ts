@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerDocument } from '@/lib/server-firestore';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { getCloudflareReport, getCloudflareReportShare } from '@/lib/cloudflare-storage';
+import { getCloudflareReport, getCloudflareReportShare, hasCloudflareD1 } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
-
-function getEnv() {
-  return getRuntimeEnv();
-}
 
 async function sha256(value: string) {
   const data = new TextEncoder().encode(value);
@@ -17,16 +12,16 @@ async function sha256(value: string) {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
-  const env = getEnv();
+  const env = getRuntimeEnv();
   const { token } = await params;
   const { searchParams } = new URL(req.url);
 
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
+
   try {
-    const d1Share = await getCloudflareReportShare(env, token).catch((error) => {
-      console.warn('D1 public report share lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return null;
-    });
-    const share = d1Share || await getServerDocument('reportShares', token, null, env) as any;
+    const share: any = await getCloudflareReportShare(env, token);
     if (!share) return NextResponse.json({ error: 'Report Share nicht gefunden' }, { status: 404 });
     if (share.visibility === 'private') return NextResponse.json({ error: 'Report ist privat' }, { status: 403 });
 
@@ -42,12 +37,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       }
     }
 
-    const d1Report = await getCloudflareReport(env, share.reportId, null).catch((error) => {
-      console.warn('D1 public report lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return null;
-    });
-    const report = d1Report || await getServerDocument('reports', share.reportId, null, env);
+    const report = await getCloudflareReport(env, share.reportId, null);
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
+    if ('forbidden' in report) return NextResponse.json({ error: 'Report nicht verfuegbar' }, { status: 403 });
 
     return NextResponse.json({
       share: {
@@ -59,7 +51,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       },
       report: sanitizeReportForClient(report, share.builder || null),
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Public Report konnte nicht geladen werden' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Public Report konnte nicht geladen werden' }, { status: 500 });
   }
 }

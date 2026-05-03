@@ -1,62 +1,43 @@
 import { NextResponse } from 'next/server';
-import { getSessionToken, getSessionUser } from '@/lib/auth-server';
-import { addServerDocument, queryServerDocuments, setServerDocument } from '@/lib/server-firestore';
+import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { queryCloudflareAgencyData, upsertCloudflareAgencyItem } from '@/lib/cloudflare-storage';
+import { hasCloudflareD1, queryCloudflareAgencyData, upsertCloudflareAgencyItem } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
-
-function getEnv() {
-  return getRuntimeEnv();
-}
 
 function docId(...parts: string[]) {
   return parts.map((part) => part.replace(/[^\w-]/g, '_')).join('_');
 }
 
 export async function GET(req: Request) {
-  const env = getEnv();
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get('projectId');
   if (!projectId) return NextResponse.json({ error: 'projectId fehlt' }, { status: 400 });
 
-  const filters = [
-    { field: 'userId', op: 'EQUAL', value: user.uid },
-    { field: 'projectId', op: 'EQUAL', value: projectId },
-  ];
-
   try {
-    const d1Agency = await queryCloudflareAgencyData(env, { userId: user.uid, projectId }).catch((error) => {
-      console.warn('D1 agency data lookup skipped:', error instanceof Error ? error.message : 'unknown');
-      return null;
-    });
-
-    if (d1Agency) {
-      return NextResponse.json(d1Agency);
-    }
-
-    const [branding, issueTasks, issueComments, scheduledReports] = await Promise.all([
-      queryServerDocuments('reportBranding', filters, 'AND', token, env),
-      queryServerDocuments('issueTasks', filters, 'AND', token, env),
-      queryServerDocuments('issueComments', filters, 'AND', token, env),
-      queryServerDocuments('scheduledReports', filters, 'AND', token, env),
-    ]);
-
-    return NextResponse.json({ branding, issueTasks, issueComments, scheduledReports });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Agency Reporting konnte nicht geladen werden' }, { status: 500 });
+    const agency = await queryCloudflareAgencyData(env, { userId: user.uid, projectId });
+    return NextResponse.json(agency);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Agency Reporting konnte nicht geladen werden' }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  const env = getEnv();
+  const env = getRuntimeEnv();
   const user = await getSessionUser();
-  const token = await getSessionToken();
-  if (!user || !token) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+  }
 
   try {
     const body = await req.json();
@@ -78,12 +59,10 @@ export async function POST(req: Request) {
         scope,
         updatedAt: now,
       };
-      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
-      await setServerDocument('reportBranding', id, payload, null, token, env).catch((firestoreError) => {
-        if (!d1Saved) throw firestoreError;
-        console.warn('Firestore agency branding skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
-      });
-      return NextResponse.json({ id, success: true });
+      const saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload });
+      return saved
+        ? NextResponse.json({ id, success: true, storage: 'cloudflare' })
+        : NextResponse.json({ error: 'Branding konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
     if (action === 'saveTask') {
@@ -99,12 +78,10 @@ export async function POST(req: Request) {
         createdAt: body.data?.createdAt || now,
         updatedAt: now,
       };
-      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
-      await setServerDocument('issueTasks', id, payload, null, token, env).catch((firestoreError) => {
-        if (!d1Saved) throw firestoreError;
-        console.warn('Firestore agency task skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
-      });
-      return NextResponse.json({ id, success: true });
+      const saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload });
+      return saved
+        ? NextResponse.json({ id, success: true, storage: 'cloudflare' })
+        : NextResponse.json({ error: 'Task konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
     if (action === 'addComment') {
@@ -122,15 +99,10 @@ export async function POST(req: Request) {
         userId: user.uid,
         createdAt: now,
       };
-      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
-      try {
-        const created = await addServerDocument('issueComments', payload, token, env);
-        return NextResponse.json({ id: created.id, success: true });
-      } catch (firestoreError) {
-        if (!d1Saved) throw firestoreError;
-        console.warn('Firestore agency comment skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
-        return NextResponse.json({ id, success: true, storage: 'd1' });
-      }
+      const saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload });
+      return saved
+        ? NextResponse.json({ id, success: true, storage: 'cloudflare' })
+        : NextResponse.json({ error: 'Kommentar konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
     if (action === 'saveScheduledReport') {
@@ -144,16 +116,14 @@ export async function POST(req: Request) {
         createdAt: body.data?.createdAt || now,
         updatedAt: now,
       };
-      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
-      await setServerDocument('scheduledReports', id, payload, null, token, env).catch((firestoreError) => {
-        if (!d1Saved) throw firestoreError;
-        console.warn('Firestore scheduled report skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
-      });
-      return NextResponse.json({ id, success: true });
+      const saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload });
+      return saved
+        ? NextResponse.json({ id, success: true, storage: 'cloudflare' })
+        : NextResponse.json({ error: 'Geplanter Report konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
     return NextResponse.json({ error: 'Ungueltige Aktion' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Agency Reporting konnte nicht gespeichert werden' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Agency Reporting konnte nicht gespeichert werden' }, { status: 500 });
   }
 }
