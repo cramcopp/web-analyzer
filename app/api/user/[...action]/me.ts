@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, updateDocument } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { getCloudflareUserProfile, patchCloudflareUserProfile, upsertCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -14,7 +15,18 @@ export async function GET() {
   }
 
   try {
-    let userData = await getDocument('users', user.uid, token, env);
+    let userData: any = await getCloudflareUserProfile(env, user.uid).catch((error) => {
+      console.warn('D1 user lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+    if (!userData) {
+      userData = await getDocument('users', user.uid, token, env).catch(() => null);
+      if (userData) {
+        await upsertCloudflareUserProfile(env, user, userData).catch((error) => {
+          console.warn('D1 user backfill skipped:', error instanceof Error ? error.message : 'unknown');
+        });
+      }
+    }
     
     // Monthly Scan Reset Logic
     if (userData) {
@@ -25,12 +37,18 @@ export async function GET() {
       
       if (isNewMonth) {
         console.warn(`Resetting scanCount for user ${user.uid} (New Month)`);
-        await updateDocument('users', user.uid, {
+        const resetData = {
           scanCount: 0,
           lastScanReset: now.toISOString()
-        }, token, env);
+        };
+        await patchCloudflareUserProfile(env, user.uid, resetData).catch((error) => {
+          console.warn('D1 monthly scan reset skipped:', error instanceof Error ? error.message : 'unknown');
+        });
+        await updateDocument('users', user.uid, resetData, token, env).catch((error) => {
+          console.warn('Firestore monthly scan reset skipped:', error instanceof Error ? error.message : 'unknown');
+        });
         // Fetch updated data
-        userData = await getDocument('users', user.uid, token, env);
+        userData = await getCloudflareUserProfile(env, user.uid).catch(() => null) || await getDocument('users', user.uid, token, env).catch(() => null);
       }
     }
     
@@ -72,7 +90,17 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Keine gültigen Felder zum Aktualisieren angegeben' }, { status: 400 });
     }
     
-    await updateDocument('users', user.uid, filteredData, token, env);
+    const d1Updated = await patchCloudflareUserProfile(env, user.uid, filteredData).catch((error) => {
+      console.warn('D1 user profile update skipped:', error instanceof Error ? error.message : 'unknown');
+      return false;
+    });
+
+    try {
+      await updateDocument('users', user.uid, filteredData, token, env);
+    } catch (firestoreError) {
+      if (!d1Updated) throw firestoreError;
+      console.warn('Firestore user profile update skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -21,6 +21,29 @@ binding = "ASSETS"
 enabled = true
 head_sampling_rate = 0.1
 
+[[d1_databases]]
+binding = "DB"
+database_name = "web-analyzer-db"
+database_id = "4eff0a12-8113-495d-a832-7ae63dfbd5e7"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "AUDIT_ARTIFACTS"
+bucket_name = "web-analyzer-audit-artifacts"
+
+[[r2_buckets]]
+binding = "REPORT_EXPORTS"
+bucket_name = "web-analyzer-report-exports"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "a8fbe2bbbf1243248c1c236cb21d96db"
+
+[queues]
+[[queues.producers]]
+binding = "SCAN_FANOUT_QUEUE"
+queue = "web-analyzer-scan-fanout"
+
 [[services]]
 binding = "WORKER_SELF_REFERENCE"
 service = "web-analyzer-pro"

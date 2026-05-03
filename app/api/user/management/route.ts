@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { updateDocument } from '@/lib/firestore-edge';
 import { getSessionUser, getSessionToken, deleteUserAccount } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { patchCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -27,7 +28,16 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Only update validated fields to prevent privilege escalation
-    await updateDocument('users', user.uid, result.data, token, env);
+    const d1Updated = await patchCloudflareUserProfile(env, user.uid, result.data).catch((error) => {
+      console.warn('[PATCH /api/user/management] D1 update skipped:', error instanceof Error ? error.message : 'unknown');
+      return false;
+    });
+    try {
+      await updateDocument('users', user.uid, result.data, token, env);
+    } catch (firestoreError) {
+      if (!d1Updated) throw firestoreError;
+      console.warn('[PATCH /api/user/management] Firestore skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+    }
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[PATCH /api/user/management] Update error:', error);

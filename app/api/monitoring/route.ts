@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { addServerDocument, queryServerDocuments, updateServerDocument } from '@/lib/server-firestore';
+import { queryCloudflareMonitoring, upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -27,6 +28,15 @@ export async function GET(req: Request) {
   if (!projectId) return NextResponse.json({ error: 'projectId fehlt' }, { status: 400 });
 
   try {
+    const d1Monitoring = await queryCloudflareMonitoring(env, { userId: user.uid, projectId }).catch((error) => {
+      console.warn('D1 monitoring lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+
+    if (d1Monitoring) {
+      return NextResponse.json(d1Monitoring);
+    }
+
     const filters = [
       { field: 'userId', op: 'EQUAL', value: user.uid },
       { field: 'projectId', op: 'EQUAL', value: projectId },
@@ -73,13 +83,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'projectId fehlt' }, { status: 400 });
     }
 
+    const id = body.id || crypto.randomUUID();
+    const d1Saved = await upsertCloudflareMonitoringItem(env, {
+      collection,
+      id,
+      userId: user.uid,
+      projectId: payload.projectId,
+      data: payload,
+    }).catch((error) => {
+      console.warn('D1 monitoring save skipped:', error instanceof Error ? error.message : 'unknown');
+      return false;
+    });
+
     if (body.id) {
-      await updateServerDocument(collection, body.id, payload, token, env);
+      try {
+        await updateServerDocument(collection, body.id, payload, token, env);
+      } catch (firestoreError) {
+        if (!d1Saved) throw firestoreError;
+        console.warn('Firestore monitoring update skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      }
       return NextResponse.json({ id: body.id, success: true });
     }
 
-    const created = await addServerDocument(collection, payload, token, env);
-    return NextResponse.json({ id: created.id, success: true });
+    try {
+      const created = await addServerDocument(collection, payload, token, env);
+      return NextResponse.json({ id: created.id, success: true });
+    } catch (firestoreError) {
+      if (!d1Saved) throw firestoreError;
+      console.warn('Firestore monitoring create skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      return NextResponse.json({ id, success: true, storage: 'd1' });
+    }
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Monitoring konnte nicht gespeichert werden' }, { status: 500 });
   }

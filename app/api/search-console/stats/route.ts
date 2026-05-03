@@ -3,6 +3,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, fetchWithRetry } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { updateServerDocument } from '@/lib/server-firestore';
+import { getCloudflareUserProfile, patchCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -23,14 +24,14 @@ export async function GET(req: Request) {
   }
 
   try {
-    const userData = await getDocument('users', user.uid, token, env);
+    const userData = await getCloudflareUserProfile(env, user.uid).catch(() => null) || await getDocument('users', user.uid, token, env);
     const tokensRaw = userData?.gscTokens;
 
     if (!tokensRaw) {
       return NextResponse.json({ error: 'Search Console nicht verbunden' }, { status: 401 });
     }
 
-    let tokens = JSON.parse(tokensRaw);
+    let tokens = typeof tokensRaw === 'string' ? JSON.parse(tokensRaw) : tokensRaw;
     let accessToken = tokens.access_token;
 
     // Helper for API calls with automatic refresh
@@ -64,6 +65,9 @@ export async function GET(req: Request) {
             accessToken = tokens.access_token;
 
             // Save updated tokens back to Firestore
+            await patchCloudflareUserProfile(env, user.uid, {
+              gscTokens: JSON.stringify(tokens),
+            }).catch(() => false);
             await updateServerDocument('users', user.uid, {
               gscTokens: JSON.stringify(tokens),
             }, token, env);

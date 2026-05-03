@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerDocument } from '@/lib/server-firestore';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { getCloudflareReport, getCloudflareReportShare } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +22,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const { searchParams } = new URL(req.url);
 
   try {
-    const share = await getServerDocument('reportShares', token, null, env) as any;
+    const d1Share = await getCloudflareReportShare(env, token).catch((error) => {
+      console.warn('D1 public report share lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+    const share = d1Share || await getServerDocument('reportShares', token, null, env) as any;
     if (!share) return NextResponse.json({ error: 'Report Share nicht gefunden' }, { status: 404 });
     if (share.visibility === 'private') return NextResponse.json({ error: 'Report ist privat' }, { status: 403 });
 
@@ -37,7 +42,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       }
     }
 
-    const report = await getServerDocument('reports', share.reportId, null, env);
+    const d1Report = await getCloudflareReport(env, share.reportId, null).catch((error) => {
+      console.warn('D1 public report lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+    const report = d1Report || await getServerDocument('reports', share.reportId, null, env);
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
 
     return NextResponse.json({

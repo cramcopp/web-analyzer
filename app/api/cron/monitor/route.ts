@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { setDocument, updateDocument } from '@/lib/firestore-edge';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { canUseFirestoreAdmin, createServerDocumentWithId, queryServerDocuments, updateServerDocument } from '@/lib/server-firestore';
+import {
+  createCloudflareScanPlaceholder,
+  queryCloudflareDueScheduledScans,
+  updateCloudflareScheduledScanRun,
+} from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -47,6 +52,11 @@ function nextRunAt(frequency: ScanJob['frequency'] = 'weekly') {
 }
 
 async function loadDueJobs(env: any): Promise<ScanJob[]> {
+  const d1Schedules = await queryCloudflareDueScheduledScans(env).catch((error) => {
+    console.warn('D1 scheduled scan lookup skipped:', error instanceof Error ? error.message : 'Unknown error');
+    return [];
+  });
+
   const [schedules, legacyProjects] = await Promise.all([
     queryServerDocuments<any>('scheduledScans', [
       { field: 'enabled', op: 'EQUAL', value: true },
@@ -55,6 +65,18 @@ async function loadDueJobs(env: any): Promise<ScanJob[]> {
       { field: 'cronEnabled', op: 'EQUAL', value: true },
     ], 'AND', null, env).catch(() => []),
   ]);
+
+  const d1ScheduledJobs = d1Schedules
+    .filter((schedule: any) => schedule.url)
+    .map((schedule: any) => ({
+      id: schedule.id,
+      userId: schedule.userId,
+      projectId: schedule.projectId,
+      url: schedule.url,
+      plan: schedule.plan || 'pro',
+      frequency: schedule.frequency || 'weekly',
+      source: 'scheduledScans' as const,
+    }));
 
   const scheduledJobs = schedules
     .filter((schedule) => schedule.url && isDue(schedule.nextRunAt))
@@ -80,7 +102,13 @@ async function loadDueJobs(env: any): Promise<ScanJob[]> {
       source: 'legacyProject' as const,
     }));
 
-  return [...scheduledJobs, ...legacyJobs];
+  const seen = new Set<string>();
+  return [...d1ScheduledJobs, ...scheduledJobs, ...legacyJobs].filter((job) => {
+    const key = `${job.source}:${job.id || job.projectId}:${job.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function triggerWorkflow(env: any, job: ScanJob) {
@@ -101,15 +129,34 @@ async function triggerWorkflow(env: any, job: ScanJob) {
     progress: 0,
   };
 
-  if (canUseFirestoreAdmin(env)) {
-    await createServerDocumentWithId('reports', auditId, placeholder, null, env);
-  } else {
-    await setDocument('reports', auditId, {
-      ...placeholder,
-      planUsed: job.plan || 'pro',
-      source: 'scheduledScans',
-      adminSecret: env.INTERNAL_SECRET,
-    }, null, null, env);
+  const d1PlaceholderCreated = await createCloudflareScanPlaceholder(env, {
+    id: auditId,
+    userId: job.userId || '',
+    projectId: job.projectId,
+    url: job.url,
+    plan: job.plan || 'pro',
+    status: 'scanning',
+    progress: 0,
+    createdAt: now,
+  }).catch((error) => {
+    console.warn('D1 cron scan placeholder skipped:', error instanceof Error ? error.message : 'Unknown error');
+    return false;
+  });
+
+  try {
+    if (canUseFirestoreAdmin(env)) {
+      await createServerDocumentWithId('reports', auditId, placeholder, null, env);
+    } else {
+      await setDocument('reports', auditId, {
+        ...placeholder,
+        planUsed: job.plan || 'pro',
+        source: 'scheduledScans',
+        adminSecret: env.INTERNAL_SECRET,
+      }, null, null, env);
+    }
+  } catch (placeholderError) {
+    if (!d1PlaceholderCreated) throw placeholderError;
+    console.warn('Firestore cron scan placeholder skipped during D1 transition:', placeholderError instanceof Error ? placeholderError.message : 'Unknown error');
   }
 
   const response = await env.SCAN_WORKFLOW_SERVICE.fetch(new Request('https://scan-workflow/start', {
@@ -129,6 +176,14 @@ async function triggerWorkflow(env: any, job: ScanJob) {
   }
 
   if (job.source === 'scheduledScans' && job.id) {
+    await updateCloudflareScheduledScanRun(env, {
+      id: job.id,
+      lastRunAt: now,
+      nextRunAt: nextRunAt(job.frequency),
+    }).catch((error) => {
+      console.warn('D1 scheduled scan timestamp update skipped:', error instanceof Error ? error.message : 'Unknown error');
+    });
+
     await updateServerDocument('scheduledScans', job.id, {
       lastRunAt: now,
       nextRunAt: nextRunAt(job.frequency),

@@ -74,6 +74,7 @@ export interface EvidenceArtifact {
   type: EvidenceArtifactType;
   url: string;
   storageUri?: string;
+  contentType?: string;
   inlineValue?: string;
   checksum?: string;
   createdAt: string;

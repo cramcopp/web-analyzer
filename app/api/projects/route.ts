@@ -3,6 +3,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument } from '@/lib/firestore-edge';
 import { projectCreateSchema } from '@/lib/validations';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { queryCloudflareProjects, upsertCloudflareProject } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,15 @@ export async function GET(_req: Request) {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const d1Projects = await queryCloudflareProjects(env, user.uid).catch((error) => {
+      console.warn('D1 projects lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return [];
+    });
+
+    if (d1Projects.length > 0) {
+      return NextResponse.json(d1Projects);
+    }
+
     const [ownedProjects, memberProjects] = await Promise.all([
       queryDocuments('projects', [
         { field: 'userId', op: 'EQUAL', value: user.uid }
@@ -68,9 +78,27 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString()
     };
 
+    const projectId = crypto.randomUUID();
+    const d1Saved = await upsertCloudflareProject(env, {
+      ...projectData,
+      id: projectId,
+    }).catch((error) => {
+      console.warn('D1 project save skipped:', error instanceof Error ? error.message : 'unknown');
+      return false;
+    });
+
     // FIX: env beim Speichern mitgeben
-    const newProject = await addDocument('projects', projectData, token, env);
-    return NextResponse.json({ id: newProject.id, success: true });
+    try {
+      const newProject = await addDocument('projects', projectData, token, env);
+      if (newProject?.id && d1Saved) {
+        await upsertCloudflareProject(env, { ...projectData, id: newProject.id }).catch(() => false);
+      }
+      return NextResponse.json({ id: newProject.id, success: true });
+    } catch (firestoreError) {
+      if (!d1Saved) throw firestoreError;
+      console.warn('[POST /api/projects] Firestore skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      return NextResponse.json({ id: projectId, success: true, storage: 'd1' });
+    }
   } catch (error: any) {
     console.error('[POST /api/projects] Firestore error:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });

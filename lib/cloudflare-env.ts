@@ -4,6 +4,34 @@ export type ServiceBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
+export type D1Statement = {
+  bind(...values: unknown[]): D1Statement;
+  run<T = unknown>(): Promise<T>;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  all<T = Record<string, unknown>>(): Promise<{ results?: T[] } | T[]>;
+};
+
+export type D1Binding = {
+  prepare(query: string): D1Statement;
+  batch?(statements: unknown[]): Promise<unknown[]>;
+};
+
+export type R2Binding = {
+  put(key: string, value: string | Uint8Array | ArrayBuffer, options?: Record<string, unknown>): Promise<unknown>;
+  get(key: string): Promise<{ text(): Promise<string> } | null>;
+  delete?(key: string): Promise<void>;
+};
+
+export type KVBinding = {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
+};
+
+export type QueueBinding = {
+  send(message: unknown, options?: Record<string, unknown>): Promise<void>;
+};
+
 export type RuntimeEnv = NodeJS.ProcessEnv & {
   APP_URL?: string;
   FIREBASE_API_KEY?: string;
@@ -31,6 +59,11 @@ export type RuntimeEnv = NodeJS.ProcessEnv & {
   AI_GATEWAY_ID?: string;
   AI_GATEWAY_TOKEN?: string;
   SCAN_WORKFLOW_SERVICE?: ServiceBinding;
+  DB?: D1Binding;
+  AUDIT_ARTIFACTS?: R2Binding;
+  REPORT_EXPORTS?: R2Binding;
+  CACHE?: KVBinding;
+  SCAN_FANOUT_QUEUE?: QueueBinding;
 };
 
 export function getRuntimeEnv(): RuntimeEnv {

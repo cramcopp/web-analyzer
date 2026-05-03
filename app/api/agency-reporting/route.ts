@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { addServerDocument, queryServerDocuments, setServerDocument } from '@/lib/server-firestore';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { queryCloudflareAgencyData, upsertCloudflareAgencyItem } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -29,6 +30,15 @@ export async function GET(req: Request) {
   ];
 
   try {
+    const d1Agency = await queryCloudflareAgencyData(env, { userId: user.uid, projectId }).catch((error) => {
+      console.warn('D1 agency data lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+
+    if (d1Agency) {
+      return NextResponse.json(d1Agency);
+    }
+
     const [branding, issueTasks, issueComments, scheduledReports] = await Promise.all([
       queryServerDocuments('reportBranding', filters, 'AND', token, env),
       queryServerDocuments('issueTasks', filters, 'AND', token, env),
@@ -59,7 +69,7 @@ export async function POST(req: Request) {
     if (action === 'saveBranding') {
       const scope = body.data?.scope === 'team' ? 'team' : 'project';
       const id = docId(projectId, scope, body.data?.teamId || user.uid);
-      await setServerDocument('reportBranding', id, {
+      const payload = {
         ...body.data,
         id,
         userId: user.uid,
@@ -67,7 +77,12 @@ export async function POST(req: Request) {
         teamId: body.data?.teamId || user.uid,
         scope,
         updatedAt: now,
-      }, null, token, env);
+      };
+      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
+      await setServerDocument('reportBranding', id, payload, null, token, env).catch((firestoreError) => {
+        if (!d1Saved) throw firestoreError;
+        console.warn('Firestore agency branding skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      });
       return NextResponse.json({ id, success: true });
     }
 
@@ -75,7 +90,7 @@ export async function POST(req: Request) {
       const issueId = String(body.data?.issueId || '');
       if (!issueId) return NextResponse.json({ error: 'issueId fehlt' }, { status: 400 });
       const id = body.data?.id || docId(projectId, issueId);
-      await setServerDocument('issueTasks', id, {
+      const payload = {
         ...body.data,
         id,
         userId: user.uid,
@@ -83,7 +98,12 @@ export async function POST(req: Request) {
         issueId,
         createdAt: body.data?.createdAt || now,
         updatedAt: now,
-      }, null, token, env);
+      };
+      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
+      await setServerDocument('issueTasks', id, payload, null, token, env).catch((firestoreError) => {
+        if (!d1Saved) throw firestoreError;
+        console.warn('Firestore agency task skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      });
       return NextResponse.json({ id, success: true });
     }
 
@@ -91,7 +111,9 @@ export async function POST(req: Request) {
       const issueId = String(body.data?.issueId || '');
       const bodyText = String(body.data?.body || '').trim();
       if (!issueId || !bodyText) return NextResponse.json({ error: 'issueId und Kommentar fehlen' }, { status: 400 });
-      const created = await addServerDocument('issueComments', {
+      const id = crypto.randomUUID();
+      const payload = {
+        id,
         projectId,
         issueId,
         body: bodyText,
@@ -99,13 +121,21 @@ export async function POST(req: Request) {
         authorName: user.email || 'Team',
         userId: user.uid,
         createdAt: now,
-      }, token, env);
-      return NextResponse.json({ id: created.id, success: true });
+      };
+      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
+      try {
+        const created = await addServerDocument('issueComments', payload, token, env);
+        return NextResponse.json({ id: created.id, success: true });
+      } catch (firestoreError) {
+        if (!d1Saved) throw firestoreError;
+        console.warn('Firestore agency comment skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+        return NextResponse.json({ id, success: true, storage: 'd1' });
+      }
     }
 
     if (action === 'saveScheduledReport') {
       const id = body.data?.id || docId(projectId, 'scheduled_report', body.data?.frequency || 'weekly');
-      await setServerDocument('scheduledReports', id, {
+      const payload = {
         ...body.data,
         id,
         userId: user.uid,
@@ -113,7 +143,12 @@ export async function POST(req: Request) {
         mailProviderConnected: false,
         createdAt: body.data?.createdAt || now,
         updatedAt: now,
-      }, null, token, env);
+      };
+      const d1Saved = await upsertCloudflareAgencyItem(env, { action, id, userId: user.uid, projectId, data: payload }).catch(() => false);
+      await setServerDocument('scheduledReports', id, payload, null, token, env).catch((firestoreError) => {
+        if (!d1Saved) throw firestoreError;
+        console.warn('Firestore scheduled report skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      });
       return NextResponse.json({ id, success: true });
     }
 

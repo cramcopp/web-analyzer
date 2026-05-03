@@ -9,6 +9,7 @@ import {
 } from './scanner/types';
 import { calculateIssueScores } from './audit/score-engine';
 import { evaluateAiVisibilityChecks } from './ai-visibility';
+import { getCacheJson, putCacheJson } from './cloudflare-cache';
 import { getCrawlLimit } from './plans';
 import { getProviderAvailability, getProviderStatuses } from './providers';
 import type { AuditCategory, AuditIssue, AuditSeverity, EvidenceArtifact, LinkOccurrence, UrlSnapshot } from '@/types/audit';
@@ -1385,28 +1386,40 @@ function generateAuditIssues(params: {
   return Array.from(issues.values());
 }
 
-export async function performPreflight(urlObj: URL, plan: string) {
+export async function performPreflight(urlObj: URL, plan: string, env?: Record<string, any>) {
   const subpageLimit = getCrawlLimit(plan);
   const domain = urlObj.hostname;
 
   const robotsUrl = `${urlObj.origin}/robots.txt`;
   let robotsTxt = { status: 404, content: '', allowed: true, sitemaps: [] as string[], crawlDelay: 0 };
-  try {
-    const res = await fetch(robotsUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
-    if (res.ok) {
-      robotsTxt.content = await res.text();
-      robotsTxt.status = res.status;
-      robotsTxt.content.split('\n').forEach(line => {
-        if (line.toLowerCase().trim().startsWith('crawl-delay:')) {
-          robotsTxt.crawlDelay = parseInt(line.split(/crawl-delay:/i)[1].trim()) || 0;
-        }
-      });
+  const robotsCacheKey = `robots:${urlObj.origin}`;
+  const cachedRobots = await getCacheJson<typeof robotsTxt>(env, robotsCacheKey).catch(() => null);
+  if (cachedRobots) {
+    robotsTxt = cachedRobots;
+  } else {
+    try {
+      const res = await fetch(robotsUrl, { ...STEALTH_CONFIG, signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        robotsTxt.content = await res.text();
+        robotsTxt.status = res.status;
+        robotsTxt.content.split('\n').forEach(line => {
+          if (line.toLowerCase().trim().startsWith('crawl-delay:')) {
+            robotsTxt.crawlDelay = parseInt(line.split(/crawl-delay:/i)[1].trim()) || 0;
+          }
+        });
+        await putCacheJson(env, robotsCacheKey, robotsTxt, 60 * 60).catch(() => false);
+      }
+    } catch {
+      // robots.txt is optional; absence is captured in the returned metadata.
     }
-  } catch {
-    // robots.txt is optional; absence is captured in the returned metadata.
   }
 
-  const sitemapUrls = await getAllUrlsBeforeCrawl(urlObj.origin, robotsTxt.content);
+  const sitemapCacheKey = `sitemap:${urlObj.origin}:${stableHash(robotsTxt.content || 'empty')}`;
+  let sitemapUrls = await getCacheJson<string[]>(env, sitemapCacheKey).catch(() => null);
+  if (!sitemapUrls) {
+    sitemapUrls = await getAllUrlsBeforeCrawl(urlObj.origin, robotsTxt.content);
+    await putCacheJson(env, sitemapCacheKey, sitemapUrls, 6 * 60 * 60).catch(() => false);
+  }
   const fetchStartedAt = Date.now();
   const response = await fetch(urlObj.toString(), { ...STEALTH_CONFIG, signal: AbortSignal.timeout(10000) });
   const responseTimeMs = Date.now() - fetchStartedAt;
@@ -1432,7 +1445,7 @@ export async function performAnalysis({ url, plan = 'free', userId = '', auditId
   const runtimeEnv = env || process.env;
   const scanId = auditId || createScanId();
   const createdAt = nowIso();
-  const preflight = await performPreflight(urlObj, plan);
+  const preflight = await performPreflight(urlObj, plan, runtimeEnv);
   const { subpageLimit, domain, robotsTxt, sitemapUrls, mainUrlNormalized, html, headers, responseTimeMs } = preflight;
   const root = parse(html);
   const ttfbMs = undefined;

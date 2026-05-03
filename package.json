@@ -13,6 +13,11 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:dry-run": "npm run cf:build && wrangler deploy --dry-run -c wrangler.toml && wrangler deploy --dry-run -c workflow-wrangler.toml",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:d1:create": "wrangler d1 create web-analyzer-db",
+    "cf:d1:migrate": "wrangler d1 migrations apply web-analyzer-db --remote",
+    "cf:r2:create": "wrangler r2 bucket create web-analyzer-audit-artifacts && wrangler r2 bucket create web-analyzer-report-exports",
+    "cf:kv:create": "wrangler kv namespace create CACHE",
+    "cf:queue:create": "wrangler queues create web-analyzer-scan-fanout",
     "lint": "eslint .",
     "clean": "next clean",
     "scan": "eslint . && knip"

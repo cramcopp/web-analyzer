@@ -93,6 +93,17 @@ export async function GET(req: Request) {
 
     // SEC-08 Fix: Store GSC tokens in Firestore instead of cookies to avoid 4KB limit
     try {
+      const { patchCloudflareUserProfile, upsertCloudflareUserProfile } = await import('@/lib/cloudflare-storage');
+      await upsertCloudflareUserProfile(env, {
+        uid: firebaseData.localId,
+        email: firebaseData.email,
+        displayName: firebaseData.displayName,
+        photoURL: firebaseData.photoUrl,
+      }).catch(() => false);
+      await patchCloudflareUserProfile(env, firebaseData.localId, {
+        gscTokens: JSON.stringify(tokens),
+      }).catch(() => false);
+
       const { updateServerDocument } = await import('@/lib/server-firestore');
       await updateServerDocument('users', firebaseData.localId, {
         gscTokens: JSON.stringify(tokens),

@@ -5,6 +5,15 @@ import { getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { canUseFirestoreAdmin, createServerDocumentWithId, setServerDocument } from '@/lib/server-firestore';
 import { toStoredReportDocument } from '@/lib/report-storage';
+import {
+  createCloudflareScanPlaceholder,
+  getCloudflareUserProfile,
+  hasCloudflareD1,
+  incrementCloudflareUserScanCount,
+  storeCloudflareScanArtifacts,
+  upsertCloudflareUserProfile,
+  writeCloudflareScanResult,
+} from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -60,7 +69,17 @@ export async function POST(req: Request) {
     }
 
     // 1. Check Quota & Plan
-    const userData = await getDocument('users', user.uid, token, env);
+    const cloudflareUserData = await getCloudflareUserProfile(env, user.uid).catch((error) => {
+      console.warn('D1 user lookup skipped:', getErrorMessage(error));
+      return null;
+    });
+    if (!cloudflareUserData && hasCloudflareD1(env)) {
+      await upsertCloudflareUserProfile(env, user).catch((error) => {
+        console.warn('D1 user sync skipped:', getErrorMessage(error));
+      });
+    }
+
+    const userData = (cloudflareUserData || await getDocument('users', user.uid, token, env)) as any;
     const plan = normalizePlan(userData?.plan || 'free');
     const scanCount = userData?.scanCount || 0;
     const maxScans = getMonthlyScanLimit(plan);
@@ -73,10 +92,17 @@ export async function POST(req: Request) {
     }
 
     // 2. Counter hochzählen
-    try {
-      await incrementField('users', user.uid, 'scanCount', 1, token, env);
-    } catch (counterError) {
-      console.warn('Scan counter update skipped:', getErrorMessage(counterError));
+    const d1CounterUpdated = await incrementCloudflareUserScanCount(env, user, 1).catch((counterError) => {
+      console.warn('D1 scan counter update skipped:', getErrorMessage(counterError));
+      return false;
+    });
+
+    if (!d1CounterUpdated) {
+      try {
+        await incrementField('users', user.uid, 'scanCount', 1, token, env);
+      } catch (counterError) {
+        console.warn('Scan counter update skipped:', getErrorMessage(counterError));
+      }
     }
 
     // 3. Setup Audit Placeholder
@@ -95,7 +121,26 @@ export async function POST(req: Request) {
       placeholderReport.projectId = projectId;
     }
 
-    await createServerDocumentWithId('reports', audit_id, placeholderReport, token, env);
+    const d1PlaceholderCreated = await createCloudflareScanPlaceholder(env, {
+      id: audit_id,
+      userId: user.uid,
+      projectId,
+      url,
+      plan,
+      status: 'scanning',
+      progress: 0,
+      createdAt: placeholderReport.createdAt,
+    }).catch((placeholderError) => {
+      console.warn('D1 scan placeholder skipped:', getErrorMessage(placeholderError));
+      return false;
+    });
+
+    try {
+      await createServerDocumentWithId('reports', audit_id, placeholderReport, token, env);
+    } catch (placeholderError) {
+      if (!d1PlaceholderCreated) throw placeholderError;
+      console.warn('Firestore scan placeholder skipped during D1 transition:', getErrorMessage(placeholderError));
+    }
 
     // 4. TRIGGER CLOUDFLARE WORKFLOW
     if (env.SCAN_WORKFLOW_SERVICE) {
@@ -127,8 +172,12 @@ export async function POST(req: Request) {
       const { performAnalysis } = await import('@/lib/scanner');
       
       void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, env }).then(async (result) => {
-        const reportDocument = toStoredReportDocument(result, audit_id, user.uid, projectId);
-        await setServerDocument('reports', audit_id, reportDocument, Object.keys(reportDocument), token, env);
+        const storedResult = await storeCloudflareScanArtifacts(env, result, { scanId: audit_id, userId: user.uid });
+        await writeCloudflareScanResult(env, storedResult, { scanId: audit_id, userId: user.uid, projectId, plan })
+          .catch((storageError) => console.warn('D1/R2 scan write skipped:', getErrorMessage(storageError)));
+        const reportDocument = toStoredReportDocument(storedResult, audit_id, user.uid, projectId);
+        await setServerDocument('reports', audit_id, reportDocument, Object.keys(reportDocument), token, env)
+          .catch((firestoreError) => console.warn('Firestore direct report write skipped:', getErrorMessage(firestoreError)));
       }).catch(console.error);
 
       return NextResponse.json({ 

@@ -3,6 +3,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { queryDocuments, addDocument } from '@/lib/firestore-edge';
 import { reportSaveSchema } from '@/lib/validations';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { queryCloudflareReports, upsertCloudflareReportDocument } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -19,6 +20,19 @@ export async function GET(req: Request) {
   const urlFilter = searchParams.get('url');
 
   try {
+    const d1Reports = await queryCloudflareReports(env, {
+      userId: user.uid,
+      url: urlFilter,
+      limit: 100,
+    }).catch((error) => {
+      console.warn('D1 reports lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return [];
+    });
+
+    if (d1Reports.length > 0) {
+      return NextResponse.json(d1Reports);
+    }
+
     const filters: any[] = [{ field: 'userId', op: 'EQUAL', value: user.uid }];
     if (urlFilter) {
       filters.push({ field: 'url', op: 'EQUAL', value: urlFilter });
@@ -51,15 +65,35 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
     
-    // 1. Save Report
-    const newReport = await addDocument('reports', {
+    const reportId = (body.audit_id || body.auditId || crypto.randomUUID()) as string;
+    const d1Saved = await upsertCloudflareReportDocument(env, reportId, {
       ...result.data,
+      audit_id: reportId,
       userId: user.uid,
-      createdAt: new Date().toISOString()
-    }, token, env);
-    
-    
-    return NextResponse.json({ id: newReport.id, success: true });
+      createdAt: new Date().toISOString(),
+    }, {
+      userId: user.uid,
+      projectId: body.projectId,
+      url: result.data.url,
+    }).catch((error) => {
+      console.warn('D1/R2 report save skipped:', error instanceof Error ? error.message : 'unknown');
+      return false;
+    });
+
+    // 1. Save Report while Firestore is still a read fallback.
+    try {
+      const newReport = await addDocument('reports', {
+        ...result.data,
+        userId: user.uid,
+        createdAt: new Date().toISOString()
+      }, token, env);
+
+      return NextResponse.json({ id: newReport.id, success: true });
+    } catch (firestoreError) {
+      if (!d1Saved) throw firestoreError;
+      console.warn('Firestore report save skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+      return NextResponse.json({ id: reportId, success: true, storage: 'd1' });
+    }
 
   } catch (error: any) {
     console.error('Save Report Error:', error);

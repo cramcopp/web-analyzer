@@ -3,6 +3,12 @@ import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:work
 import { performAnalysis } from './scanner';
 import { setServerDocument } from './server-firestore';
 import { toStoredReportDocument } from './report-storage';
+import {
+  createCloudflareScanPlaceholder,
+  markCloudflareScanError,
+  storeCloudflareScanArtifacts,
+  writeCloudflareScanResult,
+} from './cloudflare-storage';
 import type { ScanOptions } from './scanner/types';
 
 type WorkflowBinding = {
@@ -19,6 +25,11 @@ export interface Env {
   GEMINI_API_KEY?: string;
   AI_WORKFLOW_SUMMARY?: string;
   INTERNAL_SECRET: string;
+  DB?: any;
+  AUDIT_ARTIFACTS?: any;
+  REPORT_EXPORTS?: any;
+  CACHE?: any;
+  SCAN_FANOUT_QUEUE?: any;
 }
 
 function normalizeTargetUrl(url: string) {
@@ -35,6 +46,16 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
 
     try {
       await step.do('mark scan started', async () => {
+        await createCloudflareScanPlaceholder(this.env, {
+          id: reportId,
+          userId,
+          projectId,
+          url: targetUrl,
+          plan,
+          status: 'scanning',
+          progress: 10,
+        }).catch((error) => console.warn('D1 scan placeholder skipped:', error instanceof Error ? error.message : 'unknown'));
+
         await setServerDocument('reports', reportId, {
           audit_id: reportId,
           userId,
@@ -57,7 +78,11 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           env: this.env,
         });
 
-        const report = toStoredReportDocument(result, reportId, userId, projectId);
+        const storedResult = await storeCloudflareScanArtifacts(this.env, result, { scanId: reportId, userId });
+        await writeCloudflareScanResult(this.env, storedResult, { scanId: reportId, userId, projectId, plan })
+          .catch((error) => console.warn('D1/R2 scan write skipped:', error instanceof Error ? error.message : 'unknown'));
+
+        const report = toStoredReportDocument(storedResult, reportId, userId, projectId);
 
         await setServerDocument('reports', reportId, report, Object.keys(report), token, this.env);
         return report;
@@ -67,6 +92,15 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
     } catch (err: any) {
       const message = err instanceof Error ? err.message : 'Workflow scan failed';
       console.error('Workflow Error:', message);
+      await markCloudflareScanError(this.env, {
+        scanId: reportId,
+        userId,
+        projectId,
+        url: targetUrl,
+        plan,
+        message,
+      }).catch((error) => console.warn('D1 scan error mark skipped:', error instanceof Error ? error.message : 'unknown'));
+
       await setServerDocument('reports', reportId, {
         audit_id: reportId,
         userId,

@@ -14,11 +14,50 @@ Use two Cloudflare Workers:
 - `web-analyzer-pro`: Next.js app built by `@opennextjs/cloudflare`
 - `scan-workflow`: long-running crawl workflow in `lib/workflow-scanner.ts`
 
+## Cloudflare Data Transition
+Firebase Auth stays. It is used for login, Google OAuth, Firebase ID tokens, and stable user IDs. Audit data is moving away from Firestore.
+
+Target ownership:
+- D1: users, projects, scans, issues, issue status, monitoring, alerts, report shares, agency tasks, provider facts
+- R2: crawl JSON, evidence artifacts, HTML/rendered DOM payloads, screenshots later, CSV/PDF/Excel exports
+- Workflows: long-running crawl execution, evidence generation, scan diffs
+- Queues: prepared for later URL fanout/retries/dead-letter processing
+- KV: cache only, currently robots.txt and sitemap cache; later provider cache, AI cache keys and TTL rate limits
+- AI Gateway: keeps Gemini calls behind Cloudflare for cost analytics, caching and rate limits
+
+The current code writes new scan/report data to D1/R2 first when bindings exist. Firestore remains as a temporary read/write fallback so existing users and reports do not disappear during migration.
+
+Create Cloudflare resources after `wrangler login` is healthy:
+
+```bash
+npm run cf:d1:create
+npm run cf:r2:create
+npm run cf:kv:create
+npm run cf:queue:create
+```
+
+Then copy the returned D1 `database_id` and KV namespace `id` into `wrangler.toml` and `workflow-wrangler.toml` if Wrangler does not auto-provision them in your account. Apply schema:
+
+```bash
+npm run cf:d1:migrate
+```
+
+After that:
+
+```bash
+npm run deploy:all
+```
+
 ## Commands
 - `npm run lint`: code quality check
 - `npm run build`: Next.js production build
 - `npm run cf:build`: OpenNext Cloudflare Worker bundle
 - `npm run cf:dry-run`: validates both Cloudflare Workers without uploading
+- `npm run cf:d1:create`: creates the D1 database
+- `npm run cf:d1:migrate`: applies D1 migrations
+- `npm run cf:r2:create`: creates R2 buckets for scan artifacts and report exports
+- `npm run cf:kv:create`: creates the KV cache namespace
+- `npm run cf:queue:create`: creates the future scan fanout queue
 - `npm run deploy:workflow`: deploys the scan workflow Worker
 - `npm run deploy`: deploys the web app Worker
 - `npm run deploy:all`: deploys workflow first, then app

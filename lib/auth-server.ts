@@ -155,6 +155,9 @@ export async function deleteUserAccount() {
 
   // 2. Delete Firestore Data (GDPR - BIZ-10)
   try {
+    const { deleteCloudflareUserData } = await import('./cloudflare-storage');
+    await deleteCloudflareUserData(env, uid).catch(() => false);
+
     // Delete Reports
     const reports = await queryDocuments('reports', [{ field: 'userId', op: 'EQUAL', value: uid }], 'AND', token, env);
     await Promise.all(reports.map(r => deleteDocument('reports', r.id, token, env)));

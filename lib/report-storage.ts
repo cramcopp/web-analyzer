@@ -8,10 +8,15 @@ function truncateText(value: unknown, maxLength: number) {
 function pruneForFirestore(result: AnalysisResult) {
   const pruned: any = {
     ...result,
-    bodyText: truncateText(result.bodyText, 50000),
+    bodyText: undefined,
     evidence: result.evidence?.map((item: any) => ({
-      ...item,
-      inlineValue: truncateText(item.inlineValue, 5000),
+      id: item.id,
+      type: item.type,
+      url: item.url,
+      storageUri: item.storageUri,
+      checksum: item.checksum,
+      contentType: item.contentType,
+      createdAt: item.createdAt,
     })),
     crawlSummary: result.crawlSummary ? {
       ...result.crawlSummary,

@@ -4,6 +4,7 @@ import { getDocument } from '@/lib/firestore-edge';
 import { publicReportCsv, publicReportJson, publicReportPdf } from '@/lib/reporting/exports';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { getCloudflareReport, putReportExportText } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +27,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const format = searchParams.get('format') || 'json';
 
   try {
-    const report = await getDocument('reports', id, token, env) as any;
+    const d1Report = await getCloudflareReport(env, id, user.uid).catch((error) => {
+      console.warn('D1 export report lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+    const report = d1Report && !('forbidden' in d1Report)
+      ? d1Report
+      : await getDocument('reports', id, token, env) as any;
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
     if (report.userId !== user.uid) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
 
@@ -34,7 +41,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const baseName = `wap_report_${id}`;
 
     if (format === 'csv') {
-      return new NextResponse(publicReportCsv(sanitized), {
+      const body = publicReportCsv(sanitized);
+      await putReportExportText(env, `exports/${user.uid}/${id}/${baseName}.csv`, body, 'text/csv;charset=utf-8').catch(() => null);
+      return new NextResponse(body, {
         headers: {
           'Content-Type': 'text/csv;charset=utf-8',
           'Content-Disposition': contentDisposition(`${baseName}.csv`),
@@ -43,7 +52,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     if (format === 'pdf') {
-      return new NextResponse(publicReportPdf(sanitized), {
+      const body = publicReportPdf(sanitized);
+      await putReportExportText(env, `exports/${user.uid}/${id}/${baseName}.pdf`, body, 'application/pdf').catch(() => null);
+      return new NextResponse(body, {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': contentDisposition(`${baseName}.pdf`),
@@ -51,7 +62,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       });
     }
 
-    return new NextResponse(publicReportJson(sanitized), {
+    const body = publicReportJson(sanitized);
+    await putReportExportText(env, `exports/${user.uid}/${id}/${baseName}.json`, body, 'application/json;charset=utf-8').catch(() => null);
+    return new NextResponse(body, {
       headers: {
         'Content-Type': 'application/json;charset=utf-8',
         'Content-Disposition': contentDisposition(`${baseName}.json`),

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionToken, getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { addServerDocument } from '@/lib/server-firestore';
+import { upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -80,7 +81,9 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString();
     const result = await fetchUptime(target);
-    const check = await addServerDocument('uptimeChecks', {
+    const checkId = crypto.randomUUID();
+    const checkPayload = {
+      id: checkId,
       projectId,
       userId: user.uid,
       url: target.toString(),
@@ -89,11 +92,28 @@ export async function POST(req: Request) {
       responseTimeMs: result.responseTimeMs,
       checkedAt: now,
       createdAt: now,
-    }, token, env);
+    };
+    const d1CheckSaved = await upsertCloudflareMonitoringItem(env, {
+      collection: 'uptimeChecks',
+      id: checkId,
+      userId: user.uid,
+      projectId,
+      data: checkPayload,
+    }).catch(() => false);
+
+    let check: any = checkPayload;
+    try {
+      check = await addServerDocument('uptimeChecks', checkPayload, token, env);
+    } catch (firestoreError) {
+      if (!d1CheckSaved) throw firestoreError;
+      console.warn('Firestore uptime check skipped during D1 transition:', firestoreError instanceof Error ? firestoreError.message : 'unknown');
+    }
 
     let alertEvent = null;
     if (result.status === 'down') {
-      alertEvent = await addServerDocument('alertEvents', {
+      const alertId = crypto.randomUUID();
+      const alertPayload = {
+        id: alertId,
         projectId,
         userId: user.uid,
         type: 'website_down',
@@ -103,7 +123,15 @@ export async function POST(req: Request) {
         url: target.toString(),
         status: 'open',
         createdAt: now,
-      }, token, env).catch(() => null);
+      };
+      await upsertCloudflareMonitoringItem(env, {
+        collection: 'alertEvents',
+        id: alertId,
+        userId: user.uid,
+        projectId,
+        data: alertPayload,
+      }).catch(() => false);
+      alertEvent = await addServerDocument('alertEvents', alertPayload, token, env).catch(() => alertPayload);
     }
 
     return NextResponse.json({

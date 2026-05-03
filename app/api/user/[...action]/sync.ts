@@ -3,6 +3,7 @@ import { getSessionUser, getSessionToken } from '@/lib/auth-server';
 import { getDocument, setDocument } from '@/lib/firestore-edge';
 import { getMonthlyScanLimit } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { defaultUserProfile, getCloudflareUserProfile, upsertCloudflareUserProfile } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -13,29 +14,37 @@ export async function POST() {
   if (!user || !token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const existingUserData = await getDocument('users', user.uid, token, env);
+    const d1User = await getCloudflareUserProfile(env, user.uid).catch((error) => {
+      console.warn('D1 user sync lookup skipped:', error instanceof Error ? error.message : 'unknown');
+      return null;
+    });
+    if (d1User?.plan) {
+      return NextResponse.json({ success: true, user: d1User });
+    }
+
+    const existingUserData = await getDocument('users', user.uid, token, env).catch(() => null);
 
     if (!existingUserData || !existingUserData.plan) {
-      const newUser = {
+      const newUser = defaultUserProfile(user, {
         ...existingUserData,
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        role: existingUserData?.role || 'user',
-        plan: existingUserData?.plan || 'free',
         reports: existingUserData?.reports || [],
-        scanCount: existingUserData?.scanCount || 0,
         maxScans: existingUserData?.maxScans || getMonthlyScanLimit('free'),
-        lastScanReset: existingUserData?.lastScanReset || new Date().toISOString(),
-        createdAt: existingUserData?.createdAt || new Date().toISOString()
-      };
+      });
+      await upsertCloudflareUserProfile(env, user, newUser).catch((error) => {
+        console.warn('D1 user sync write skipped:', error instanceof Error ? error.message : 'unknown');
+      });
+
       // Merging is handled internally if setDocument uses {merge:true}, 
       // but passing the full object ensures everything is written.
-      await setDocument('users', user.uid, newUser, null, token, env);
+      await setDocument('users', user.uid, newUser, null, token, env).catch((error) => {
+        console.warn('Firestore user sync skipped during D1 transition:', error instanceof Error ? error.message : 'unknown');
+      });
       return NextResponse.json({ success: true, user: newUser });
     }
 
+    await upsertCloudflareUserProfile(env, user, existingUserData).catch((error) => {
+      console.warn('D1 user backfill skipped:', error instanceof Error ? error.message : 'unknown');
+    });
     return NextResponse.json({ success: true, user: existingUserData });
   } catch (error: any) {
     console.error('Sync error:', error);
