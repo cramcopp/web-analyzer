@@ -128,6 +128,20 @@ export type UxAndDesignReportSection = ReportSection & {
 };
 
 export type ReportData = {
+  plan?: string;
+  accountPlan?: string;
+  scanPlan?: string;
+  crawlLimitUsed?: number;
+  scannerVersion?: string;
+  crawlDevice?: 'desktop' | 'mobile';
+  renderMode?: 'fetch' | 'browser' | 'auto';
+  renderAudit?: any;
+  psiMetrics?: any;
+  psiResults?: any[];
+  cruxRecord?: any;
+  googleInspection?: any;
+  lighthouseScores?: any;
+  scanDiff?: any;
   businessIntelligence?: {
     businessNiche: string;
     keywordGapAnalysis: string[];

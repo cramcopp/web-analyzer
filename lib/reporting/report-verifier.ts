@@ -15,6 +15,7 @@ type GroundingData = {
     aiVisibilityFacts: any[];
   };
   gscData: any;
+  googleInspection: any;
   psiMetrics: any;
   cruxMetrics: any;
   dataSources: any;
@@ -288,6 +289,20 @@ function attachGrounding(report: any, scrapeData: any) {
   report.crawlSummary = scrapeData.crawlSummary || null;
   report.audit_id = scrapeData.audit_id || null;
   report.url = scrapeData.url || report.url || null;
+  report.plan = scrapeData.plan || scrapeData.scanPlan || report.plan || null;
+  report.accountPlan = scrapeData.accountPlan || scrapeData.scanPlan || report.accountPlan || null;
+  report.scanPlan = scrapeData.scanPlan || scrapeData.plan || report.scanPlan || null;
+  report.crawlLimitUsed = scrapeData.crawlLimitUsed || scrapeData.crawlSummary?.crawlLimitUsed || report.crawlLimitUsed || null;
+  report.scannerVersion = scrapeData.scannerVersion || report.scannerVersion || null;
+  report.crawlDevice = scrapeData.crawlDevice || report.crawlDevice || null;
+  report.renderMode = scrapeData.renderMode || report.renderMode || null;
+  report.renderAudit = scrapeData.renderAudit || report.renderAudit || null;
+  report.psiMetrics = scrapeData.psiMetrics || report.psiMetrics || null;
+  report.psiResults = scrapeData.psiResults || report.psiResults || [];
+  report.cruxRecord = scrapeData.cruxRecord || report.cruxRecord || null;
+  report.googleInspection = scrapeData.googleInspection || report.googleInspection || null;
+  report.lighthouseScores = scrapeData.lighthouseScores || report.lighthouseScores || null;
+  report.scanDiff = scrapeData.scanDiff || report.scanDiff || null;
   report.scoreBreakdown = scrapeData.scoreBreakdown || null;
   report.dataSources = scrapeData.dataSources || {};
   report.keywordFacts = scrapeData.keywordFacts || [];
@@ -313,7 +328,8 @@ export function buildGroundingData(scrapeData: any, url?: string): GroundingData
       trafficFacts: scrapeData.trafficFacts || [],
       aiVisibilityFacts: scrapeData.aiVisibilityFacts || [],
     },
-    gscData: scrapeData.gscData || null,
+    gscData: scrapeData.gscData || scrapeData.googleInspection || null,
+    googleInspection: scrapeData.googleInspection || null,
     psiMetrics: scrapeData.psiMetrics || null,
     cruxMetrics: scrapeData.cruxMetrics || null,
     dataSources: scrapeData.dataSources || {},

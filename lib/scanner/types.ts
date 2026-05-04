@@ -6,6 +6,8 @@ import type { AiVisibilityFact, BacklinkFact, CompetitorFact, KeywordFact, Provi
 export interface ScanOptions {
   url: string;
   plan?: string;
+  device?: 'desktop' | 'mobile';
+  renderMode?: 'fetch' | 'browser' | 'auto';
   userId?: string;
   projectId?: string;
   auditId?: string;
@@ -36,10 +38,106 @@ export interface SslCertificateData {
   hstsPolicy?: string;
 }
 
+export interface RedirectHop {
+  url: string;
+  status: number;
+  location?: string;
+}
+
+export interface ExternalLinkCheck {
+  url: string;
+  sourceUrl: string;
+  status: number | string;
+  ok: boolean;
+  redirectChain?: RedirectHop[];
+  error?: string;
+}
+
+export interface RenderAuditData {
+  mode: 'fetch' | 'browser' | 'auto';
+  used: boolean;
+  available: boolean;
+  pagesRendered: number;
+  pagesRequested: number;
+  failedUrls: { url: string; reason: string }[];
+  domDiffs?: RenderDomDiff[];
+  screenshots?: {
+    requested: number;
+    captured: number;
+    failed: { url: string; reason: string }[];
+  };
+  source: 'cloudflare_browser_rendering' | 'html_fetch';
+}
+
+export interface RenderDomDiff {
+  url: string;
+  rawHash: string;
+  renderedHash: string;
+  rawTextLength: number;
+  renderedTextLength: number;
+  rawLinkCount: number;
+  renderedLinkCount: number;
+  rawScriptCount: number;
+  renderedScriptCount: number;
+  significant: boolean;
+}
+
+export interface PsiStrategyResult {
+  strategy: 'mobile' | 'desktop';
+  finalUrl?: string;
+  performanceScore?: number | null;
+  accessibilityScore?: number | null;
+  bestPracticesScore?: number | null;
+  seoScore?: number | null;
+  metrics: PsiMetrics;
+  fieldOverallCategory?: string;
+  originFallback?: boolean;
+  fetchTime?: string;
+  lighthouseVersion?: string;
+  error?: string;
+}
+
+export interface CruxRecordResult {
+  source: 'url' | 'origin';
+  id?: string;
+  formFactor?: string;
+  collectionPeriod?: { firstDate?: string; lastDate?: string };
+  metrics: Record<string, { percentile?: number | string; good?: number; needsImprovement?: number; poor?: number }>;
+  error?: string;
+}
+
+export interface GoogleInspectionPageResult {
+  url: string;
+  verdict?: string;
+  coverageState?: string;
+  indexingState?: string;
+  robotsTxtState?: string;
+  pageFetchState?: string;
+  googleCanonical?: string;
+  userCanonical?: string;
+  lastCrawlTime?: string;
+  sitemap?: string[];
+  referringUrls?: string[];
+  inspectionResultLink?: string;
+  error?: string;
+}
+
+export interface GoogleInspectionResult {
+  source: 'gsc' | 'unavailable';
+  property?: string;
+  inspectedCount: number;
+  skippedCount: number;
+  results: GoogleInspectionPageResult[];
+  error?: string;
+}
+
 export interface SubpageResult {
   error: boolean;
   url: string;
   urlObj?: string;
+  crawlDepth?: number;
+  discoveredFrom?: string;
+  crawlSource?: 'sitemap' | 'link' | 'redirect' | 'seed';
   title?: string;
   metaDescription?: string;
   robots?: string;
@@ -55,11 +153,20 @@ export interface SubpageResult {
   externalLinkDetails?: LinkOccurrence[];
   xRobotsTag?: string;
   redirectLocation?: string;
+  redirectChain?: RedirectHop[];
   hasNextPrev?: boolean;
   isIndexable?: boolean;
   indexabilityReason?: string;
   headers?: Record<string, string>;
   htmlLang?: string;
+  viewport?: string;
+  generator?: string;
+  hreflangs?: { hreflang: string; href: string; normalizedHref?: string; valid: boolean }[];
+  structuredDataTypes?: string[];
+  structuredDataParseErrors?: number;
+  jsonLdBlocks?: number;
+  wordCount?: number;
+  contentFingerprint?: string;
   headings?: { h1: string[]; h2: string[]; h3: string[] };
   images?: { src: string; alt: string }[];
   textBasis?: string;
@@ -122,6 +229,14 @@ export interface AnalysisResult {
   audit_id: string;
   userId: string;
   createdAt: string;
+  scannerVersion?: string;
+  plan?: string;
+  accountPlan?: string;
+  scanPlan?: string;
+  crawlLimitUsed?: number;
+  crawlDevice?: 'desktop' | 'mobile';
+  renderMode?: 'fetch' | 'browser' | 'auto';
+  renderAudit?: RenderAuditData;
   url: string;
   urlObj: string;
   title: string;
@@ -157,6 +272,9 @@ export interface AnalysisResult {
   preflight?: PreflightData;
   psiMetricsStr: string;
   psiMetrics: PsiMetrics | null;
+  psiResults?: PsiStrategyResult[];
+  cruxRecord?: CruxRecordResult | null;
+  googleInspection?: GoogleInspectionResult | null;
   lighthouseScores: LighthouseScores | null;
   safeBrowsingStr: string;
   domainAge: string;
@@ -185,14 +303,90 @@ export interface AnalysisResult {
   securityHeaders: Record<string, string>;
   headers: Record<string, string>;
   crawlSummary: { 
+    startUrl?: string;
+    sourceType?: string;
+    crawlLimitUsed?: number;
+    crawlDepthReached?: number;
     totalInternalLinks: number; 
     scannedSubpagesCount: number; 
+    crawledPagesCount?: number;
+    internalLinksCount?: number;
     indexablePagesCount: number;
+    sitemapUrls?: string[];
+    skippedUrls?: { url: string; reason: string }[];
+    blockedUrls?: string[];
     crawledUrls: string[];
     indexableUrls: string[];
+    depthDistribution?: Record<string, number>;
+    statusCodeDistribution?: Record<string, number>;
+    indexabilityReasons?: Record<string, number>;
+    nonIndexableUrls?: { url: string; reason: string }[];
+    sitemapCoverage?: {
+      submitted: number;
+      crawled: number;
+      indexable: number;
+      notCrawled: string[];
+    };
+    pageAudit?: {
+      url: string;
+      status: number | string;
+      crawlDepth?: number;
+      crawlSource?: string;
+      isIndexable?: boolean;
+      indexabilityReason?: string;
+      titleLength: number;
+      metaDescriptionLength: number;
+      wordCount: number;
+      internalInlinks: number;
+      internalOutlinks: number;
+      externalOutlinks: number;
+      canonical?: string;
+      canonicalSelfReferenced: boolean;
+      hreflangCount: number;
+      schemaTypes: string[];
+    }[];
+    internalLinking?: {
+      orphanUrls: string[];
+      lowInlinkUrls: { url: string; inlinks: number }[];
+      deepUrls: { url: string; depth: number }[];
+      nofollowInternalLinks: { sourceUrl: string; targetUrl: string; anchorText: string }[];
+      httpInternalLinks: { sourceUrl: string; targetUrl: string; anchorText: string }[];
+      linkGraphMetrics?: {
+        averageDepth: number;
+        maxDepth: number;
+        orphanCount: number;
+        lowInlinkCount: number;
+        topLinkedPages: { url: string; inlinks: number; depth: number }[];
+        crawlPriorityPages: { url: string; inlinks: number; depth: number; reason: string }[];
+      };
+    };
+    canonicalClusters?: { canonical: string; urls: string[] }[];
+    canonicalIssues?: { sourceUrl: string; canonical: string; targetReason: string }[];
+    duplicateContentClusters?: { fingerprint: string; urls: string[]; wordCount: number }[];
+    hreflangSummary?: {
+      totalTags: number;
+      pagesWithHreflang: number;
+      invalidTags: { url: string; hreflang: string; href: string }[];
+      missingSelfReferences: string[];
+      missingReturnTags: { sourceUrl: string; targetUrl: string; hreflang: string }[];
+    };
+    structuredDataSummary?: {
+      pagesWithStructuredData: string[];
+      schemaTypes: string[];
+      jsonLdBlocks: number;
+      parseErrors: number;
+    };
+    externalLinkChecks?: {
+      checkedCount: number;
+      brokenCount: number;
+      skippedCount: number;
+      brokenLinks: ExternalLinkCheck[];
+    };
+    redirectChains?: { url: string; chain: RedirectHop[] }[];
     scannedSubpages: Omit<SubpageResult, 'error'>[]; 
     brokenLinks: { url: string; status: number | string }[] 
   };
+  scanDiff?: import('@/types/monitoring').ScanDiff | null;
   apiEndpoints: string[];
   issues?: AuditIssue[];
   evidence?: EvidenceArtifact[];

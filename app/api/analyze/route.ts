@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
+import { getCrawlLimit, getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import {
   createCloudflareScanPlaceholder,
@@ -23,6 +23,8 @@ async function readAnalyzeBody(req: Request) {
     const body = await req.json();
     const url = typeof body?.url === 'string' ? body.url.trim() : '';
     const projectId = typeof body?.projectId === 'string' ? body.projectId : undefined;
+    const device: 'desktop' | 'mobile' = body?.device === 'mobile' ? 'mobile' : 'desktop';
+    const renderMode: 'fetch' | 'browser' | 'auto' = body?.renderMode === 'browser' || body?.renderMode === 'fetch' ? body.renderMode : 'auto';
 
     if (!url) {
       return { error: 'URL ist erforderlich' };
@@ -39,7 +41,7 @@ async function readAnalyzeBody(req: Request) {
       return { error: 'Nur HTTP- und HTTPS-URLs koennen analysiert werden' };
     }
 
-    return { url: parsedUrl.toString(), projectId };
+    return { url: parsedUrl.toString(), projectId, device, renderMode };
   } catch {
     return { error: 'Ungueltiges JSON im Request Body' };
   }
@@ -53,7 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: body.error }, { status: 400 });
     }
 
-    const { url, projectId } = body;
+    const { url, projectId, device, renderMode } = body;
     const user = await getSessionUser();
 
     if (!user) {
@@ -78,6 +80,7 @@ export async function POST(req: Request) {
     }
 
     const plan = normalizePlan(userData?.plan || 'free');
+    const crawlLimitUsed = getCrawlLimit(plan);
     const scanCount = userData?.scanCount || 0;
     const maxScans = getMonthlyScanLimit(plan);
 
@@ -120,13 +123,18 @@ export async function POST(req: Request) {
     if (env.SCAN_WORKFLOW_SERVICE) {
       const workflowResponse = await env.SCAN_WORKFLOW_SERVICE.fetch(new Request('https://worker/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': env.INTERNAL_SECRET || '',
+        },
         body: JSON.stringify({
           url,
           plan,
           userId: user.uid,
           projectId,
           auditId: audit_id,
+          device,
+          renderMode,
         }),
       }));
 
@@ -139,13 +147,19 @@ export async function POST(req: Request) {
         audit_id,
         mode: 'workflow',
         status: 'processing',
+        plan,
+        accountPlan: plan,
+        scanPlan: plan,
+        crawlLimitUsed,
+        crawlDevice: device,
+        renderMode,
       });
     }
 
     console.warn('Workflow nicht gebunden. Nutze langsamen Direct-Scan.');
     const { performAnalysis } = await import('@/lib/scanner');
 
-    void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, env }).then(async (result) => {
+    void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, device, renderMode, env }).then(async (result) => {
       const storedResult = await storeCloudflareScanArtifacts(env, result, { scanId: audit_id, userId: user.uid });
       await writeCloudflareScanResult(env, storedResult, { scanId: audit_id, userId: user.uid, projectId, plan })
         .catch((storageError) => console.warn('D1/R2 scan write failed:', getErrorMessage(storageError)));
@@ -155,6 +169,12 @@ export async function POST(req: Request) {
       audit_id,
       mode: 'background-direct',
       status: 'processing',
+      plan,
+      accountPlan: plan,
+      scanPlan: plan,
+      crawlLimitUsed,
+      crawlDevice: device,
+      renderMode,
     });
   } catch (error) {
     console.error('Analyze API Error:', error);

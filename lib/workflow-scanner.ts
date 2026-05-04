@@ -1,6 +1,7 @@
 // @ts-ignore cloudflare:workers is provided by Wrangler for the workflow worker.
 import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { performAnalysis } from './scanner';
+import { normalizePlan } from './plans';
 import {
   createCloudflareScanPlaceholder,
   markCloudflareScanError,
@@ -16,8 +17,14 @@ type WorkflowBinding = {
 export interface Env {
   SCAN_WORKFLOW: WorkflowBinding;
   GEMINI_API_KEY?: string;
+  PAGESPEED_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  CRUX_API_KEY?: string;
   AI_WORKFLOW_SUMMARY?: string;
   INTERNAL_SECRET: string;
+  BROWSER?: any;
   DB?: any;
   AUDIT_ARTIFACTS?: any;
   REPORT_EXPORTS?: any;
@@ -33,7 +40,8 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
   declare env: Env;
 
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
-    const { url, plan = 'free', auditId, userId = '', projectId } = event.payload;
+    const { url, plan = 'free', auditId, userId = '', projectId, device = 'desktop', renderMode = 'auto' } = event.payload;
+    const scanPlan = normalizePlan(plan);
     const targetUrl = normalizeTargetUrl(url);
     const reportId = auditId || crypto.randomUUID();
 
@@ -44,7 +52,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           userId,
           projectId,
           url: targetUrl,
-          plan,
+          plan: scanPlan,
           status: 'scanning',
           progress: 10,
         });
@@ -57,15 +65,17 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
       const finalReport = await step.do('perform deterministic scan', async () => {
         const result = await performAnalysis({
           url: targetUrl,
-          plan,
+          plan: scanPlan,
           userId,
           projectId,
           auditId: reportId,
+          device,
+          renderMode,
           env: this.env,
         });
 
         const storedResult = await storeCloudflareScanArtifacts(this.env, result, { scanId: reportId, userId });
-        await writeCloudflareScanResult(this.env, storedResult, { scanId: reportId, userId, projectId, plan });
+        await writeCloudflareScanResult(this.env, storedResult, { scanId: reportId, userId, projectId, plan: scanPlan });
         return storedResult;
       });
 
@@ -78,7 +88,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
         userId,
         projectId,
         url: targetUrl,
-        plan,
+        plan: scanPlan,
         message,
       }).catch((error) => console.warn('D1 scan error mark failed:', error instanceof Error ? error.message : 'unknown'));
 
@@ -91,6 +101,10 @@ const workflowHttpEntrypoint = {
   async fetch(req: Request, env: Env) {
     if (req.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 });
+    }
+
+    if (!env.INTERNAL_SECRET || req.headers.get('x-internal-secret') !== env.INTERNAL_SECRET) {
+      return new Response('Unauthorized', { status: 401 });
     }
 
     const params = await req.json() as ScanOptions;

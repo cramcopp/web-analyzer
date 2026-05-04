@@ -56,6 +56,10 @@ function numeric(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function normalizePlanValue(value: unknown) {
+  return value === 'agency' || value === 'pro' ? value : 'free';
+}
+
 function sectionScore(source: any, key: typeof SCORE_KEYS[number]) {
   return numeric(source?.[`${key}Score`]) ?? numeric((source?.[key] as ScoreSection | undefined)?.score) ?? 0;
 }
@@ -83,6 +87,8 @@ export function normalizeStoredReport(report: any): NormalizedStoredReport {
   const auditId = merged.audit_id || merged.auditId || report?.id || results?.audit_id || rawScrapeData?.audit_id;
   const url = merged.url || merged.urlObj || report?.url || results?.url || rawScrapeData?.url;
   const score = numeric(report?.score) ?? numeric(merged.score) ?? averageScore(merged);
+  const scanPlan = normalizePlanValue(merged.scanPlan || merged.plan || rawScrapeData?.scanPlan || rawScrapeData?.plan || report?.plan);
+  const accountPlan = normalizePlanValue(merged.accountPlan || rawScrapeData?.accountPlan || scanPlan);
 
   return {
     ...report,
@@ -90,8 +96,11 @@ export function normalizeStoredReport(report: any): NormalizedStoredReport {
     id: report?.id || auditId,
     audit_id: auditId,
     url,
-    results: results ? { ...results, id: report?.id || results.id, audit_id: auditId, url } : null,
-    rawScrapeData: rawScrapeData ? { ...rawScrapeData, id: report?.id || rawScrapeData.id, audit_id: auditId, url } : null,
+    plan: scanPlan,
+    accountPlan,
+    scanPlan,
+    results: results ? { ...results, id: report?.id || results.id, audit_id: auditId, url, plan: scanPlan, accountPlan, scanPlan } : null,
+    rawScrapeData: rawScrapeData ? { ...rawScrapeData, id: report?.id || rawScrapeData.id, audit_id: auditId, url, plan: scanPlan, accountPlan, scanPlan } : null,
     score,
     seoScore: numeric(report?.seoScore) ?? sectionScore(merged, 'seo'),
     performanceScore: numeric(report?.performanceScore) ?? sectionScore(merged, 'performance'),

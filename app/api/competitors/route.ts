@@ -69,11 +69,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Niche is required' }, { status: 400 });
     }
 
-    const apiKey = env.GOOGLE_API_KEY;
+    const apiKey = env.GOOGLE_SEARCH_API_KEY || env.GOOGLE_API_KEY;
     const cx = env.GOOGLE_CX;
 
     if (!apiKey || !cx) {
-       console.warn("GOOGLE_API_KEY or GOOGLE_CX missing. Skipping competitor search.");
+       console.warn("GOOGLE_SEARCH_API_KEY/GOOGLE_API_KEY or GOOGLE_CX missing. Skipping competitor search.");
        return NextResponse.json({ competitors: [] }, { status: 200 });
     }
 

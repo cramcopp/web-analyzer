@@ -18,11 +18,14 @@
     "cf:r2:create": "wrangler r2 bucket create web-analyzer-audit-artifacts && wrangler r2 bucket create web-analyzer-report-exports",
     "cf:kv:create": "wrangler kv namespace create CACHE",
     "cf:queue:create": "wrangler queues create web-analyzer-scan-fanout",
+    "cf:secret:workflow-google": "wrangler secret put GOOGLE_API_KEY -c workflow-wrangler.toml",
+    "cf:secret:workflow-gsc-client": "wrangler secret put GOOGLE_CLIENT_ID -c workflow-wrangler.toml && wrangler secret put GOOGLE_CLIENT_SECRET -c workflow-wrangler.toml",
     "lint": "eslint .",
     "clean": "next clean",
     "scan": "eslint . && knip"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
     "@opennextjs/cloudflare": "^1.19.5",
     "autoprefixer": "^10.4.21",
     "framer-motion": "^12.38.0",
