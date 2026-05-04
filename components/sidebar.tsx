@@ -9,6 +9,7 @@ import {
   CreditCard,
   FileText,
   FolderKanban,
+  Globe2,
   LayoutDashboard,
   Network,
   Menu,
@@ -41,7 +42,9 @@ export const Sidebar = memo(function Sidebar({
   onOpenTeam,
   onOpenProfile,
   onOpenPricing,
+  onOpenHome,
   onLogout,
+  activeSection,
   notifications,
   setNotifications,
   isNotifOpen,
@@ -56,7 +59,9 @@ export const Sidebar = memo(function Sidebar({
   onOpenTeam?: () => void;
   onOpenProfile?: () => void;
   onOpenPricing?: () => void;
+  onOpenHome?: () => void;
   onLogout?: () => void;
+  activeSection?: string;
   notifications: Notification[];
   setNotifications: (notifs: Notification[]) => void;
   isNotifOpen: boolean;
@@ -86,18 +91,20 @@ export const Sidebar = memo(function Sidebar({
   };
 
   const mainNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, action: onOpenDashboard },
-    { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
+    { id: 'home', label: 'Home', icon: LayoutDashboard, action: onOpenHome },
+    { id: 'seo', label: 'SEO', icon: Search, action: onOpenDashboard },
     { id: 'audit', label: 'Audit', icon: ShieldCheck, action: () => { onOpenProjectTab?.('audit'); } },
-    { id: 'monitoring', label: 'Monitoring', icon: Activity, action: () => { onOpenProjectTab?.('monitoring'); } },
-    { id: 'keywords', label: 'Keywords', icon: Search, action: () => { onOpenProjectTab?.('keywords'); } },
-    { id: 'linking', label: 'Interne Verlinkung', icon: Network, action: () => { onOpenProjectTab?.('linking'); } },
-    { id: 'competition', label: 'Wettbewerber', icon: Trophy, action: () => { onOpenProjectTab?.('competition'); } },
-    { id: 'ai_visibility', label: 'AI Visibility', icon: BrainCircuit, action: () => { onOpenProjectTab?.('ai_visibility'); } },
+    { id: 'ai_visibility', label: 'KI', icon: BrainCircuit, action: () => { onOpenProjectTab?.('ai_visibility'); } },
+    { id: 'traffic', label: 'Traffic', icon: Activity, action: () => { onOpenProjectTab?.('rankings'); } },
+    { id: 'content', label: 'Content', icon: FileText, action: () => { onOpenProjectTab?.('keywords'); } },
+    { id: 'linking', label: 'Links', icon: Network, action: () => { onOpenProjectTab?.('linking'); } },
+    { id: 'competition', label: 'Markt', icon: Trophy, action: () => { onOpenProjectTab?.('competition'); } },
+    { id: 'monitoring', label: 'Monitor', icon: Globe2, action: () => { onOpenProjectTab?.('monitoring'); } },
     { id: 'reports', label: 'Reports', icon: FileText, action: () => { onOpenProjectTab?.('reports'); } },
+    { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
     { id: 'team', label: 'Team', icon: Users, action: onOpenTeam },
-    { id: 'billing', label: 'Billing', icon: CreditCard, action: onOpenPricing },
-    { id: 'settings', label: 'Settings', icon: Settings, action: onOpenSettings },
+    { id: 'billing', label: 'Preise', icon: CreditCard, action: onOpenPricing },
+    { id: 'settings', label: 'Setup', icon: Settings, action: onOpenSettings },
   ];
 
 
@@ -167,16 +174,41 @@ export const Sidebar = memo(function Sidebar({
 
   if (isCollapsed) {
     return (
-      <aside className="fixed left-0 top-0 h-screen w-16 bg-[#F5F5F3] dark:bg-zinc-950 border-r border-[#E5E5E5] dark:border-zinc-800 flex flex-col z-50 transition-colors items-center py-6 shadow-sm">
-        <button
-          onClick={() => setIsCollapsed(false)}
-          className="text-[#1A1A1A] dark:text-zinc-100 hover:text-[#D4AF37] transition-colors mb-auto"
-          title="Sidebar ausklappen"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+      <aside className="fixed left-0 top-14 z-50 hidden h-[calc(100vh-3.5rem)] w-[72px] flex-col items-center border-r border-[#dfe3ea] bg-[#f4f6fb] py-3 text-[#5f6b7a] shadow-sm transition-colors dark:border-zinc-800 dark:bg-[#0b1020] dark:text-zinc-400 md:flex">
+        <nav className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto px-1 pb-3">
+          {mainNavItems.slice(0, 11).map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              activeSection === item.id ||
+              (activeSection === 'analyzer' && item.id === 'seo') ||
+              (activeSection === 'project' && item.id === 'projects');
+            return (
+              <button
+                key={item.id}
+                onClick={() => onItemClick(item.action)}
+                title={item.label}
+                className={`group flex w-full flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[10px] font-bold transition-colors ${
+                  isActive
+                    ? 'bg-white text-[#0b7de3] shadow-sm dark:bg-zinc-900 dark:text-[#D4AF37]'
+                    : 'hover:bg-white hover:text-[#172033] dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                <Icon className={`h-5 w-5 ${isActive ? 'text-[#D4AF37]' : ''}`} />
+                <span className="max-w-full truncate leading-none">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-        <div className="flex flex-col gap-5 items-center mt-auto pb-8 w-full relative">
+        <div className="flex w-full flex-col items-center gap-3 border-t border-[#dfe3ea] px-2 pt-3 dark:border-zinc-800">
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="flex h-10 w-10 items-center justify-center rounded-md bg-white text-[#172033] shadow-sm transition-colors hover:text-[#D4AF37] dark:bg-zinc-900 dark:text-zinc-100"
+            title="Workspace ausklappen"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
           {!loading && user && (
             <SidebarAccountMenu 
               onOpenProfile={onOpenProfile}
@@ -206,10 +238,10 @@ export const Sidebar = memo(function Sidebar({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40 md:hidden"
+        className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40 md:hidden"
         onClick={() => setIsCollapsed(true)}
       />
-      <aside className="fixed left-0 top-0 h-screen w-72 bg-[#F5F5F3] dark:bg-zinc-950 border-r border-[#E5E5E5] dark:border-zinc-800 flex flex-col z-50 transition-colors shadow-2xl">
+      <aside className="fixed left-0 top-14 z-50 flex h-[calc(100vh-3.5rem)] w-72 flex-col border-r border-[#dfe3ea] bg-[#f4f6fb] shadow-2xl transition-colors dark:border-zinc-800 dark:bg-zinc-950">
         <div className="p-5 flex justify-between items-start border-b border-[#E5E5E5] dark:border-zinc-800 shrink-0">
           <div>
             <h1 className="text-[18px] font-black uppercase tracking-tighter leading-none mb-1">

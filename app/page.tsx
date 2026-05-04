@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Search, Globe, Loader2, AlertCircle, CheckCircle, X, Zap, Star } from 'lucide-react';
 import { Sidebar } from '../components/sidebar';
 import { FloatingNav } from '../components/floating-nav';
+import TopNav from '../components/top-nav';
+import MarketingHome from '../components/marketing-home';
 import { generateReportClientSide } from './lib/generate-report';
 import { useAuth } from '../components/auth-provider';
 import PricingSection from '../components/PricingSection';
@@ -18,10 +20,10 @@ import { ReportData, PrioritizedTask, GscData } from '../types/report';
 import { AnalysisResult } from '../lib/scanner';
 import { Notification, Project } from '../types/common';
 import { useTrial } from '../hooks/use-trial';
-import { getMonthlyScanLimit } from '../lib/plans';
+import { getMonthlyScanLimit, normalizePlan } from '../lib/plans';
 import { normalizeStoredReport } from '../lib/report-normalizer';
 
-type ActiveView = 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
+type ActiveView = 'home' | 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
 type ProjectNavTab =
   | 'overview'
   | 'audit'
@@ -39,7 +41,7 @@ type ProjectNavTab =
   | 'settings';
 
 export default function WebsiteAnalyzer() {
-  const { user, userData, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading, signIn, logOut } = useAuth();
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,12 +54,20 @@ export default function WebsiteAnalyzer() {
   const [notification, setNotification] = useState<{message: string, url: string} | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [activeView, setActiveView] = useState<ActiveView>('analyzer');
+  const [activeView, setActiveView] = useState<ActiveView>('home');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectInitialTab, setProjectInitialTab] = useState<ProjectNavTab>('overview');
 
-  const { effectivePlan, trialDaysLeft, isInTrial } = useTrial();
-  const scanLimitMonthly = getMonthlyScanLimit(effectivePlan);
+  const { trialDaysLeft, showTrialBadge } = useTrial();
+  const accountPlan = normalizePlan(userData?.plan || 'free');
+  const currentReportPlan = normalizePlan(
+    rawScrapeData?.scanPlan ||
+    rawScrapeData?.plan ||
+    (report as any)?.scanPlan ||
+    (report as any)?.plan ||
+    accountPlan
+  );
+  const scanLimitMonthly = getMonthlyScanLimit(accountPlan);
   const scanCount = userData?.scanCount || 0;
   const scanUsageRatio = scanLimitMonthly > 0 ? scanCount / scanLimitMonthly : 0;
 
@@ -162,6 +172,7 @@ export default function WebsiteAnalyzer() {
     setIsLoading(true);
     setError(null);
     setReport(null);
+    setRawScrapeData(null);
 
     try {
       if (user && userData && scanCount >= scanLimitMonthly) {
@@ -181,7 +192,6 @@ export default function WebsiteAnalyzer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: targetUrl,
-          plan: effectivePlan,
           projectId: selectedProject && (selectedProject.url === currentUrl || selectedProject.url === targetUrl) ? selectedProject.id : undefined,
         }),
       });
@@ -226,8 +236,18 @@ export default function WebsiteAnalyzer() {
       }
 
       setRawScrapeData(scrapeData);
-      const finalReport = await generateReportClientSide(scrapeData, effectivePlan);
-      const reportWithAuditId = { ...finalReport, audit_id: finalReport.audit_id || scrapeData.audit_id, url: scrapeData.url || targetUrl };
+      const reportScanPlan = normalizePlan(scrapeData.scanPlan || scrapeData.plan || accountPlan);
+      const finalReport = await generateReportClientSide(scrapeData, reportScanPlan);
+      const reportWithAuditId = {
+        ...finalReport,
+        plan: reportScanPlan,
+        accountPlan: scrapeData.accountPlan || reportScanPlan,
+        scanPlan: reportScanPlan,
+        crawlLimitUsed: scrapeData.crawlLimitUsed || scrapeData.crawlSummary?.crawlLimitUsed,
+        scannerVersion: scrapeData.scannerVersion,
+        audit_id: finalReport.audit_id || scrapeData.audit_id,
+        url: scrapeData.url || targetUrl
+      };
       setReport(reportWithAuditId);
       setLastAnalyzedUrl(targetUrl);
       addNotification('Analyse abgeschlossen', `Bericht für ${targetUrl} ist bereit.`);
@@ -291,6 +311,22 @@ export default function WebsiteAnalyzer() {
     }
   };
 
+  const handleStartScanFromNav = (target: string) => {
+    const value = target.trim();
+    if (!value) return;
+    setUrl(value);
+    setActiveView('analyzer');
+    void handleAnalyze(undefined, value);
+  };
+
+  const handleLogout = () => {
+    void logOut();
+    setActiveView('home');
+    setReport(null);
+    setRawScrapeData(null);
+    setUrl('');
+    setSelectedProject(null);
+  };
 
   const handleConnectGSC = async () => {
     try {
@@ -339,7 +375,28 @@ export default function WebsiteAnalyzer() {
   );
 
   return (
-    <main className="min-h-screen bg-[#F5F5F3] dark:bg-zinc-950 text-[#1A1A1A] dark:text-zinc-100 font-sans overflow-x-hidden md:pl-16 relative transition-colors duration-500">
+    <>
+      <TopNav
+        mode={activeView === 'home' ? 'marketing' : 'app'}
+        activeView={activeView}
+        user={user}
+        userData={userData}
+        onNavigate={(view) => setActiveView(view as ActiveView)}
+        onStartScan={handleStartScanFromNav}
+        onSignIn={signIn}
+        onLogout={handleLogout}
+      />
+
+      {activeView === 'home' ? (
+        <MarketingHome
+          user={user}
+          onStartScan={handleStartScanFromNav}
+          onOpenAnalyzer={() => setActiveView('analyzer')}
+          onOpenPricing={() => setActiveView('pricing')}
+          onSignIn={signIn}
+        />
+      ) : (
+    <main className="min-h-screen bg-[#F5F5F3] dark:bg-zinc-950 text-[#1A1A1A] dark:text-zinc-100 font-sans overflow-x-hidden pt-14 md:pl-[72px] relative transition-colors duration-500">
       <Sidebar 
         onLoadReport={handleLoadReport}
         onSelectProject={handleSelectProject}
@@ -350,11 +407,13 @@ export default function WebsiteAnalyzer() {
         onOpenTeam={() => setActiveView('team')}
         onOpenProfile={() => setActiveView('profile')}
         onOpenPricing={() => setActiveView('pricing')}
+        onOpenHome={() => setActiveView('home')}
+        activeSection={activeView}
         isNotifOpen={isNotifOpen}
         setIsNotifOpen={setIsNotifOpen}
         notifications={notifications}
         setNotifications={setNotifications}
-        onLogout={() => { setActiveView('analyzer'); setReport(null); setUrl(''); }}
+        onLogout={handleLogout}
       />
       {!isLoading && report && (activeView === 'analyzer' || activeView === 'project') && <FloatingNav />}
       
@@ -371,13 +430,20 @@ export default function WebsiteAnalyzer() {
 
       <div className="max-w-[1600px] mx-auto px-6 md:px-10 py-10 md:py-[60px] flex flex-col justify-between min-h-screen">
         <div>
-          <header className="mb-10 flex flex-col md:flex-row md:justify-between md:items-start gap-8">
+          <header className="mb-8 flex flex-col gap-6 border-b border-[#dfe3ea] pb-7 dark:border-zinc-800 md:flex-row md:items-end md:justify-between">
+            <div>
             <h1 
-              className="text-[40px] sm:text-[50px] md:text-[82px] leading-[0.85] tracking-[-3px] font-bold uppercase max-w-[200px] sm:max-w-[500px] cursor-pointer hover:text-[#D4AF37] transition-all duration-500" 
+              className="max-w-[760px] cursor-pointer text-[34px] font-black uppercase leading-[0.95] tracking-tight text-[#172033] transition-all duration-500 hover:text-[#D4AF37] dark:text-zinc-100 sm:text-[44px] md:text-[56px]"
               onClick={() => setActiveView('analyzer')}
             >
-              {activeView === 'analyzer' ? 'Website Analyzer Pro' : 'WAP'}
+              {activeView === 'analyzer' ? 'SEO Audit & AI Scanner' : 'WAP Workspace'}
             </h1>
+            <p className="mt-3 max-w-[720px] text-[13px] font-bold uppercase tracking-[0.12em] text-[#7b8495]">
+              {activeView === 'analyzer'
+                ? 'Domain eingeben, Deep-Scan starten und daraus einen vermarktbaren Massnahmenplan machen.'
+                : 'Projekte, Reports, Monitoring und Team-Workflows.'}
+            </p>
+            </div>
             <div className="md:text-right flex flex-col gap-3 items-end">
               {(!userData?.plan || userData.plan === 'free') && (
                 <button 
@@ -404,12 +470,30 @@ export default function WebsiteAnalyzer() {
 
           {activeView === 'analyzer' && (
             <>
-              {isInTrial && (
+              {showTrialBadge && (
                 <div className="mb-8 p-4 bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex items-center justify-between">
                   <span className="text-[11px] font-black uppercase tracking-widest text-[#D4AF37]">Testphase aktiv: Noch {trialDaysLeft} Tage verbleibend</span>
                   <button onClick={() => setActiveView('pricing')} className="text-[10px] font-bold uppercase underline text-[#D4AF37]">Jetzt upgraden</button>
                 </div>
               )}
+              <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ['SEO Audit', 'Crawl, Indexierung, Struktur und Onpage-Prioritaeten.'],
+                  ['KI-Sichtbarkeit', 'AI-Crawler, semantische Luecken und LLM-Lesbarkeit.'],
+                  ['Security & DSGVO', 'Header, SSL, Cookies, Datenschutz und Risiken.'],
+                  ['Agentur Reports', 'White-Label Exporte, Kundenlinks und Monitoring.'],
+                ].map(([title, text]) => (
+                  <button
+                    key={title}
+                    onClick={() => title === 'Agentur Reports' ? openProjectSection('reports') : undefined}
+                    className="group min-h-[128px] rounded-lg border border-[#dfe3ea] bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    <span className="mb-4 block h-1.5 w-12 rounded-full bg-[#D4AF37]" />
+                    <h3 className="text-[15px] font-black text-[#172033] dark:text-zinc-100">{title}</h3>
+                    <p className="mt-2 text-[12px] font-semibold leading-relaxed text-[#667085] dark:text-zinc-400">{text}</p>
+                  </button>
+                ))}
+              </section>
               <section className="mb-[60px] mt-10 relative">
                 <span className="text-[12px] uppercase tracking-[1px] font-semibold text-[#888888] mb-[10px] block">Website oder Git-URL</span>
                 <form onSubmit={handleAnalyze} className="flex flex-col md:flex-row items-end gap-6">
@@ -437,7 +521,7 @@ export default function WebsiteAnalyzer() {
                 <p className="text-[11px] text-[#888888] uppercase tracking-[1px] font-semibold max-w-[500px] mt-8 leading-[1.6]">KI-gestützte Analyse für SEO, Security, Performance & DSGVO.</p>
               </section>
 
-              {isLoading && <LoadingDisplay plan={effectivePlan} />}
+              {isLoading && <LoadingDisplay plan={accountPlan} />}
               {report && !isLoading && (
                 <ReportResultsView 
                   report={report} 
@@ -447,7 +531,7 @@ export default function WebsiteAnalyzer() {
                   onConnectGSC={handleConnectGSC} 
                   gscError={gscError} 
                   onExportActionPlan={exportActionPlanToCSV} 
-                  plan={effectivePlan} 
+                  plan={currentReportPlan}
                   setActiveView={setActiveView} 
                 />
               )}
@@ -470,7 +554,7 @@ export default function WebsiteAnalyzer() {
               onConnectGSC={handleConnectGSC} 
               gscError={gscError} 
               onExportActionPlan={exportActionPlanToCSV} 
-              plan={effectivePlan} 
+              plan={currentReportPlan}
               setActiveView={setActiveView} 
             />
           )}
@@ -499,5 +583,7 @@ export default function WebsiteAnalyzer() {
         </footer>
       </div>
     </main>
+      )}
+    </>
   );
 }
