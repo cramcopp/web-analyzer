@@ -1,5 +1,17 @@
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 
+const isDev = process.env.NODE_ENV !== 'production';
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isDev ? ["'unsafe-eval'"] : []),
+  'https://*.google.com',
+  'https://*.googleapis.com',
+  'https://*.gstatic.com',
+  'https://static.cloudflareinsights.com',
+  'https://cloudflareinsights.com',
+].join(' ');
+
 const nextConfig: any = {
   reactStrictMode: true,
   typescript: {
@@ -45,7 +57,7 @@ const nextConfig: any = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.google.com https://*.googleapis.com https://*.gstatic.com https://static.cloudflareinsights.com https://cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleusercontent.com https://picsum.photos https://*.google.com https://*.gstatic.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com wss://*.firebaseio.com https://*.firebase.com https://*.cloudflareinsights.com https://cloudflareinsights.com; frame-src https://*.google.com; object-src 'none';",
+            value: `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleusercontent.com https://picsum.photos https://*.google.com https://*.gstatic.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com wss://*.firebaseio.com https://*.firebase.com https://*.cloudflareinsights.com https://cloudflareinsights.com; frame-src https://*.google.com; object-src 'none';`,
           },
         ],
       },
