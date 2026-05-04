@@ -50,8 +50,8 @@ export default function ProjectsOverviewView({
           <h2 className="text-[32px] md:text-[46px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Projektübersicht</h2>
           <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest leading-relaxed max-w-xl mt-4">
             {targetLabel
-              ? `Waehle ein Projekt aus. Danach oeffnet die App direkt den Bereich ${targetLabel}.`
-              : 'Waehle ein Projekt aus. Danach oeffnet die App den gewuenschten Projektbereich mit echten Crawl- und Providerdaten.'}
+              ? `Wähle ein Projekt aus. Danach öffnet die App direkt den Bereich ${targetLabel}.`
+              : 'Wähle ein Projekt aus. Danach öffnet die App den gewünschten Projektbereich mit echten Crawl- und Providerdaten.'}
           </p>
         </div>
       </div>
@@ -60,7 +60,7 @@ export default function ProjectsOverviewView({
         <div className="h-[280px] bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 animate-pulse" />
       ) : error ? (
         <div className="min-h-[260px] bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 flex flex-col items-center justify-center text-center gap-4">
-          <DataSourceBadge type="unavailable" label="Projekt-API nicht verfuegbar" />
+          <DataSourceBadge type="unavailable" label="Projekt-API nicht verfügbar" />
           <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest">{error}</p>
         </div>
       ) : projects.length === 0 ? (
@@ -87,7 +87,7 @@ export default function ProjectsOverviewView({
                   </div>
                   <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100 truncate">{project.name}</h3>
                   <p className="text-[10px] text-[#888] font-bold uppercase tracking-widest mt-2">
-                    Letzter Scan: {project.lastScanAt ? new Date(project.lastScanAt).toLocaleDateString('de-DE') : 'Nicht verfuegbar'}
+                    Letzter Scan: {project.lastScanAt ? new Date(project.lastScanAt).toLocaleDateString('de-DE') : 'Nicht verfügbar'}
                   </p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-[#888] group-hover:text-[#D4AF37] group-hover:translate-x-1 transition-all shrink-0" />

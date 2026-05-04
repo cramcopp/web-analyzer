@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyReportGrounding } from '@/lib/reporting/report-verifier';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { getCacheJson, putCacheJson } from '@/lib/cloudflare-cache';
-import { normalizePlan } from '@/lib/plans';
+import { hasPlanRank, normalizePlan } from '@/lib/plans';
 import {
   buildDeterministicReport,
   buildGroundedReportPayload,
@@ -371,23 +371,23 @@ export async function POST(req: NextRequest) {
     for (const modelId of models) {
       for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
         try {
-          let prompt = scanPlan === 'agency'
-            ? `Du bist ein Senior Technical SEO Consultant fuer ein DACH Website-Governance-SaaS. Erstelle einen klaren, direkten Agenturbericht fuer ${url}.`
-            : `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. Erstelle einen ehrlichen Bericht in deutscher Sprache fuer ${url}.`;
+          let prompt = hasPlanRank(scanPlan, 'agency')
+            ? `Du bist ein Senior Technical SEO Consultant für ein DACH Website-Governance-SaaS. Erstelle einen klaren, direkten ${scanPlan === 'business' ? 'Business-' : 'Agentur'}bericht für ${url}.`
+            : `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. Erstelle einen ehrlichen Bericht in deutscher Sprache für ${url}.`;
 
           prompt += `
 
-          Harte Regeln fuer Datenwahrheit:
+          Harte Regeln für Datenwahrheit:
           - Nutze nur Daten aus issues, evidence, crawlSummary, realProviderFacts, GSC, PSI oder CrUX.
           - Erfinde keine Rankings, Backlinks, Suchvolumen, Trafficdaten, Wettbewerberwerte oder AI-Visibility-Metriken.
           - Behaupte keine Core-Web-Vitals, Lighthouse- oder PSI-Werte, wenn psiMetrics/cruxMetrics fehlen.
-          - Jede Empfehlung muss auf vorhandene issue ids, evidence ids oder crawlSummary-Fakten zurueckfuehrbar sein.
-          - Wenn Daten fehlen, schreibe "Nicht verfuegbar" oder "Provider nicht verbunden".
-          - Scores aus dem JSON sind deterministische Scanner-Scores; veraendere sie inhaltlich nicht.
-          - competitorBenchmarking darf nur echte realProviderFacts.competitorFacts nutzen. Wenn leer, gib [] zurueck oder markiere Nicht verfuegbar.
+          - Jede Empfehlung muss auf vorhandene issue ids, evidence ids oder crawlSummary-Fakten zurückführbar sein.
+          - Wenn Daten fehlen, schreibe "Nicht verfügbar" oder "Provider nicht verbunden".
+          - Scores aus dem JSON sind deterministische Scanner-Scores; verändere sie inhaltlich nicht.
+          - competitorBenchmarking darf nur echte realProviderFacts.competitorFacts nutzen. Wenn leer, gib [] zurück oder markiere Nicht verfügbar.
           - keywordGapAnalysis sind nur Themenhinweise aus vorhandenen Inhalten/Issues, keine Suchvolumen- oder Ranking-Fakten.
 
-          Erstelle den Bericht ausschliesslich aus diesem Grounding-JSON:
+          Erstelle den Bericht ausschließlich aus diesem Grounding-JSON:
           ${JSON.stringify(groundedData)}`;
 
 

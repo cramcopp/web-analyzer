@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { hasCloudflareD1, upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
+import { hasCloudflareD1, getCloudflareUserProfile, upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
+import { getPlanConfig } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
 function normalizeUrl(value: string) {
   const url = new URL(value.startsWith('http') ? value : `https://${value}`);
   if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new Error('Nur HTTP/HTTPS URLs koennen geprueft werden');
+    throw new Error('Nur HTTP/HTTPS URLs können geprüft werden');
   }
   return url;
 }
@@ -65,10 +66,15 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
+    const userProfile = await getCloudflareUserProfile(env, user.uid);
+    if (!getPlanConfig(userProfile?.plan).monitoring) {
+      return NextResponse.json({ error: 'Monitoring ist ab Pro verfügbar' }, { status: 403 });
+    }
+
     const body = await req.json();
     const projectId = body.projectId;
     const target = normalizeUrl(String(body.url || ''));
@@ -78,7 +84,7 @@ export async function POST(req: Request) {
     }
 
     if (isPrivateHost(target.hostname)) {
-      return NextResponse.json({ error: 'Private oder lokale Hosts koennen nicht geprueft werden' }, { status: 400 });
+      return NextResponse.json({ error: 'Private oder lokale Hosts können nicht geprüft werden' }, { status: 400 });
     }
 
     const now = new Date().toISOString();

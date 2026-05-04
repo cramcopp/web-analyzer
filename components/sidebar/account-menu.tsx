@@ -7,6 +7,7 @@ import {
 import Image from 'next/image';
 import { useAuth } from '../auth-provider';
 import { useTrial } from '../../hooks/use-trial';
+import { hasPlanRank, normalizePlan } from '../../lib/plans';
 
 interface SidebarAccountMenuProps {
   onOpenProfile?: () => void;
@@ -30,6 +31,13 @@ export function SidebarAccountMenu({
   const { user, userData, logOut } = useAuth();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const { trialDaysLeft, showTrialBadge } = useTrial();
+  const plan = normalizePlan(userData?.plan || 'free');
+  const planBadgeClass = {
+    business: 'bg-[#172033] text-white border border-[#D4AF37] shadow-sm',
+    agency: 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border border-zinc-700 shadow-sm',
+    pro: 'bg-[#D4AF37] text-white shadow-sm',
+    free: 'bg-[#F5F5F3] dark:bg-zinc-800 text-[#888]',
+  }[plan];
 
   if (!user) return null;
 
@@ -70,7 +78,7 @@ export function SidebarAccountMenu({
                 <Settings className="w-4 h-4 text-[#888] group-hover:text-[#D4AF37]" />{" "}
                 Einstellungen
               </button>
-              {userData?.plan === 'agency' && (
+              {hasPlanRank(plan, 'agency') && (
                 <button
                   onClick={() => {
                     onItemClick(onOpenTeam);
@@ -176,12 +184,8 @@ export function SidebarAccountMenu({
                   {user.displayName || "Nutzer"}
                 </span>
                 {userData?.plan && (
-                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-[2px] leading-none tracking-widest ${
-                    userData.plan === 'agency' ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border border-zinc-700 shadow-sm' :
-                    userData.plan === 'pro' ? 'bg-[#D4AF37] text-white shadow-sm' :
-                    'bg-[#F5F5F3] dark:bg-zinc-800 text-[#888]'
-                  }`}>
-                    {userData.plan}
+                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-[2px] leading-none tracking-widest ${planBadgeClass}`}>
+                    {plan}
                   </span>
                 )}
               </div>

@@ -43,7 +43,18 @@ export const reportSaveSchema = z.object({
 });
 
 export const checkoutSchema = z.object({
-  planName: z.enum(['pro', 'agency']),
+  checkoutType: z.enum(['plan', 'addon']).default('plan'),
+  planName: z.enum(['pro', 'agency', 'business']).optional(),
+  addonKey: z.enum(['keywords_100', 'project_100_keywords', 'team_seat', 'white_label_domain', 'backlinks', 'ai_visibility']).optional(),
   interval: z.enum(['monthly', 'yearly']).default('monthly'),
+  quantity: z.number().int().min(1).max(50).default(1),
   priceId: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.checkoutType === 'plan' && !value.planName) {
+    ctx.addIssue({ code: 'custom', path: ['planName'], message: 'Plan fehlt' });
+  }
+
+  if (value.checkoutType === 'addon' && !value.addonKey) {
+    ctx.addIssue({ code: 'custom', path: ['addonKey'], message: 'Add-on fehlt' });
+  }
 });

@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   }
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({
-        error: result.error.issues[0]?.message || 'Ungueltige Daten',
+        error: result.error.issues[0]?.message || 'Ungültige Daten',
       }, { status: 400 });
     }
 

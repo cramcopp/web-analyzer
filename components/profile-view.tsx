@@ -3,6 +3,7 @@
 import { useState, memo } from 'react';
 import Image from 'next/image';
 import { useAuth } from './auth-provider';
+import { getEffectivePlanConfig, hasPlanRank } from '../lib/plans';
 
 function ProfileView() {
   const { user, userData, updateUser, updateUserData, error: authError } = useAuth();
@@ -13,6 +14,7 @@ function ProfileView() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [success, setSuccess] = useState(false);
   const [brandLogo, setBrandLogo] = useState(userData?.brandLogo || '');
+  const [customDomain, setCustomDomain] = useState(userData?.customDomain || '');
   const [prevUserDataLogo, setPrevUserDataLogo] = useState(userData?.brandLogo);
 
   // Sync state during render if userData changes
@@ -24,6 +26,9 @@ function ProfileView() {
   }
 
   if (!user) return null;
+  const hasWhiteLabelProfile = hasPlanRank(userData?.plan, 'agency');
+  const effectivePlan = getEffectivePlanConfig(userData?.plan, userData?.addOns);
+  const hasCustomDomainAddon = effectivePlan.whiteLabelCustomDomain;
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +41,10 @@ function ProfileView() {
         password: editPass ? editPass : undefined
       });
       
-      if (userData?.plan === 'agency') {
-        await updateUserData({ brandLogo });
+      if (hasWhiteLabelProfile) {
+        await updateUserData({ brandLogo, ...(hasCustomDomainAddon ? { customDomain } : {}) });
+      } else if (hasCustomDomainAddon) {
+        await updateUserData({ customDomain });
       }
       
       setSuccess(true);
@@ -127,7 +134,7 @@ function ProfileView() {
                 </div>
               )}
               
-              {userData?.plan === 'agency' && (
+              {hasWhiteLabelProfile && (
                 <div className="flex flex-col gap-3">
                   <label className="text-[10px] font-black uppercase tracking-widest text-[#888]">Agentur-Logo (URL)</label>
                   <input 
@@ -135,6 +142,19 @@ function ProfileView() {
                     value={brandLogo}
                     placeholder="https://deine-website.de/logo.png"
                     onChange={(e) => setBrandLogo(e.target.value)}
+                    className="w-full bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 rounded-sm py-3 px-4 text-[14px] font-bold outline-none focus:border-[#D4AF37] transition-colors"
+                  />
+                </div>
+              )}
+
+              {hasCustomDomainAddon && (
+                <div className="flex flex-col gap-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#888]">White Label Custom Domain</label>
+                  <input
+                    type="text"
+                    value={customDomain}
+                    placeholder="reports.deine-domain.de"
+                    onChange={(e) => setCustomDomain(e.target.value)}
                     className="w-full bg-white dark:bg-zinc-900 border border-[#E5E5E5] dark:border-zinc-800 rounded-sm py-3 px-4 text-[14px] font-bold outline-none focus:border-[#D4AF37] transition-colors"
                   />
                 </div>
@@ -178,6 +198,12 @@ function ProfileView() {
                  <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">E-Mail Adresse</span>
                  <div className="text-[20px] font-bold text-[#1A1A1A] dark:text-zinc-100 tracking-tight border-b border-[#DDD] dark:border-zinc-800 pb-2">{user.email}</div>
                </div>
+               {hasCustomDomainAddon && (
+                 <div className="flex flex-col gap-2">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">White Label Domain</span>
+                   <div className="text-[20px] font-bold text-[#1A1A1A] dark:text-zinc-100 tracking-tight border-b border-[#DDD] dark:border-zinc-800 pb-2">{userData?.customDomain || 'Noch nicht gesetzt'}</div>
+                 </div>
+               )}
             </div>
           )}
         </div>

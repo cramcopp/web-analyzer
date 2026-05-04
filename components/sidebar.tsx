@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { Notification, Project, HistoryItem } from "../types/common";
-import { getMonthlyScanLimit } from "../lib/plans";
+import { getMonthlyCrawlPageLimit, getMonthlyScanLimit } from "../lib/plans";
 import { normalizeStoredReports } from "../lib/report-normalizer";
 
 // Sub-Components
@@ -71,6 +71,9 @@ export const Sidebar = memo(function Sidebar({
   const scanLimitMonthly = getMonthlyScanLimit(userData?.plan || 'free');
   const scanCount = userData?.scanCount || 0;
   const scanUsageRatio = scanLimitMonthly > 0 ? scanCount / scanLimitMonthly : 0;
+  const crawlPagesLimitMonthly = getMonthlyCrawlPageLimit(userData?.plan || 'free');
+  const crawlPagesCount = userData?.crawlPagesCount || 0;
+  const crawlUsageRatio = crawlPagesLimitMonthly > 0 ? crawlPagesCount / crawlPagesLimitMonthly : 0;
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -308,6 +311,21 @@ export const Sidebar = memo(function Sidebar({
                      <div
                        className={`h-full transition-all duration-1000 rounded-full ${ scanUsageRatio > 0.8 ? 'bg-[#EB5757]' : 'bg-[#D4AF37]' }`}
                       style={{ width: `${Math.min(100, scanUsageRatio * 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center">
+                     <span className="text-[13px] font-black tracking-tighter text-[#1A1A1A] dark:text-zinc-100 leading-none">
+                       {crawlPagesCount} / {crawlPagesLimitMonthly}
+                     </span>
+                     <span className="text-[8px] font-bold text-[#888] uppercase tracking-widest">Crawl-Seiten</span>
+                  </div>
+                  <div className="w-full h-1 bg-black/5 dark:bg-white/5 overflow-hidden rounded-full">
+                     <div
+                       className={`h-full transition-all duration-1000 rounded-full ${ crawlUsageRatio > 0.8 ? 'bg-[#EB5757]' : 'bg-[#27AE60]' }`}
+                      style={{ width: `${Math.min(100, crawlUsageRatio * 100)}%` }}
                     />
                   </div>
                 </div>

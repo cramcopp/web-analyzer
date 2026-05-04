@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
 import { projectCreateSchema } from '@/lib/validations';
-import { getCrawlLimit, normalizePlan } from '@/lib/plans';
+import { getCrawlLimit, getEffectivePlanConfig, normalizePlan } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { getCloudflareUserProfile, hasCloudflareD1, queryCloudflareProjects, upsertCloudflareProject } from '@/lib/cloudflare-storage';
 
@@ -13,7 +13,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -40,12 +40,22 @@ export async function POST(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({
-        error: result.error.issues[0]?.message || 'Ungueltige Eingabe',
+        error: result.error.issues[0]?.message || 'Ungültige Eingabe',
       }, { status: 400 });
     }
 
     const userData = await getCloudflareUserProfile(env, user.uid);
     const accountPlan = normalizePlan(typeof userData?.plan === 'string' ? userData.plan : 'free');
+    const planConfig = getEffectivePlanConfig(accountPlan, userData?.addOns);
+    const projects = await queryCloudflareProjects(env, user.uid);
+    const ownedProjects = projects.filter((project: any) => project.userId === user.uid);
+    if (ownedProjects.length >= planConfig.projects) {
+      return NextResponse.json({
+        error: 'Projektlimit erreicht',
+        details: `Dein ${planConfig.name}-Plan erlaubt ${planConfig.projects} Projekte.`,
+      }, { status: 403 });
+    }
+
     const projectId = crypto.randomUUID();
     const projectData = {
       id: projectId,

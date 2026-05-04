@@ -1,4 +1,4 @@
-import { getMonthlyScanLimit, normalizePlan } from './plans';
+import { getMonthlyCrawlPageLimit, getMonthlyScanLimit, normalizeAddonKey, normalizeAddonQuantities, normalizePlan, type AddonKey } from './plans';
 import { compareScans } from './monitoring/diff';
 import type { AnalysisResult } from './scanner/types';
 import type { AuditIssue, EvidenceArtifact, UrlSnapshot } from '@/types/audit';
@@ -290,6 +290,7 @@ function buildReportSummary(result: AnalysisResult | Record<string, unknown>) {
     accountPlan: result.accountPlan,
     scanPlan: result.scanPlan || result.plan,
     crawlLimitUsed: result.crawlLimitUsed,
+    visibilityLimits: result.visibilityLimits,
     crawlDevice: result.crawlDevice,
     renderMode: result.renderMode,
     renderAudit: result.renderAudit,
@@ -326,6 +327,18 @@ function buildReportSummary(result: AnalysisResult | Record<string, unknown>) {
     contentStrategy: result.contentStrategy,
     aiVisibility: result.aiVisibility,
   };
+}
+
+function getCrawledPagesCount(result: AnalysisResult | Record<string, unknown>) {
+  const crawlSummary = isObject(result.crawlSummary) ? result.crawlSummary : {};
+  const crawledPagesCount = typeof crawlSummary.crawledPagesCount === 'number' ? crawlSummary.crawledPagesCount : null;
+  const crawledUrls = Array.isArray(crawlSummary.crawledUrls) ? crawlSummary.crawledUrls : [];
+  const scannedSubpagesCount = typeof crawlSummary.scannedSubpagesCount === 'number' ? crawlSummary.scannedSubpagesCount : null;
+
+  if (crawledPagesCount !== null && Number.isFinite(crawledPagesCount)) return crawledPagesCount;
+  if (crawledUrls.length > 0) return crawledUrls.length;
+  if (scannedSubpagesCount !== null && Number.isFinite(scannedSubpagesCount)) return scannedSubpagesCount + 1;
+  return 1;
 }
 
 function reportLikeToRaw(report: Record<string, unknown>) {
@@ -396,6 +409,10 @@ export function defaultUserProfile(user: SessionUser, existing?: Record<string, 
     plan,
     scanCount: typeof existing?.scanCount === 'number' ? existing.scanCount : 0,
     maxScans: typeof existing?.maxScans === 'number' ? existing.maxScans : getMonthlyScanLimit(plan),
+    crawlPagesCount: typeof existing?.crawlPagesCount === 'number' ? existing.crawlPagesCount : 0,
+    maxCrawlPages: typeof existing?.maxCrawlPages === 'number' ? existing.maxCrawlPages : getMonthlyCrawlPageLimit(plan),
+    addOns: normalizeAddonQuantities(existing?.addOns),
+    stripeAddonSubscriptions: existing?.stripeAddonSubscriptions || {},
     lastScanReset: existing?.lastScanReset || createdAt,
     stripeCustomerId: existing?.stripeCustomerId || null,
     gscTokens: existing?.gscTokens || null,
@@ -417,7 +434,11 @@ function toUserProfile(row: Record<string, unknown> | null) {
     role: row.role || profile.role || 'user',
     plan: row.plan || profile.plan || 'free',
     scanCount: typeof row.scan_count === 'number' ? row.scan_count : profile.scanCount || 0,
-    maxScans: typeof row.max_scans === 'number' ? row.max_scans : profile.maxScans || getMonthlyScanLimit('free'),
+    maxScans: typeof row.max_scans === 'number' ? row.max_scans : profile.maxScans || getMonthlyScanLimit(row.plan as string || 'free'),
+    crawlPagesCount: typeof row.crawl_pages_count === 'number' ? row.crawl_pages_count : profile.crawlPagesCount || 0,
+    maxCrawlPages: typeof row.max_crawl_pages === 'number' ? row.max_crawl_pages : profile.maxCrawlPages || getMonthlyCrawlPageLimit(row.plan as string || 'free'),
+    addOns: normalizeAddonQuantities(parseMaybeJson(row.add_ons_json) || profile.addOns),
+    stripeAddonSubscriptions: parseMaybeJson<Record<string, unknown>>(row.stripe_addon_subscriptions_json) || profile.stripeAddonSubscriptions || {},
     lastScanReset: row.last_scan_reset || profile.lastScanReset,
     stripeCustomerId: row.stripe_customer_id || profile.stripeCustomerId,
     gscTokens: row.gsc_tokens_json || profile.gscTokens,
@@ -447,9 +468,10 @@ export async function upsertCloudflareUserProfile(
   await db.prepare(`
     INSERT INTO users (
       id, email, display_name, photo_url, role, plan, scan_count, max_scans,
+      crawl_pages_count, max_crawl_pages, add_ons_json, stripe_addon_subscriptions_json,
       last_scan_reset, stripe_customer_id, gsc_tokens_json, profile_json, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       email = excluded.email,
       display_name = excluded.display_name,
@@ -458,6 +480,10 @@ export async function upsertCloudflareUserProfile(
       plan = excluded.plan,
       scan_count = excluded.scan_count,
       max_scans = excluded.max_scans,
+      crawl_pages_count = excluded.crawl_pages_count,
+      max_crawl_pages = excluded.max_crawl_pages,
+      add_ons_json = excluded.add_ons_json,
+      stripe_addon_subscriptions_json = excluded.stripe_addon_subscriptions_json,
       last_scan_reset = excluded.last_scan_reset,
       stripe_customer_id = excluded.stripe_customer_id,
       gsc_tokens_json = COALESCE(excluded.gsc_tokens_json, users.gsc_tokens_json),
@@ -472,6 +498,10 @@ export async function upsertCloudflareUserProfile(
     normalized.plan,
     normalized.scanCount,
     normalized.maxScans,
+    normalized.crawlPagesCount,
+    normalized.maxCrawlPages,
+    safeJson(normalized.addOns),
+    safeJson(normalized.stripeAddonSubscriptions),
     normalized.lastScanReset,
     normalized.stripeCustomerId || null,
     normalized.gscTokens || null,
@@ -501,6 +531,10 @@ export async function patchCloudflareUserProfile(
         plan = COALESCE(?, plan),
         scan_count = COALESCE(?, scan_count),
         max_scans = COALESCE(?, max_scans),
+        crawl_pages_count = COALESCE(?, crawl_pages_count),
+        max_crawl_pages = COALESCE(?, max_crawl_pages),
+        add_ons_json = COALESCE(?, add_ons_json),
+        stripe_addon_subscriptions_json = COALESCE(?, stripe_addon_subscriptions_json),
         last_scan_reset = COALESCE(?, last_scan_reset),
         stripe_customer_id = COALESCE(?, stripe_customer_id),
         gsc_tokens_json = COALESCE(?, gsc_tokens_json),
@@ -513,6 +547,10 @@ export async function patchCloudflareUserProfile(
     data.plan ?? null,
     data.scanCount ?? null,
     data.maxScans ?? null,
+    data.crawlPagesCount ?? null,
+    data.maxCrawlPages ?? null,
+    data.addOns !== undefined ? safeJson(normalizeAddonQuantities(data.addOns)) : null,
+    data.stripeAddonSubscriptions !== undefined ? safeJson(data.stripeAddonSubscriptions) : null,
     data.lastScanReset ?? null,
     data.stripeCustomerId ?? null,
     data.gscTokens ?? null,
@@ -527,20 +565,22 @@ export async function patchCloudflareUserProfile(
 export async function updateCloudflareStripeSubscription(
   env: CloudflareStorageEnv | Record<string, unknown> | undefined,
   userId: string,
-  data: Record<string, unknown> & { plan?: string; maxScans?: number }
+  data: Record<string, unknown> & { plan?: string; maxScans?: number; maxCrawlPages?: number }
 ) {
   const db = getDb(env);
   if (!db) return false;
 
   const existing = await getCloudflareUserProfile(env, userId);
   const now = nowIso();
-  const plan = String(data.plan || existing?.plan || 'free');
+  const plan = normalizePlan(String(data.plan || existing?.plan || 'free'));
   const maxScans = typeof data.maxScans === 'number' ? data.maxScans : getMonthlyScanLimit(plan);
+  const maxCrawlPages = typeof data.maxCrawlPages === 'number' ? data.maxCrawlPages : getMonthlyCrawlPageLimit(plan);
   const merged = {
     ...(existing || { uid: userId, id: userId, role: 'user', scanCount: 0 }),
     ...data,
     plan,
     maxScans,
+    maxCrawlPages,
     lastScanReset: data.lastScanReset || now,
     updatedAt: now,
   };
@@ -548,12 +588,16 @@ export async function updateCloudflareStripeSubscription(
   await db.prepare(`
     INSERT INTO users (
       id, email, display_name, photo_url, role, plan, scan_count, max_scans,
+      crawl_pages_count, max_crawl_pages, add_ons_json, stripe_addon_subscriptions_json,
       last_scan_reset, stripe_customer_id, gsc_tokens_json, profile_json, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       plan = excluded.plan,
       max_scans = excluded.max_scans,
+      max_crawl_pages = excluded.max_crawl_pages,
+      add_ons_json = excluded.add_ons_json,
+      stripe_addon_subscriptions_json = excluded.stripe_addon_subscriptions_json,
       last_scan_reset = excluded.last_scan_reset,
       stripe_customer_id = COALESCE(excluded.stripe_customer_id, users.stripe_customer_id),
       profile_json = excluded.profile_json,
@@ -567,6 +611,10 @@ export async function updateCloudflareStripeSubscription(
     plan,
     existing?.scanCount || 0,
     maxScans,
+    existing?.crawlPagesCount || 0,
+    maxCrawlPages,
+    safeJson(normalizeAddonQuantities(existing?.addOns)),
+    safeJson(existing?.stripeAddonSubscriptions || {}),
     String(data.lastScanReset || now),
     data.stripeCustomerId || existing?.stripeCustomerId || null,
     existing?.gscTokens || null,
@@ -576,6 +624,65 @@ export async function updateCloudflareStripeSubscription(
   ).run();
 
   return true;
+}
+
+type StripeAddonSubscriptionRecord = {
+  addonKey: AddonKey;
+  quantity: number;
+  status?: string | null;
+  updatedAt: string;
+};
+
+export async function updateCloudflareStripeAddonSubscription(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  userId: string,
+  data: {
+    subscriptionId: string;
+    addonKey: string;
+    quantity?: number;
+    status?: string | null;
+    active: boolean;
+  }
+) {
+  if (!data.subscriptionId || !userId) return false;
+
+  const addonKey = normalizeAddonKey(data.addonKey);
+  if (!addonKey) return false;
+
+  const existing = await getCloudflareUserProfile(env, userId);
+  if (!existing) return false;
+
+  const now = nowIso();
+  const addOns = normalizeAddonQuantities(existing.addOns);
+  const subscriptions = {
+    ...(existing.stripeAddonSubscriptions || {}),
+  } as Record<string, StripeAddonSubscriptionRecord>;
+
+  const previous = subscriptions[data.subscriptionId];
+  if (previous?.addonKey) {
+    const previousQuantity = Math.max(0, Math.floor(Number(previous.quantity) || 0));
+    addOns[previous.addonKey] = Math.max((addOns[previous.addonKey] || 0) - previousQuantity, 0);
+  }
+
+  if (data.active) {
+    const quantity = Math.max(1, Math.floor(Number(data.quantity) || 1));
+    addOns[addonKey] = (addOns[addonKey] || 0) + quantity;
+    subscriptions[data.subscriptionId] = {
+      addonKey,
+      quantity,
+      status: data.status || null,
+      updatedAt: now,
+    };
+  } else {
+    delete subscriptions[data.subscriptionId];
+  }
+
+  const compactAddOns = normalizeAddonQuantities(addOns);
+  const updated = await patchCloudflareUserProfile(env, userId, {
+    addOns: compactAddOns,
+    stripeAddonSubscriptions: subscriptions,
+  });
+  return updated;
 }
 
 export async function getCloudflareUserByEmail(
@@ -650,13 +757,38 @@ export async function incrementCloudflareUserScanCount(
   if (!db) return false;
 
   const now = nowIso();
-  await upsertCloudflareUserProfile(env, user);
+  const existing = await getCloudflareUserProfile(env, user.uid);
+  if (!existing) {
+    await upsertCloudflareUserProfile(env, user);
+  }
   await db.prepare(`
     UPDATE users
     SET scan_count = COALESCE(scan_count, 0) + ?,
         updated_at = ?
     WHERE id = ?
   `).bind(amount, now, user.uid).run();
+  return true;
+}
+
+export async function incrementCloudflareUserCrawlPageCount(
+  env: CloudflareStorageEnv | Record<string, unknown> | undefined,
+  userId: string,
+  amount = 0,
+  plan?: string | null
+) {
+  const db = getDb(env);
+  if (!db || !userId || amount <= 0) return false;
+
+  const scanPlan = normalizePlan(plan || 'free');
+  const now = nowIso();
+  // eslint-disable-next-line no-secrets/no-secrets
+  await db.prepare(`
+    UPDATE users
+    SET crawl_pages_count = COALESCE(crawl_pages_count, 0) + ?,
+        max_crawl_pages = COALESCE(max_crawl_pages, ?),
+        updated_at = ?
+    WHERE id = ?
+  `).bind(amount, getMonthlyCrawlPageLimit(scanPlan), now, userId).run();
   return true;
 }
 
@@ -1837,6 +1969,7 @@ export async function writeCloudflareScanResult(
 
   await runBatch(db, statements);
   await writeScanDiffIfPossible(db, projectId, userId, scanDiff);
+  await incrementCloudflareUserCrawlPageCount(env, userId, getCrawledPagesCount(storedResult), scanPlan);
   return true;
 }
 

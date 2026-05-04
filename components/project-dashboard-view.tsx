@@ -341,8 +341,8 @@ function ProjectDashboardView({
           </div>
         );
 
-      case 'issues': return <ProjectIssuesView report={activeAuditData} />;
-      case 'evidence': return <ProjectEvidenceView report={activeAuditData} />;
+      case 'issues': return <ProjectIssuesView report={activeAuditData} plan={plan} />;
+      case 'evidence': return <ProjectEvidenceView report={activeAuditData} plan={plan} />;
       case 'keywords': return <ProjectKeywordsView report={activeAuditData} />;
       case 'rankings': return <ProjectRankingsView report={activeAuditData} />;
       case 'linking': return <ProjectLinkingView report={activeAuditData} plan={plan} />;

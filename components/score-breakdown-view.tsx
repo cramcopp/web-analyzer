@@ -67,10 +67,10 @@ export default function ScoreBreakdownView({ breakdown }: { breakdown?: AuditSco
             <span className="text-[10px] font-black uppercase tracking-[3px] text-[#D4AF37]">Issue-Based Scoring</span>
           </div>
           <h3 className="text-[24px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">
-            Score-Erklaerung
+            Score-Erklärung
           </h3>
           <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest mt-2 max-w-2xl">
-            Jeder Score startet bei 100. Abzuege entstehen ausschliesslich aus Issues, gewichtet nach Severity und Confidence.
+            Jeder Score startet bei 100. Abzüge entstehen ausschließlich aus Issues, gewichtet nach Severity und Confidence.
           </p>
         </div>
       </div>

@@ -3,6 +3,8 @@ import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { z } from 'zod';
 import { getCacheJson, putCacheJson } from '@/lib/cloudflare-cache';
+import { getCloudflareUserProfile, hasCloudflareD1 } from '@/lib/cloudflare-storage';
+import { getPlanConfig } from '@/lib/plans';
 
 const competitorsSchema = z.object({
   niche: z.string().min(1, "Nische ist erforderlich"),
@@ -40,7 +42,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
   }
 
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
+  }
+
   try {
+    const userProfile = await getCloudflareUserProfile(env, user.uid);
+    const planConfig = getPlanConfig(userProfile?.plan);
+    if (planConfig.competitors <= 0) {
+      return NextResponse.json({
+        error: 'Wettbewerber-Analyse ist in deinem Plan nicht enthalten',
+        details: 'Wettbewerber sind ab Pro verfügbar.',
+      }, { status: 403 });
+    }
+
     const body = await req.json();
     const result = competitorsSchema.safeParse(body);
     
@@ -78,7 +93,8 @@ export async function POST(req: Request) {
     }
 
     const queryStr = `${niche}`;
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(queryStr)}&num=10`;
+    const requestedCompetitors = Math.min(10, planConfig.competitors);
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(queryStr)}&num=${requestedCompetitors}`;
 
     const searchRes = await fetch(searchUrl, {
       signal: AbortSignal.timeout(5000)
@@ -110,7 +126,7 @@ export async function POST(req: Request) {
        } catch {
            return true; 
        }
-    }).slice(0, 3); // Take top 3
+    }).slice(0, requestedCompetitors);
 
     if (filteredItems.length === 0) {
        return NextResponse.json({ competitors: [] });

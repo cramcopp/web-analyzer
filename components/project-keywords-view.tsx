@@ -23,7 +23,7 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
   const topKeywordsFromPage = useMemo(() => {
     if (!report?.bodyText) return [];
 
-    const stopWords = new Set(['dass', 'sind', 'haben', 'eine', 'oder', 'und', 'der', 'die', 'das', 'mit', 'von', 'fuer']);
+    const stopWords = new Set(['dass', 'sind', 'haben', 'eine', 'oder', 'und', 'der', 'die', 'das', 'mit', 'von', 'fuer', 'für']);
     const words = report.bodyText.toLowerCase()
       .replace(/[^\w\s\u00e4\u00f6\u00fc]/g, '')
       .split(/\s+/)
@@ -53,7 +53,7 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
           </div>
           <h2 className="text-[32px] md:text-[42px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Keyword Scan</h2>
           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest max-w-xl">
-            On-Page-Worthaeufigkeit ist heuristisch. Suchvolumen, CPC und Difficulty brauchen einen echten Keyword-Provider.
+            On-Page-Worthäufigkeit ist heuristisch. Suchvolumen, CPC und Difficulty brauchen einen echten Keyword-Provider.
           </p>
         </div>
       </div>
@@ -90,7 +90,7 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
                   <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-950 p-4 border border-[#EEE] dark:border-zinc-800">
                     <Info className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                     <p className="text-[11px] text-[#888] font-medium leading-relaxed">
-                      Diese Begriffe wurden im auslesbaren Textkoerper gezaehlt. Das ist kein Suchvolumen und keine Ranking-Aussage.
+                      Diese Begriffe wurden im auslesbaren Textkörper gezählt. Das ist kein Suchvolumen und keine Ranking-Aussage.
                     </p>
                   </div>
                 </div>
@@ -136,7 +136,7 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
                       className="bg-zinc-700 text-zinc-400 px-6 py-3 font-black uppercase text-[10px] tracking-widest flex items-center gap-2 cursor-not-allowed"
                     >
                       <PlugZap className="w-4 h-4" />
-                      {keywordProviderConfigured ? 'Abruf spaeter' : 'Provider fehlt'}
+                      {keywordProviderConfigured ? 'Abruf später' : 'Provider fehlt'}
                     </button>
                   </div>
                 </div>
@@ -174,7 +174,7 @@ export default function ProjectKeywordsView({ report }: { report: AnalysisResult
                     {keywordProviderConfigured ? 'Noch keine Keyword-Facts abgerufen' : 'Provider noch nicht verbunden'}
                   </h4>
                   <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest italic max-w-sm">
-                    DataForSEO, SerpApi oder ein anderer Keyword-Provider kann hier spaeter echte Facts liefern.
+                    DataForSEO, SerpApi oder ein anderer Keyword-Provider kann hier später echte Facts liefern.
                   </p>
                 </div>
               </div>

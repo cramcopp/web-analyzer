@@ -1,5 +1,6 @@
 import type { AuditIssue, EvidenceArtifact } from '@/types/audit';
 import type { ReportBuilderConfig, ReportSectionKey } from '@/types/reporting';
+import { applyReportVisibilityLimits, buildVisibilitySummaryFromReport, normalizePlan } from '@/lib/plans';
 
 const DEFAULT_PUBLIC_SECTIONS: ReportSectionKey[] = ['summary', 'scores', 'issues', 'evidence', 'crawl', 'recommendations'];
 
@@ -51,6 +52,9 @@ export function sanitizeReportForClient(rawReport: any, builder?: ReportBuilderC
     scoreBreakdown: results?.scoreBreakdown || rawScrapeData?.scoreBreakdown || null,
     dataSources: results?.dataSources || rawScrapeData?.dataSources || {},
   };
+  const scanPlan = normalizePlan(source.scanPlan || source.plan || rawReport?.scanPlan || rawReport?.plan);
+  const visibleSource = applyReportVisibilityLimits(source, scanPlan) as any;
+  const visibilityLimits = buildVisibilitySummaryFromReport(source, scanPlan);
 
   const sections = new Set(builder?.sections?.length ? builder.sections : DEFAULT_PUBLIC_SECTIONS);
   const sanitized = {
@@ -58,6 +62,10 @@ export function sanitizeReportForClient(rawReport: any, builder?: ReportBuilderC
     url: rawReport?.url || source.url,
     createdAt: rawReport?.createdAt || source.createdAt,
     score: rawReport?.score,
+    scanPlan,
+    accountPlan: normalizePlan(source.accountPlan || scanPlan),
+    crawlLimitUsed: source.crawlLimitUsed || source.crawlSummary?.crawlLimitUsed,
+    visibilityLimits,
     builder: builder ? {
       title: builder.title,
       sections: builder.sections,
@@ -65,7 +73,7 @@ export function sanitizeReportForClient(rawReport: any, builder?: ReportBuilderC
       includeTasks: builder.includeTasks,
       includeDebugData: false,
     } : null,
-    dataSources: source.dataSources,
+    dataSources: visibleSource.dataSources,
   };
 
   if (sections.has('scores')) {
@@ -76,28 +84,28 @@ export function sanitizeReportForClient(rawReport: any, builder?: ReportBuilderC
       accessibility: source.accessibility,
       compliance: source.compliance,
       contentStrategy: source.contentStrategy,
-      scoreBreakdown: source.scoreBreakdown,
+      scoreBreakdown: visibleSource.scoreBreakdown,
     });
   }
 
   if (sections.has('summary')) {
-    Object.assign(sanitized, { overallAssessment: source.overallAssessment });
+    Object.assign(sanitized, { overallAssessment: visibleSource.overallAssessment });
   }
 
   if (sections.has('recommendations')) {
-    Object.assign(sanitized, { implementationPlan: source.implementationPlan });
+    Object.assign(sanitized, { implementationPlan: visibleSource.implementationPlan });
   }
 
   if (sections.has('crawl')) {
-    Object.assign(sanitized, { crawlSummary: source.crawlSummary });
+    Object.assign(sanitized, { crawlSummary: visibleSource.crawlSummary });
   }
 
   if (sections.has('issues') || sections.has('tasks')) {
-    Object.assign(sanitized, { issues: summarizeIssues(source.issues) });
+    Object.assign(sanitized, { issues: summarizeIssues(visibleSource.issues) });
   }
 
   if (sections.has('evidence') && builder?.includeEvidence !== false) {
-    Object.assign(sanitized, { evidence: summarizeEvidence(source.evidence) });
+    Object.assign(sanitized, { evidence: summarizeEvidence(visibleSource.evidence) });
   } else {
     Object.assign(sanitized, { evidence: [] });
   }

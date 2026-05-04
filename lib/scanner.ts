@@ -17,7 +17,7 @@ import {
 import { calculateIssueScores } from './audit/score-engine';
 import { evaluateAiVisibilityChecks } from './ai-visibility';
 import { getCacheJson, putCacheJson } from './cloudflare-cache';
-import { getCrawlLimit, normalizePlan } from './plans';
+import { getCrawlLimit, getVisibilityLimits, hasPlanRank, normalizePlan } from './plans';
 import { getProviderAvailability, getProviderStatuses } from './providers';
 import type { AuditCategory, AuditIssue, AuditSeverity, EvidenceArtifact, LinkOccurrence, UrlSnapshot } from '@/types/audit';
 import type { AiVisibilityCheckSet } from '@/types/ai-visibility';
@@ -418,7 +418,7 @@ async function captureScreenshotArtifacts(
   renderAudit: RenderAuditData,
   limit: number
 ): Promise<EvidenceArtifact[]> {
-  const targets = Array.from(new Set(urls.filter(Boolean))).slice(0, Math.min(limit, 1));
+  const targets = Array.from(new Set(urls.filter(Boolean))).slice(0, Math.max(0, limit));
   renderAudit.screenshots = {
     requested: targets.length,
     captured: 0,
@@ -1617,7 +1617,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Title Tag fehlt',
         description: 'Die Seite hat keinen auslesbaren HTML Title.',
-        fixHint: 'Fuege einen eindeutigen, beschreibenden Title Tag hinzu.',
+        fixHint: 'Füge einen eindeutigen, beschreibenden Title Tag hinzu.',
         sourceType: 'real',
       });
     } else if (title.length < 30) {
@@ -1642,8 +1642,8 @@ function generateAuditIssues(params: {
         affectedUrls: [page.url],
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Title Tag ist lang',
-        description: `Der Title hat ${title.length} Zeichen und kann in Suchergebnissen gekuerzt werden.`,
-        fixHint: 'Kuerze den Title auf den wichtigsten Suchintent und die zentrale Aussage.',
+        description: `Der Title hat ${title.length} Zeichen und kann in Suchergebnissen gekürzt werden.`,
+        fixHint: 'Kürze den Title auf den wichtigsten Suchintent und die zentrale Aussage.',
         sourceType: 'real',
       });
     }
@@ -1658,7 +1658,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Meta Description fehlt',
         description: 'Die Seite hat keine Meta Description.',
-        fixHint: 'Ergaenze eine klare, handlungsorientierte Beschreibung pro URL.',
+        fixHint: 'Ergänze eine klare, handlungsorientierte Beschreibung pro URL.',
         sourceType: 'real',
       });
     } else if (metaDescription.length < 70) {
@@ -1671,7 +1671,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Meta Description ist kurz',
         description: `Die Meta Description hat nur ${metaDescription.length} Zeichen.`,
-        fixHint: 'Beschreibe Nutzen, Thema und naechsten Schritt etwas genauer.',
+        fixHint: 'Beschreibe Nutzen, Thema und nächsten Schritt etwas genauer.',
         sourceType: 'real',
       });
     } else if (metaDescription.length > 160) {
@@ -1684,7 +1684,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Meta Description ist lang',
         description: `Die Meta Description hat ${metaDescription.length} Zeichen.`,
-        fixHint: 'Kuerze die Beschreibung auf die wichtigsten Suchergebnis-Informationen.',
+        fixHint: 'Kürze die Beschreibung auf die wichtigsten Suchergebnis-Informationen.',
         sourceType: 'real',
       });
     }
@@ -1698,7 +1698,7 @@ function generateAuditIssues(params: {
         affectedUrls: [page.url],
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'H1 fehlt',
-        description: 'Die Seite hat keine H1-Ueberschrift.',
+        description: 'Die Seite hat keine H1-Überschrift.',
         fixHint: 'Setze genau eine gut sichtbare H1, die den Seiteninhalt beschreibt.',
         sourceType: 'real',
       });
@@ -1710,9 +1710,9 @@ function generateAuditIssues(params: {
         confidence: 1,
         affectedUrls: [page.url],
         evidenceRefs: [htmlEvidence(page.url)],
-        title: 'Mehrere H1-Ueberschriften',
-        description: `Die Seite hat ${h1Count} H1-Ueberschriften.`,
-        fixHint: 'Nutze eine primaere H1 und strukturiere weitere Abschnitte mit H2/H3.',
+        title: 'Mehrere H1-Überschriften',
+        description: `Die Seite hat ${h1Count} H1-Überschriften.`,
+        fixHint: 'Nutze eine primäre H1 und strukturiere weitere Abschnitte mit H2/H3.',
         sourceType: 'real',
       });
     }
@@ -1727,7 +1727,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Bilder ohne Alt-Text',
         description: `${imagesWithoutAlt} Bild(er) haben keinen Alt-Text.`,
-        fixHint: 'Ergaenze kurze, sinnvolle Alt-Texte fuer informative Bilder.',
+        fixHint: 'Ergänze kurze, sinnvolle Alt-Texte für informative Bilder.',
         sourceType: 'real',
       });
       addIssue({
@@ -1737,8 +1737,8 @@ function generateAuditIssues(params: {
         confidence: 1,
         affectedUrls: [page.url],
         evidenceRefs: [htmlEvidence(page.url)],
-        title: 'Alt-Texte fuer Barrierefreiheit fehlen',
-        description: `${imagesWithoutAlt} Bild(er) sind fuer Screenreader nicht ausreichend beschrieben.`,
+        title: 'Alt-Texte für Barrierefreiheit fehlen',
+        description: `${imagesWithoutAlt} Bild(er) sind für Screenreader nicht ausreichend beschrieben.`,
         fixHint: 'Beschreibe informative Bilder und lasse rein dekorative Bilder mit leerem alt-Attribut.',
         sourceType: 'real',
       });
@@ -1767,7 +1767,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Canonical zeigt auf andere URL',
         description: `Das Canonical verweist auf ${page.canonical}.`,
-        fixHint: 'Pruefe, ob diese URL bewusst konsolidiert wird. Falls nicht, korrigiere das Canonical.',
+        fixHint: 'Prüfe, ob diese URL bewusst konsolidiert wird. Falls nicht, korrigiere das Canonical.',
         sourceType: 'real',
       });
     }
@@ -1781,7 +1781,7 @@ function generateAuditIssues(params: {
         affectedUrls: [page.url],
         evidenceRefs: [htmlEvidence(page.url)],
         title: 'Noindex-Meta erkannt',
-        description: 'Die Seite enthaelt eine noindex-Direktive im Meta-Robots-Tag.',
+        description: 'Die Seite enthält eine noindex-Direktive im Meta-Robots-Tag.',
         fixHint: 'Entferne noindex, wenn die Seite organisch auffindbar sein soll.',
         sourceType: 'real',
       });
@@ -1796,8 +1796,8 @@ function generateAuditIssues(params: {
         affectedUrls: [page.url],
         evidenceRefs: [headerEvidence(page.url)],
         title: 'X-Robots-Tag noindex erkannt',
-        description: 'Der HTTP Header X-Robots-Tag enthaelt noindex.',
-        fixHint: 'Pruefe Server-, CDN- oder Framework-Konfiguration fuer X-Robots-Tag.',
+        description: 'Der HTTP Header X-Robots-Tag enthält noindex.',
+        fixHint: 'Prüfe Server-, CDN- oder Framework-Konfiguration für X-Robots-Tag.',
         sourceType: 'real',
       });
     }
@@ -1812,7 +1812,7 @@ function generateAuditIssues(params: {
           affectedUrls: [page.url],
           evidenceRefs: [evidenceId(params.scanId, 'robots_txt', mainUrl)],
           title: 'robots.txt blockiert URL',
-          description: 'Die URL ist laut robots.txt fuer den Crawler gesperrt.',
+          description: 'Die URL ist laut robots.txt für den Crawler gesperrt.',
           fixHint: 'Passe robots.txt an, falls diese URL gecrawlt werden soll.',
           sourceType: 'real',
         });
@@ -1827,8 +1827,8 @@ function generateAuditIssues(params: {
         confidence: 0.85,
         affectedUrls: [page.url],
         evidenceRefs: [htmlEvidence(page.url)],
-        title: 'Duennen Inhalt erkannt',
-        description: `Die Seite hat nur etwa ${wordCount} auslesbare Woerter.`,
+        title: 'Dünnen Inhalt erkannt',
+        description: `Die Seite hat nur etwa ${wordCount} auslesbare Wörter.`,
         fixHint: 'Erweitere die Seite um hilfreiche, einzigartige Inhalte passend zum Suchintent.',
         sourceType: 'heuristic',
       });
@@ -1868,9 +1868,9 @@ function generateAuditIssues(params: {
         confidence: 0.8,
         affectedUrls: uncrawledSitemapUrls,
         evidenceRefs: [evidenceId(params.scanId, 'sitemap', mainUrl)],
-        title: 'Sitemap enthaelt nicht gecrawlte URLs',
+        title: 'Sitemap enthält nicht gecrawlte URLs',
         description: `${uncrawledSitemapUrls.length} Sitemap-URL(s) wurden in diesem Scan nicht erreicht, meist wegen Crawl-Limit oder Queue-Reihenfolge.`,
-        fixHint: 'Pruefe Crawl-Limit, Sitemap-Prioritaet und interne Verlinkung wichtiger URLs.',
+        fixHint: 'Prüfe Crawl-Limit, Sitemap-Priorität und interne Verlinkung wichtiger URLs.',
         sourceType: 'real',
       });
     }
@@ -1901,7 +1901,7 @@ function generateAuditIssues(params: {
       evidenceRefs: params.crawlAudit.externalLinkChecks.brokenLinks.slice(0, 10).map((item) => htmlEvidence(item.sourceUrl)),
       title: 'Defekte externe Links',
       description: `${params.crawlAudit.externalLinkChecks.brokenLinks.length} externe Link(s) antworten nicht erfolgreich oder konnten nicht erreicht werden.`,
-      fixHint: 'Pruefe verlinkte externe Ziele, ersetze tote Links oder entferne sie aus der Seite.',
+      fixHint: 'Prüfe verlinkte externe Ziele, ersetze tote Links oder entferne sie aus der Seite.',
       sourceType: 'real',
     });
   }
@@ -1933,7 +1933,7 @@ function generateAuditIssues(params: {
       evidenceRefs: significantDomDiffs.slice(0, 10).map((diff) => evidenceId(params.scanId, 'rendered_dom', diff.url)),
       title: 'Gerenderter DOM weicht deutlich vom HTML ab',
       description: `${significantDomDiffs.length} URL(s) liefern nach JavaScript-Rendering deutlich andere Inhalte oder Links als im initialen HTML.`,
-      fixHint: 'Pruefe, ob kritische Inhalte, Links, Canonicals und Meta-Daten auch ohne spaetes JavaScript stabil im HTML oder direkt nach Render verfuegbar sind.',
+      fixHint: 'Prüfe, ob kritische Inhalte, Links, Canonicals und Meta-Daten auch ohne spätes JavaScript stabil im HTML oder direkt nach Render verfügbar sind.',
       sourceType: 'real',
     });
   }
@@ -1957,7 +1957,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [gscEvidence(mainUrl)],
         title: 'Google meldet nicht indexierte URLs',
         description: `${notIndexed.length} URL(s) haben in der URL Inspection keinen PASS-Verdict.`,
-        fixHint: 'Pruefe Coverage State, Canonical, Robots und Sitemap-Signale in der Search Console und behebe zuerst indexierbare Zielseiten mit Business-Wert.',
+        fixHint: 'Prüfe Coverage State, Canonical, Robots und Sitemap-Signale in der Search Console und behebe zuerst indexierbare Zielseiten mit Business-Wert.',
         sourceType: 'gsc',
       });
     }
@@ -1970,9 +1970,9 @@ function generateAuditIssues(params: {
         confidence: 0.95,
         affectedUrls: canonicalMismatches.slice(0, 80).map((result) => result.url),
         evidenceRefs: [gscEvidence(mainUrl)],
-        title: 'Google waehlt andere Canonicals',
+        title: 'Google wählt andere Canonicals',
         description: `${canonicalMismatches.length} URL(s) haben laut Search Console einen anderen Google-Canonical als den User-Canonical.`,
-        fixHint: 'Staerke Canonical-Signale durch konsistente interne Links, Sitemap-URLs, Redirects, hreflang und eindeutige Inhalte.',
+        fixHint: 'Stärke Canonical-Signale durch konsistente interne Links, Sitemap-URLs, Redirects, hreflang und eindeutige Inhalte.',
         sourceType: 'gsc',
       });
     }
@@ -1987,7 +1987,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [gscEvidence(mainUrl)],
         title: 'Google sieht Robots-Blockaden',
         description: `${robotsBlocked.length} URL(s) haben in der URL Inspection Robots- oder Fetch-Blockade-Signale.`,
-        fixHint: 'Pruefe robots.txt, Meta-Robots, X-Robots-Tag, CDN-Firewall und unterschiedliche Regeln fuer Googlebot.',
+        fixHint: 'Prüfe robots.txt, Meta-Robots, X-Robots-Tag, CDN-Firewall und unterschiedliche Regeln für Googlebot.',
         sourceType: 'gsc',
       });
     }
@@ -2002,7 +2002,7 @@ function generateAuditIssues(params: {
         evidenceRefs: [gscEvidence(mainUrl)],
         title: 'Search Console Inspection teilweise fehlgeschlagen',
         description: `${failedInspections.length} URL Inspection Request(s) lieferten einen Provider-Fehler.`,
-        fixHint: 'Pruefe Search-Console-Property, OAuth-Scope und API-Quotas.',
+        fixHint: 'Prüfe Search-Console-Property, OAuth-Scope und API-Quotas.',
         sourceType: 'gsc',
       });
     }
@@ -2072,7 +2072,7 @@ function generateAuditIssues(params: {
       evidenceRefs: params.crawlAudit.lowInlinkUrls.slice(0, 10).map((item) => htmlEvidence(item.url)),
       title: 'Wichtige Seiten haben wenige interne Links',
       description: `${params.crawlAudit.lowInlinkUrls.length} indexierbare Seite(n) haben maximal einen internen Inlink.`,
-      fixHint: 'Staerke diese URLs mit kontextuellen Links aus passenden Seiten und Navigationselementen.',
+      fixHint: 'Stärke diese URLs mit kontextuellen Links aus passenden Seiten und Navigationselementen.',
       sourceType: 'real',
     });
   }
@@ -2087,7 +2087,7 @@ function generateAuditIssues(params: {
       evidenceRefs: params.crawlAudit.deepUrls.slice(0, 10).map((item) => htmlEvidence(item.url)),
       title: 'Seiten liegen tief in der Crawl-Struktur',
       description: `${params.crawlAudit.deepUrls.length} URL(s) wurden erst ab Crawl-Tiefe 4 erreicht.`,
-      fixHint: 'Bringe wichtige URLs naeher an Startseite, Kategorie-/Hub-Seiten oder Navigation.',
+      fixHint: 'Bringe wichtige URLs näher an Startseite, Kategorie-/Hub-Seiten oder Navigation.',
       sourceType: 'real',
     });
   }
@@ -2160,9 +2160,9 @@ function generateAuditIssues(params: {
       confidence: 0.9,
       affectedUrls: params.crawlAudit.hreflangSummary.invalidTags.slice(0, 80).map((item) => item.url),
       evidenceRefs: params.crawlAudit.hreflangSummary.invalidTags.slice(0, 10).map((item) => htmlEvidence(item.url)),
-      title: 'Ungueltige hreflang-Tags',
-      description: `${params.crawlAudit.hreflangSummary.invalidTags.length} hreflang-Tag(s) sind unvollstaendig oder formal ungueltig.`,
-      fixHint: 'Nutze gueltige Sprach-/Regionscodes, absolute URLs und rel="alternate".',
+      title: 'Ungültige hreflang-Tags',
+      description: `${params.crawlAudit.hreflangSummary.invalidTags.length} hreflang-Tag(s) sind unvollständig oder formal ungültig.`,
+      fixHint: 'Nutze gültige Sprach-/Regionscodes, absolute URLs und rel="alternate".',
       sourceType: 'real',
     });
   }
@@ -2177,7 +2177,7 @@ function generateAuditIssues(params: {
       evidenceRefs: params.crawlAudit.hreflangSummary.missingSelfReferences.slice(0, 10).map(htmlEvidence),
       title: 'hreflang-Selbstreferenz fehlt',
       description: `${params.crawlAudit.hreflangSummary.missingSelfReferences.length} Seite(n) mit hreflang verweisen nicht auf sich selbst.`,
-      fixHint: 'Fuege pro Sprachversion eine selbstreferenzierende hreflang-URL hinzu.',
+      fixHint: 'Füge pro Sprachversion eine selbstreferenzierende hreflang-URL hinzu.',
       sourceType: 'real',
     });
   }
@@ -2191,8 +2191,8 @@ function generateAuditIssues(params: {
       affectedUrls: params.crawlAudit.hreflangSummary.missingReturnTags.slice(0, 80).map((item) => item.sourceUrl),
       evidenceRefs: params.crawlAudit.hreflangSummary.missingReturnTags.slice(0, 10).map((item) => htmlEvidence(item.sourceUrl)),
       title: 'hreflang-Return-Tags fehlen',
-      description: `${params.crawlAudit.hreflangSummary.missingReturnTags.length} hreflang-Verknuepfung(en) sind nicht reziprok.`,
-      fixHint: 'Stelle sicher, dass jede Sprachversion auf alle alternativen Versionen inklusive Rueckverweis zeigt.',
+      description: `${params.crawlAudit.hreflangSummary.missingReturnTags.length} hreflang-Verknüpfung(en) sind nicht reziprok.`,
+      fixHint: 'Stelle sicher, dass jede Sprachversion auf alle alternativen Versionen inklusive Rückverweis zeigt.',
       sourceType: 'real',
     });
   }
@@ -2207,7 +2207,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Keine strukturierten Daten erkannt',
       description: 'Im Crawl wurde kein JSON-LD Schema-Markup erkannt.',
-      fixHint: 'Ergaenze passendes Organization-, LocalBusiness-, Article-, Product- oder Breadcrumb-Markup.',
+      fixHint: 'Ergänze passendes Organization-, LocalBusiness-, Article-, Product- oder Breadcrumb-Markup.',
       sourceType: 'real',
     });
   }
@@ -2221,8 +2221,8 @@ function generateAuditIssues(params: {
       affectedUrls: params.pages.filter((page) => (page.structuredDataParseErrors || 0) > 0).slice(0, 80).map((page) => page.url),
       evidenceRefs: params.pages.filter((page) => (page.structuredDataParseErrors || 0) > 0).slice(0, 10).map((page) => htmlEvidence(page.url)),
       title: 'Strukturierte Daten enthalten JSON-Fehler',
-      description: `${params.crawlAudit.structuredDataSummary.parseErrors} JSON-LD Block/Bloecke konnten nicht geparst werden.`,
-      fixHint: 'Validiere JSON-LD gegen schema.org und pruefe Kommas, Quotes und eingebettete HTML-Zeichen.',
+      description: `${params.crawlAudit.structuredDataSummary.parseErrors} JSON-LD Block/Blöcke konnten nicht geparst werden.`,
+      fixHint: 'Validiere JSON-LD gegen schema.org und prüfe Kommas, Quotes und eingebettete HTML-Zeichen.',
       sourceType: 'real',
     });
   }
@@ -2257,9 +2257,9 @@ function generateAuditIssues(params: {
       confidence: 0.85,
       affectedUrls: [mainUrl],
       evidenceRefs: [htmlEvidence(mainUrl)],
-      title: 'OpenGraph-Daten unvollstaendig',
-      description: 'Title, Description oder Bild fuer Social-/Messenger-Previews fehlen.',
-      fixHint: 'Ergaenze og:title, og:description und og:image fuer bessere Snippet-Kontrolle.',
+      title: 'OpenGraph-Daten unvollständig',
+      description: 'Title, Description oder Bild für Social-/Messenger-Previews fehlen.',
+      fixHint: 'Ergänze og:title, og:description und og:image für bessere Snippet-Kontrolle.',
       sourceType: 'real',
     });
   }
@@ -2275,7 +2275,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [headerEvidence(mainUrl)],
       title: 'Content-Security-Policy fehlt',
       description: 'Es wurde kein CSP-Header gefunden.',
-      fixHint: 'Fuehre eine restriktive Content-Security-Policy ein und teste sie zuerst im Report-Only-Modus.',
+      fixHint: 'Führe eine restriktive Content-Security-Policy ein und teste sie zuerst im Report-Only-Modus.',
       sourceType: 'real',
     });
   } else if (!/default-src|script-src/i.test(csp) || /unsafe-inline|unsafe-eval/i.test(csp)) {
@@ -2287,17 +2287,17 @@ function generateAuditIssues(params: {
       affectedUrls: [mainUrl],
       evidenceRefs: [headerEvidence(mainUrl)],
       title: 'CSP wirkt schwach',
-      description: 'Die CSP ist vorhanden, enthaelt aber breite oder riskante Direktiven.',
-      fixHint: 'Vermeide unsafe-inline/unsafe-eval und definiere klare Quellen fuer Skripte und Inhalte.',
+      description: 'Die CSP ist vorhanden, enthält aber breite oder riskante Direktiven.',
+      fixHint: 'Vermeide unsafe-inline/unsafe-eval und definiere klare Quellen für Skripte und Inhalte.',
       sourceType: 'heuristic',
     });
   }
 
   const securityHeaderChecks: Array<[string, string, AuditSeverity, string, string]> = [
-    ['strict-transport-security', 'missing_hsts', 'high', 'HSTS fehlt', 'Aktiviere Strict-Transport-Security fuer HTTPS-Hosts.'],
+    ['strict-transport-security', 'missing_hsts', 'high', 'HSTS fehlt', 'Aktiviere Strict-Transport-Security für HTTPS-Hosts.'],
     ['x-content-type-options', 'missing_x_content_type_options', 'medium', 'X-Content-Type-Options fehlt', 'Setze X-Content-Type-Options: nosniff.'],
     ['referrer-policy', 'missing_referrer_policy', 'medium', 'Referrer-Policy fehlt', 'Setze eine passende Referrer-Policy, z.B. strict-origin-when-cross-origin.'],
-    ['permissions-policy', 'missing_permissions_policy', 'low', 'Permissions-Policy fehlt', 'Beschraenke Browser-APIs mit Permissions-Policy.'],
+    ['permissions-policy', 'missing_permissions_policy', 'low', 'Permissions-Policy fehlt', 'Beschränke Browser-APIs mit Permissions-Policy.'],
     ['x-frame-options', 'missing_x_frame_options', 'medium', 'X-Frame-Options fehlt', 'Setze X-Frame-Options oder frame-ancestors in der CSP.'],
   ];
 
@@ -2326,7 +2326,7 @@ function generateAuditIssues(params: {
       confidence: 0.8,
       affectedUrls: [mainUrl],
       evidenceRefs: [htmlEvidence(mainUrl)],
-      title: 'Moeglicher Mixed Content',
+      title: 'Möglicher Mixed Content',
       description: 'Im HTML wurden unsichere http:// Ressourcen gefunden.',
       fixHint: 'Ersetze Ressourcen-URLs durch HTTPS oder relative URLs.',
       sourceType: 'heuristic',
@@ -2343,7 +2343,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Unsichere HTTP-URL erkannt',
       description: 'Mindestens eine URL nutzt HTTP statt HTTPS.',
-      fixHint: 'Nutze HTTPS fuer Seiten und Ressourcen und richte Weiterleitungen ein.',
+      fixHint: 'Nutze HTTPS für Seiten und Ressourcen und richte Weiterleitungen ein.',
       sourceType: 'real',
     });
   }
@@ -2375,7 +2375,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'E-Mail-Adressen im HTML gefunden',
       description: `${emails.length} E-Mail-Adresse(n) sind direkt im HTML auslesbar.`,
-      fixHint: 'Pruefe, ob Kontaktformulare oder geschuetzte Darstellungen sinnvoller sind.',
+      fixHint: 'Prüfe, ob Kontaktformulare oder geschützte Darstellungen sinnvoller sind.',
       sourceType: 'real',
     });
   }
@@ -2421,7 +2421,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Datenschutz-Link nicht erkannt',
       description: 'Im Crawl wurde kein klarer Datenschutz-Link gefunden.',
-      fixHint: 'Platziere einen gut auffindbaren Link zur Datenschutzerklaerung.',
+      fixHint: 'Platziere einen gut auffindbaren Link zur Datenschutzerklärung.',
       sourceType: 'heuristic',
     });
   }
@@ -2436,7 +2436,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Cookie-Banner nicht erkannt',
       description: 'Es wurde kein Consent- oder Cookie-Banner erkannt.',
-      fixHint: 'Pruefe manuell, ob ein Consent-Mechanismus fuer nicht notwendige Dienste vorhanden ist.',
+      fixHint: 'Prüfe manuell, ob ein Consent-Mechanismus für nicht notwendige Dienste vorhanden ist.',
       sourceType: 'heuristic',
     });
   }
@@ -2451,7 +2451,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Tracking-Skripte erkannt',
       description: 'Es wurden Skripte typischer Tracking-Anbieter erkannt.',
-      fixHint: 'Dokumentiere Anbieter, Zweck und Consent-Abhaengigkeit in CMP und Datenschutzerklaerung.',
+      fixHint: 'Dokumentiere Anbieter, Zweck und Consent-Abhängigkeit in CMP und Datenschutzerklärung.',
       sourceType: 'real',
     });
   }
@@ -2464,7 +2464,7 @@ function generateAuditIssues(params: {
       confidence: 0.65,
       affectedUrls: [mainUrl],
       evidenceRefs: [htmlEvidence(mainUrl)],
-      title: 'Moegliches Tracking vor Consent',
+      title: 'Mögliches Tracking vor Consent',
       description: 'Tracking-Skripte wurden erkannt, aber kein Consent-Banner.',
       fixHint: 'Verifiziere im Browser, dass nicht notwendige Skripte erst nach Einwilligung laden.',
       sourceType: 'heuristic',
@@ -2481,7 +2481,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Externe Google Fonts erkannt',
       description: 'Die Seite bindet Google Fonts von externen Google-Domains ein.',
-      fixHint: 'Pruefe lokale Font-Auslieferung oder eine dokumentierte Consent-/Rechtsgrundlage.',
+      fixHint: 'Prüfe lokale Font-Auslieferung oder eine dokumentierte Consent-/Rechtsgrundlage.',
       sourceType: 'real',
     });
   }
@@ -2496,7 +2496,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Drittanbieter-Embeds erkannt',
       description: 'Es wurden externe Skripte oder iframes gefunden.',
-      fixHint: 'Pruefe Datenfluesse, Consent-Bedarf und Anbieterangaben.',
+      fixHint: 'Prüfe Datenflüsse, Consent-Bedarf und Anbieterangaben.',
       sourceType: 'heuristic',
     });
   }
@@ -2512,7 +2512,7 @@ function generateAuditIssues(params: {
       affectedUrls: [mainUrl],
       evidenceRefs: [evidenceId(params.scanId, 'robots_txt', mainUrl)],
       title: 'AI-Crawler in robots.txt blockiert',
-      description: `Folgende AI-Crawler sind fuer den Vollzugriff blockiert: ${blockedAiBots.map((check) => check.label).join(', ')}.`,
+      description: `Folgende AI-Crawler sind für den Vollzugriff blockiert: ${blockedAiBots.map((check) => check.label).join(', ')}.`,
       fixHint: 'Entscheide bewusst, welche AI-Crawler Zugriff erhalten sollen, und dokumentiere die Governance-Regel.',
       sourceType: 'heuristic',
     });
@@ -2533,8 +2533,8 @@ function generateAuditIssues(params: {
       affectedUrls: [mainUrl],
       evidenceRefs: [evidenceId(params.scanId, 'robots_txt', mainUrl)],
       title: `${check.label} Zugriff blockiert`,
-      description: `${check.label} ist laut robots.txt fuer den Vollzugriff blockiert (${check.rule}).`,
-      fixHint: 'Pruefe, ob diese Blockade Teil der AI-Governance ist oder die Auffindbarkeit in AI-Systemen begrenzt.',
+      description: `${check.label} ist laut robots.txt für den Vollzugriff blockiert (${check.rule}).`,
+      fixHint: 'Prüfe, ob diese Blockade Teil der AI-Governance ist oder die Auffindbarkeit in AI-Systemen begrenzt.',
       sourceType: 'heuristic',
     });
   });
@@ -2549,7 +2549,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Organization Schema nicht erkannt',
       description: `Fehlende Entity-Signale: ${aiChecks.organizationSchema.missing.join(', ')}.`,
-      fixHint: 'Ergaenze strukturierte Daten fuer Organisation, Logo, Kontakt und relevante Profile.',
+      fixHint: 'Ergänze strukturierte Daten für Organisation, Logo, Kontakt und relevante Profile.',
       sourceType: 'heuristic',
     });
   }
@@ -2579,7 +2579,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Brand-Entity-Struktur ist unklar',
       description: `Fehlende Brand-Entity-Signale: ${aiChecks.brandEntity.missing.join(', ')}.`,
-      fixHint: 'Staerke Brand-Entity-Signale mit Schema, Profilen und klarer Unternehmensstruktur.',
+      fixHint: 'Stärke Brand-Entity-Signale mit Schema, Profilen und klarer Unternehmensstruktur.',
       sourceType: 'heuristic',
     });
   }
@@ -2592,9 +2592,9 @@ function generateAuditIssues(params: {
       confidence: aiChecks.aboutContactImpressum.confidence,
       affectedUrls: [mainUrl],
       evidenceRefs: [htmlEvidence(mainUrl)],
-      title: 'About/Kontakt/Impressum-Struktur unvollstaendig',
+      title: 'About/Kontakt/Impressum-Struktur unvollständig',
       description: `Fehlende Vertrauensseiten: ${aiChecks.aboutContactImpressum.missing.join(', ')}.`,
-      fixHint: 'Verlinke About/Ueber uns, Kontakt und Impressum sichtbar und konsistent.',
+      fixHint: 'Verlinke About/Über uns, Kontakt und Impressum sichtbar und konsistent.',
       sourceType: 'heuristic',
     });
   }
@@ -2624,7 +2624,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'FAQ/Definition/HowTo-Eignung fehlt',
       description: 'Es wurden keine klaren FAQ-, Definitions- oder HowTo-Strukturen erkannt.',
-      fixHint: 'Ergaenze echte Antwortformate, Definitionen oder Schrittfolgen, wenn sie fachlich passen.',
+      fixHint: 'Ergänze echte Antwortformate, Definitionen oder Schrittfolgen, wenn sie fachlich passen.',
       sourceType: 'heuristic',
     });
   }
@@ -2657,9 +2657,9 @@ function generateAuditIssues(params: {
       confidence: 0.85,
       affectedUrls: headingIssues,
       evidenceRefs: headingIssues.map(htmlEvidence),
-      title: 'Ueberschriftenstruktur pruefen',
-      description: 'Die H1-Struktur ist auf mindestens einer Seite auffaellig.',
-      fixHint: 'Nutze eine klare Ueberschriftenhierarchie mit einer H1 und logisch folgenden H2/H3.',
+      title: 'Überschriftenstruktur prüfen',
+      description: 'Die H1-Struktur ist auf mindestens einer Seite auffällig.',
+      fixHint: 'Nutze eine klare Überschriftenhierarchie mit einer H1 und logisch folgenden H2/H3.',
       sourceType: 'heuristic',
     });
   }
@@ -2679,7 +2679,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Leere Links erkannt',
       description: `${emptyLinks} Link(s) haben keinen lesbaren Namen.`,
-      fixHint: 'Fuege Linktext oder ein sinnvolles aria-label hinzu.',
+      fixHint: 'Füge Linktext oder ein sinnvolles aria-label hinzu.',
       sourceType: 'real',
     });
   }
@@ -2698,8 +2698,8 @@ function generateAuditIssues(params: {
       affectedUrls: [mainUrl],
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Buttons ohne Accessible Name',
-      description: `${unnamedButtons} Button(s) sind fuer assistive Technologien nicht benannt.`,
-      fixHint: 'Ergaenze sichtbaren Text oder aria-label fuer Icon-Buttons.',
+      description: `${unnamedButtons} Button(s) sind für assistive Technologien nicht benannt.`,
+      fixHint: 'Ergänze sichtbaren Text oder aria-label für Icon-Buttons.',
       sourceType: 'real',
     });
   }
@@ -2721,7 +2721,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [htmlEvidence(mainUrl)],
       title: 'Formularfelder ohne Label',
       description: `${unlabeledInputs} Formularfeld(er) haben kein erkennbares Label.`,
-      fixHint: 'Verknuepfe jedes Eingabefeld mit label, aria-label oder aria-labelledby.',
+      fixHint: 'Verknüpfe jedes Eingabefeld mit label, aria-label oder aria-labelledby.',
       sourceType: 'real',
     });
   }
@@ -2799,7 +2799,7 @@ function generateAuditIssues(params: {
       affectedUrls: [mainUrl],
       evidenceRefs: [],
       title: 'PageSpeed Insights nicht verbunden',
-      description: params.psiResults[0]?.error ? `PageSpeed Insights Fehler: ${params.psiResults[0].error}.` : 'PageSpeed Insights ist fuer diesen Scan nicht angebunden.',
+      description: params.psiResults[0]?.error ? `PageSpeed Insights Fehler: ${params.psiResults[0].error}.` : 'PageSpeed Insights ist für diesen Scan nicht angebunden.',
       fixHint: 'Konfiguriere einen PSI Provider-Key oder kennzeichne Performance weiter als Heuristik.',
       sourceType: 'unavailable',
     });
@@ -2813,9 +2813,9 @@ function generateAuditIssues(params: {
       confidence: 1,
       affectedUrls: [mainUrl],
       evidenceRefs: [],
-      title: 'CrUX Felddaten nicht verfuegbar',
-      description: params.cruxRecord?.error ? `CrUX meldet: ${params.cruxRecord.error}.` : 'Fuer diesen Scan liegen keine CrUX Felddaten vor.',
-      fixHint: 'Pruefe CrUX-Verfuegbarkeit auf Origin-/URL-Ebene, wenn ein Provider angebunden ist.',
+      title: 'CrUX Felddaten nicht verfügbar',
+      description: params.cruxRecord?.error ? `CrUX meldet: ${params.cruxRecord.error}.` : 'Für diesen Scan liegen keine CrUX Felddaten vor.',
+      fixHint: 'Prüfe CrUX-Verfügbarkeit auf Origin-/URL-Ebene, wenn ein Provider angebunden ist.',
       sourceType: 'unavailable',
     });
   }
@@ -2831,7 +2831,7 @@ function generateAuditIssues(params: {
       evidenceRefs: [headerEvidence(mainUrl)],
       title: 'Niedriger Lighthouse Performance Score',
       description: `PageSpeed Insights ${primaryPsi.strategy} Performance Score: ${primaryPsi.performanceScore}.`,
-      fixHint: 'Priorisiere LCP, Render-Blocking Resources, JavaScript-Ausfuehrung und Bildoptimierung.',
+      fixHint: 'Priorisiere LCP, Render-Blocking Resources, JavaScript-Ausführung und Bildoptimierung.',
       sourceType: 'provider',
     });
   }
@@ -2844,9 +2844,9 @@ function generateAuditIssues(params: {
       confidence: 0.95,
       affectedUrls: [mainUrl],
       evidenceRefs: [headerEvidence(mainUrl)],
-      title: 'LCP im Lab-Test auffaellig',
+      title: 'LCP im Lab-Test auffällig',
       description: `PageSpeed Insights ${primaryPsi.strategy} LCP: ${Math.round(primaryPsi.metrics.lcp)} ms.`,
-      fixHint: 'Optimiere das groesste sichtbare Element, Serverantwort, kritisches CSS und Bildauslieferung.',
+      fixHint: 'Optimiere das größte sichtbare Element, Serverantwort, kritisches CSS und Bildauslieferung.',
       sourceType: 'provider',
     });
   }
@@ -2859,9 +2859,9 @@ function generateAuditIssues(params: {
       confidence: 0.95,
       affectedUrls: [mainUrl],
       evidenceRefs: [headerEvidence(mainUrl)],
-      title: 'CLS im Lab-Test auffaellig',
+      title: 'CLS im Lab-Test auffällig',
       description: `PageSpeed Insights ${primaryPsi.strategy} CLS: ${primaryPsi.metrics.cls.toFixed(3)}.`,
-      fixHint: 'Reserviere Platz fuer Bilder, Ads, Embeds und dynamisch geladene UI-Bloecke.',
+      fixHint: 'Reserviere Platz für Bilder, Ads, Embeds und dynamisch geladene UI-Blöcke.',
       sourceType: 'provider',
     });
   }
@@ -2877,10 +2877,15 @@ export async function performPreflight(
     device?: 'desktop' | 'mobile';
     renderMode?: 'fetch' | 'browser' | 'auto';
     renderAudit?: RenderAuditData;
+    crawlLimitOverride?: number;
   } = {}
 ) {
   const scanPlan = normalizePlan(plan);
-  const subpageLimit = getCrawlLimit(scanPlan);
+  const planCrawlLimit = getCrawlLimit(scanPlan);
+  const overrideLimit = typeof options.crawlLimitOverride === 'number' && Number.isFinite(options.crawlLimitOverride)
+    ? Math.max(0, Math.floor(options.crawlLimitOverride))
+    : planCrawlLimit;
+  const subpageLimit = Math.min(planCrawlLimit, overrideLimit);
   const domain = urlObj.hostname;
   const device = options.device || 'desktop';
   const renderMode = options.renderMode || 'auto';
@@ -2961,7 +2966,7 @@ export async function performPreflight(
   };
 }
 
-export async function performAnalysis({ url, plan = 'free', device = 'desktop', renderMode = 'auto', userId = '', auditId, env }: ScanOptions): Promise<AnalysisResult> {
+export async function performAnalysis({ url, plan = 'free', device = 'desktop', renderMode = 'auto', userId = '', auditId, crawlLimitOverride, env }: ScanOptions): Promise<AnalysisResult> {
   const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
   const runtimeEnv = env || process.env;
   const scanId = auditId || createScanId();
@@ -2977,7 +2982,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
     failedUrls: [],
     source: runtimeEnv?.BROWSER ? 'cloudflare_browser_rendering' : 'html_fetch',
   };
-  const preflight = await performPreflight(urlObj, plan, runtimeEnv, { device: crawlDevice, renderMode: scanRenderMode, renderAudit });
+  const preflight = await performPreflight(urlObj, plan, runtimeEnv, { device: crawlDevice, renderMode: scanRenderMode, renderAudit, crawlLimitOverride });
   const { scanPlan, subpageLimit, domain, robotsTxt, sitemapUrls, mainUrlNormalized, html, headers, responseTimeMs } = preflight;
   const root = parse(html);
   const ttfbMs = undefined;
@@ -3210,7 +3215,14 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
     .filter((result) => result.error || (typeof result.status === 'number' && result.status >= 400))
     .map((result) => ({ url: result.url, status: result.status }));
   const issuePages = [mainPage, ...subpageResults];
-  const externalLinkChecks = await checkExternalLinks(issuePages, scanPlan === 'agency' ? 120 : scanPlan === 'pro' ? 40 : 10);
+  const externalLinkCheckLimit = hasPlanRank(scanPlan, 'business')
+    ? 500
+    : hasPlanRank(scanPlan, 'agency') ? 120 : hasPlanRank(scanPlan, 'pro') ? 40 : 10;
+  const googleInspectionLimit = hasPlanRank(scanPlan, 'business')
+    ? 200
+    : hasPlanRank(scanPlan, 'agency') ? 50 : hasPlanRank(scanPlan, 'pro') ? 10 : 3;
+  const visibilityLimits = getVisibilityLimits(scanPlan);
+  const externalLinkChecks = await checkExternalLinks(issuePages, externalLinkCheckLimit);
   const crawlAudit = buildCrawlAuditEnhancements({
     mainUrl: mainUrlNormalized,
     pages: issuePages,
@@ -3231,7 +3243,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
     indexableUrls,
     runtimeEnv,
     userId,
-    scanPlan === 'agency' ? 50 : scanPlan === 'pro' ? 10 : 3
+    googleInspectionLimit
   );
   const screenshotEvidence = await captureScreenshotArtifacts(
     [
@@ -3246,7 +3258,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
     createdAt,
     scanId,
     renderAudit,
-    1
+    visibilityLimits.evidencePerReport
   );
   const evidence = [
     ...buildEvidenceArtifacts(scanId, issuePages, robotsTxt.content, sitemapUrls, createdAt, renderAudit, psiResults, cruxRecord, googleInspection),
@@ -3300,7 +3312,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
       type: googleInspection?.source === 'gsc' ? 'gsc' : 'unavailable',
       label: googleInspection?.source === 'gsc'
         ? `Search Console URL Inspection: ${googleInspection.inspectedCount} URL(s)`
-        : googleInspection?.error ? `Search Console nicht verfuegbar: ${googleInspection.error}` : 'Search Console URL Inspection nicht verbunden',
+        : googleInspection?.error ? `Search Console nicht verfügbar: ${googleInspection.error}` : 'Search Console URL Inspection nicht verbunden',
     },
     backlinks: {
       type: providerAvailability.backlink ? 'provider' : 'unavailable',
@@ -3310,7 +3322,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
       type: providerAvailability.keyword ? 'provider' : 'unavailable',
       label: providerAvailability.keyword ? 'Keyword-Provider konfiguriert, keine Facts abgerufen' : 'Keyword-Provider noch nicht verbunden',
     },
-    onPageKeywords: { type: 'heuristic', label: 'On-Page Worthaeufigkeit' },
+    onPageKeywords: { type: 'heuristic', label: 'On-Page Worthäufigkeit' },
     competition: {
       type: providerAvailability.traffic || providerAvailability.serp ? 'provider' : 'ai_inferred',
       label: providerAvailability.traffic || providerAvailability.serp ? 'Wettbewerber-Provider konfiguriert, keine Facts abgerufen' : 'Nur KI-Hinweise, keine Provider-Fakten',
@@ -3335,13 +3347,13 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
       ...aiVisibilityChecks.aiOverviewTracking,
       status: providerAvailability.serp ? 'provider_configured' : 'unavailable',
       sourceType: providerAvailability.serp ? 'provider' : 'unavailable',
-      provider: providerAvailability.serp ? 'SERP Provider konfiguriert' : 'SERP Provider spaeter',
+      provider: providerAvailability.serp ? 'SERP Provider konfiguriert' : 'SERP Provider später',
     },
     promptMonitoring: {
       ...aiVisibilityChecks.promptMonitoring,
       status: providerAvailability.aiVisibility ? 'provider_configured' : 'unavailable',
       sourceType: providerAvailability.aiVisibility ? 'provider' : 'unavailable',
-      provider: providerAvailability.aiVisibility ? 'AI Visibility Provider konfiguriert' : 'AI Visibility Provider spaeter',
+      provider: providerAvailability.aiVisibility ? 'AI Visibility Provider konfiguriert' : 'AI Visibility Provider später',
     },
   };
 
@@ -3364,7 +3376,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
     : null;
   const psiMetricsStr = primaryPsi
     ? `PSI ${primaryPsi.strategy}: Performance ${primaryPsi.performanceScore ?? 'n/a'}, LCP ${primaryPsi.metrics.lcp ?? 'n/a'} ms, CLS ${primaryPsi.metrics.cls ?? 'n/a'}.`
-    : 'Nicht verfuegbar: PageSpeed Insights ist nicht verbunden oder lieferte kein Ergebnis.';
+    : 'Nicht verfügbar: PageSpeed Insights ist nicht verbunden oder lieferte kein Ergebnis.';
 
   return {
     audit_id: scanId,
@@ -3375,6 +3387,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
     accountPlan: scanPlan,
     scanPlan,
     crawlLimitUsed: subpageLimit,
+    visibilityLimits,
     crawlDevice,
     renderMode: scanRenderMode,
     renderAudit,
@@ -3423,6 +3436,7 @@ export async function performAnalysis({ url, plan = 'free', device = 'desktop', 
       startUrl: mainUrlNormalized,
       sourceType: 'real',
       crawlLimitUsed: subpageLimit,
+      visibilityLimits,
       crawlDepthReached,
       totalInternalLinks: discoveredInternalLinks.size,
       internalLinksCount: discoveredInternalLinks.size,

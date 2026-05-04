@@ -85,7 +85,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
         <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-[#888] mb-4">
           <Network className="w-8 h-8" />
         </div>
-        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfuegbar</h3>
+        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfügbar</h3>
         <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest italic">Starten Sie einen Scan, um die Verlinkungs-Analyse zu nutzen.</p>
       </div>
     );
@@ -103,7 +103,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
           </div>
           <h2 className="text-[32px] md:text-[42px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Interne Verlinkung</h2>
           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest max-w-xl">
-            LinkGraph, konkrete Link-Jobs, Orphans, Topic Hubs, Anchor-Vorschlaege und bestehende Links aus echten Crawl-Daten.
+            LinkGraph, konkrete Link-Jobs, Orphans, Topic Hubs, Anchor-Vorschläge und bestehende Links aus echten Crawl-Daten.
           </p>
         </div>
         <button
@@ -177,7 +177,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
           </section>
 
           <section className="bg-[#1A1A1A] dark:bg-zinc-950 border border-white/5 p-6">
-            <h4 className="text-[14px] font-black uppercase tracking-widest text-white mb-5">Naechste Link-Jobs</h4>
+            <h4 className="text-[14px] font-black uppercase tracking-widest text-white mb-5">Nächste Link-Jobs</h4>
             {analysis.opportunities.length === 0 ? (
               <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest">Keine Link-Jobs im Crawl erkannt.</p>
             ) : (
@@ -213,7 +213,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
                   <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#888]">Quelle</th>
                   <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#888]">Ziel</th>
                   <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#888]">Anchor</th>
-                  <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#888]">Prioritaet</th>
+                  <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#888]">Priorität</th>
                   <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-[#888]">Grund</th>
                 </tr>
               </thead>
@@ -242,7 +242,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
             <DataSourceBadge type="heuristic" label="Missing Chances" />
           </div>
           {analysis.matrixPages.length === 0 ? (
-            <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest">Keine Matrix-Daten verfuegbar.</p>
+            <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest">Keine Matrix-Daten verfügbar.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
@@ -283,7 +283,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
           )}
           <p className="mt-6 text-[10px] text-zinc-500 font-bold uppercase tracking-widest italic flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 text-[#D4AF37]" />
-            Gold = bestehender Crawl-Link. Gruen = fehlende Chance aus heuristischer Semantic Layer. Kein Random.
+            Gold = bestehender Crawl-Link. Grün = fehlende Chance aus heuristischer Semantic Layer. Kein Random.
           </p>
         </section>
       )}
@@ -338,7 +338,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
             <DataSourceBadge type="heuristic" label="H1/Title/Existing Anchors" />
           </div>
           {analysis.anchorSuggestions.length === 0 ? (
-            <EmptyState>Keine Anchor-Vorschlaege vorhanden.</EmptyState>
+            <EmptyState>Keine Anchor-Vorschläge vorhanden.</EmptyState>
           ) : (
             <table className="w-full text-left">
               <tbody className="divide-y divide-[#EEE] dark:divide-zinc-800">
@@ -348,7 +348,7 @@ export default function ProjectLinkingView({ report, plan = 'free' }: { report: 
                     <td className="px-6 py-4"><UrlLabel url={item.targetUrl} strong /></td>
                     <td className="px-6 py-4">
                       <p className="text-[12px] font-black text-[#D4AF37]">{item.suggestedAnchor}</p>
-                      <p className="text-[10px] text-[#888] mt-1">{item.existingAnchors.length > 0 ? item.existingAnchors.join(', ') : 'Keine bestehenden Anchors fuer Zielseite'}</p>
+                      <p className="text-[10px] text-[#888] mt-1">{item.existingAnchors.length > 0 ? item.existingAnchors.join(', ') : 'Keine bestehenden Anchors für Zielseite'}</p>
                     </td>
                     <td className="px-6 py-4"><PriorityBadge confidence={item.confidence} /></td>
                   </tr>

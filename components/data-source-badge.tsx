@@ -56,7 +56,7 @@ function getBadgeMeta(type: DataSourceType) {
       };
     case 'unavailable':
       return {
-        label: 'Nicht verfuegbar',
+        label: 'Nicht verfügbar',
         className: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20',
         icon: AlertCircle,
       };

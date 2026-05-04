@@ -10,12 +10,13 @@ function issueRows(report: any) {
     category: issue.category,
     title: issue.title,
     affectedUrls: (issue.affectedUrls || []).join(' | '),
+    hiddenAffectedUrls: issue.affectedUrlsHidden || 0,
     confidence: issue.confidence,
   }));
 }
 
 export function publicReportCsv(report: any) {
-  const header = ['id', 'status', 'severity', 'category', 'title', 'affectedUrls', 'confidence'];
+  const header = ['id', 'status', 'severity', 'category', 'title', 'affectedUrls', 'hiddenAffectedUrls', 'confidence'];
   const rows = [header, ...issueRows(report).map((row: any) => header.map((key) => row[key]))];
   return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\n');
 }
@@ -45,6 +46,10 @@ function pdfLines(report: any) {
     report?.builder?.title || 'Website Audit Report',
     `URL: ${report?.url || 'n/a'}`,
     `Created: ${report?.createdAt || 'n/a'}`,
+    `Scan plan: ${report?.scanPlan || report?.plan || 'n/a'}`,
+    `Crawled pages: ${report?.visibilityLimits?.crawledPages ?? report?.crawlSummary?.crawledPagesCount ?? 'n/a'}`,
+    `Visible detail pages: ${report?.visibilityLimits?.visibleDetailPages ?? 'n/a'}`,
+    `Hidden detail pages: ${report?.visibilityLimits?.hiddenDetailPages ?? 0}`,
     '',
     'Scores',
     ...scores,

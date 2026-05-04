@@ -3,6 +3,7 @@
 import { CheckCircle2, FileSearch, ListChecks } from 'lucide-react';
 import DataSourceBadge from './data-source-badge';
 import type { AuditIssue, AuditSeverity } from '@/types/audit';
+import { applyReportVisibilityLimits, buildVisibilitySummaryFromReport } from '@/lib/plans';
 
 type ProjectIssuesReport = {
   issues?: AuditIssue[];
@@ -24,8 +25,10 @@ function severityClass(severity: AuditSeverity) {
   return 'text-[#888] bg-zinc-500/10 border-zinc-500/20';
 }
 
-export default function ProjectIssuesView({ report }: { report: ProjectIssuesReport | null }) {
-  const issues = [...(report?.issues || [])].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+export default function ProjectIssuesView({ report, plan = 'free' }: { report: ProjectIssuesReport | null; plan?: string }) {
+  const visibleReport = applyReportVisibilityLimits(report || {}, plan) as ProjectIssuesReport & { visibilityLimits?: any };
+  const visibility = visibleReport.visibilityLimits || buildVisibilitySummaryFromReport(report || {}, plan);
+  const issues = [...(visibleReport?.issues || [])].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
   const openIssues = issues.filter((issue) => issue.status !== 'fixed' && issue.status !== 'ignored');
   const fixedIssues = issues.filter((issue) => issue.status === 'fixed');
   const ignoredIssues = issues.filter((issue) => issue.status === 'ignored');
@@ -43,6 +46,11 @@ export default function ProjectIssuesView({ report }: { report: ProjectIssuesRep
           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest max-w-xl">
             Deterministische Audit-Befunde mit Issue ID, Evidence-Referenzen, Confidence und Status.
           </p>
+          {visibility.hiddenIssueUrls > 0 && (
+            <p className="text-[10px] text-[#D4AF37] font-black mt-3 uppercase tracking-widest">
+              {visibility.hiddenIssueUrls} Issue-URLs wegen Planlimit ausgeblendet
+            </p>
+          )}
         </div>
       </div>
 
@@ -68,7 +76,7 @@ export default function ProjectIssuesView({ report }: { report: ProjectIssuesRep
       {issues.length === 0 ? (
         <section className="min-h-[280px] bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 flex flex-col items-center justify-center text-center gap-4">
           <CheckCircle2 className="w-10 h-10 text-[#27AE60]" />
-          <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Issues verfuegbar</h3>
+          <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Issues verfügbar</h3>
           <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest max-w-md">
             Starte einen Audit-Scan. Diese Ansicht zeigt nur echte Scanner-Befunde, keine Demo- oder Provider-Platzhalter.
           </p>
@@ -103,7 +111,7 @@ export default function ProjectIssuesView({ report }: { report: ProjectIssuesRep
                   {(issue.affectedUrls || []).slice(0, 3).map((url) => (
                     <p key={url} className="truncate font-mono text-[#1A1A1A] dark:text-zinc-100">{url}</p>
                   ))}
-                  {(issue.affectedUrls || []).length === 0 && <p className="text-[#888] font-bold uppercase tracking-widest">Nicht verfuegbar</p>}
+                  {(issue.affectedUrls || []).length === 0 && <p className="text-[#888] font-bold uppercase tracking-widest">Nicht verfügbar</p>}
                 </div>
                 <div>
                   <span className="text-[9px] font-black uppercase tracking-widest text-[#888] block mb-2">Evidence</span>

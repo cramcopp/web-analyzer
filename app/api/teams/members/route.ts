@@ -4,10 +4,12 @@ import { teamInviteSchema, teamMemberSchema } from '@/lib/validations';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import {
   getCloudflareUserByEmail,
+  getCloudflareUserProfile,
   hasCloudflareD1,
   queryCloudflareTeamForMember,
   updateCloudflareTeam,
 } from '@/lib/cloudflare-storage';
+import { getEffectivePlanConfig } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +19,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({
-        error: result.error.issues[0]?.message || 'Ungueltige E-Mail',
+        error: result.error.issues[0]?.message || 'Ungültige E-Mail',
       }, { status: 400 });
     }
 
@@ -48,6 +50,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nutzer ist bereits im Team' }, { status: 400 });
     }
 
+    const ownerProfile = await getCloudflareUserProfile(env, team.ownerId);
+    const seatLimit = getEffectivePlanConfig(ownerProfile?.plan, ownerProfile?.addOns).seats;
+    if (team.members.length >= seatLimit) {
+      return NextResponse.json({
+        error: 'Seat-Limit erreicht',
+        details: `Der aktuelle Plan erlaubt ${seatLimit} Nutzer/Seats.`,
+      }, { status: 403 });
+    }
+
     const updatedMembers = [...team.members, String(invitedUser.uid)];
     const updated = await updateCloudflareTeam(env, team.id, { members: updatedMembers });
     if (!updated) {
@@ -67,7 +78,7 @@ export async function DELETE(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -76,7 +87,7 @@ export async function DELETE(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({
-        error: result.error.issues[0]?.message || 'Ungueltige UID',
+        error: result.error.issues[0]?.message || 'Ungültige UID',
       }, { status: 400 });
     }
 

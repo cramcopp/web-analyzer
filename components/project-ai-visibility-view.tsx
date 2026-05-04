@@ -59,7 +59,7 @@ export default function ProjectAiVisibilityView({ report }: { report: any }) {
           <BrainCircuit className="w-8 h-8" />
         </div>
         <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine AI-Visibility Daten</h3>
-        <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest">Starte einen Scan fuer heuristische AI-Visibility Checks.</p>
+        <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest">Starte einen Scan für heuristische AI-Visibility Checks.</p>
       </div>
     );
   }
@@ -93,7 +93,7 @@ export default function ProjectAiVisibilityView({ report }: { report: any }) {
           </div>
           <h2 className="text-[32px] md:text-[42px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">AI Visibility</h2>
           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest max-w-xl">
-            Heuristische Checks fuer AI-Crawler, robots.txt, Brand Entity, Schema, SameAs, DACH-Vertrauensstruktur und AI-Snippet-Eignung.
+            Heuristische Checks für AI-Crawler, robots.txt, Brand Entity, Schema, SameAs, DACH-Vertrauensstruktur und AI-Snippet-Eignung.
           </p>
         </div>
         <div className="bg-[#1A1A1A] dark:bg-white text-white dark:text-zinc-900 px-6 py-4">
@@ -107,10 +107,10 @@ export default function ProjectAiVisibilityView({ report }: { report: any }) {
           <h3 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 flex items-center gap-2">
             <Bot className="w-4 h-4 text-[#D4AF37]" /> AI Crawler Access
           </h3>
-          <DataSourceBadge type={crawlerChecks.length > 0 ? 'heuristic' : 'unavailable'} label={crawlerChecks.length > 0 ? 'robots.txt Check' : 'Neuer Scan noetig'} />
+          <DataSourceBadge type={crawlerChecks.length > 0 ? 'heuristic' : 'unavailable'} label={crawlerChecks.length > 0 ? 'robots.txt Check' : 'Neuer Scan nötig'} />
         </div>
         {crawlerChecks.length === 0 ? (
-          <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Dieser Report enthaelt noch keine strukturierte AI-Crawler-Matrix.</p>
+          <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Dieser Report enthält noch keine strukturierte AI-Crawler-Matrix.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {crawlerChecks.map((check) => {
@@ -138,7 +138,7 @@ export default function ProjectAiVisibilityView({ report }: { report: any }) {
         </div>
       ) : (
         <section className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 text-center">
-          <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Strukturierte Entity-/Snippet-Checks erscheinen nach dem naechsten Scan.</p>
+          <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Strukturierte Entity-/Snippet-Checks erscheinen nach dem nächsten Scan.</p>
         </section>
       )}
 
@@ -174,8 +174,8 @@ export default function ProjectAiVisibilityView({ report }: { report: any }) {
       <div className="bg-[#1A1A1A] dark:bg-zinc-950 border border-white/5 p-6">
         <h3 className="text-[14px] font-black uppercase tracking-widest text-white mb-3">Provider Roadmap</h3>
         <div className="flex flex-wrap gap-2">
-          <DataSourceBadge type={serpProviderConfigured ? 'provider' : 'unavailable'} label={serpProviderConfigured ? 'AI Overview via SERP bereit' : 'AI Overview Tracking spaeter via SERP'} />
-          <DataSourceBadge type={aiProviderConfigured ? 'provider' : 'unavailable'} label={aiProviderConfigured ? `${aiVisibilityFacts.length} Prompt Facts` : 'Prompt Monitoring spaeter'} />
+          <DataSourceBadge type={serpProviderConfigured ? 'provider' : 'unavailable'} label={serpProviderConfigured ? 'AI Overview via SERP bereit' : 'AI Overview Tracking später via SERP'} />
+          <DataSourceBadge type={aiProviderConfigured ? 'provider' : 'unavailable'} label={aiProviderConfigured ? `${aiVisibilityFacts.length} Prompt Facts` : 'Prompt Monitoring später'} />
           <DataSourceBadge type="heuristic" label="Robots/Schema aktiv" />
         </div>
       </div>

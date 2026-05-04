@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
 import { teamCreateSchema } from '@/lib/validations';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { hasPlanRank } from '@/lib/plans';
 import {
   createCloudflareTeam,
   getCloudflareUserProfile,
@@ -18,7 +19,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -47,14 +48,14 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
     const userData = await getCloudflareUserProfile(env, user.uid);
-    if (userData?.plan !== 'agency') {
+    if (!hasPlanRank(userData?.plan, 'agency')) {
       return NextResponse.json({
-        error: 'Team-Funktionen sind nur im Agency-Plan verfuegbar.',
+        error: 'Team-Funktionen sind ab dem Agency-Plan verfügbar.',
       }, { status: 403 });
     }
 
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
 
     if (!result.success) {
       return NextResponse.json({
-        error: result.error.issues[0]?.message || 'Ungueltige Eingabe',
+        error: result.error.issues[0]?.message || 'Ungültige Eingabe',
       }, { status: 400 });
     }
 

@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const { searchParams } = new URL(req.url);
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -39,7 +39,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
 
     const report = await getCloudflareReport(env, share.reportId, null);
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
-    if ('forbidden' in report) return NextResponse.json({ error: 'Report nicht verfuegbar' }, { status: 403 });
+    if ('forbidden' in report) return NextResponse.json({ error: 'Report nicht verfügbar' }, { status: 403 });
 
     return NextResponse.json({
       share: {

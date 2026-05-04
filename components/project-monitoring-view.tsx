@@ -43,7 +43,7 @@ type ScoreCarrier = {
 };
 
 function formatDate(value?: string) {
-  if (!value) return 'Nicht verfuegbar';
+  if (!value) return 'Nicht verfügbar';
   return new Date(value).toLocaleString('de-DE');
 }
 
@@ -319,13 +319,13 @@ export default function ProjectMonitoringView({ project, report, plan = 'free' }
                     <CheckCircle2 className="w-4 h-4 text-[#27AE60]" /> Aktiv
                   </h4>
                   <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-2">
-                    Frequenz: {activeSchedule.frequency} {activeSchedule.nextRunAt ? `| Naechster Lauf: ${formatDate(activeSchedule.nextRunAt)}` : ''}
+                    Frequenz: {activeSchedule.frequency} {activeSchedule.nextRunAt ? `| Nächster Lauf: ${formatDate(activeSchedule.nextRunAt)}` : ''}
                   </p>
                 </div>
                 <DataSourceBadge type="real" label="scheduledScans" />
               </div>
             ) : (
-              <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch kein geplanter Scan fuer dieses Projekt.</p>
+              <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch kein geplanter Scan für dieses Projekt.</p>
             )}
           </section>
 
@@ -408,7 +408,7 @@ export default function ProjectMonitoringView({ project, report, plan = 'free' }
               className="px-4 py-3 bg-[#1A1A1A] dark:bg-white text-white dark:text-zinc-900 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
             >
               <Activity className="w-4 h-4" />
-              {uptimeSaving ? 'Prueft...' : 'Jetzt pruefen'}
+              {uptimeSaving ? 'Prüft...' : 'Jetzt prüfen'}
             </button>
           </div>
           {uptimeChecks.length === 0 ? (
@@ -438,7 +438,7 @@ export default function ProjectMonitoringView({ project, report, plan = 'free' }
               <History className="w-4 h-4 text-[#D4AF37]" /> Scan History
             </h3>
             {reports.length === 0 ? (
-              <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch keine gespeicherten Scans fuer dieses Projekt.</p>
+              <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch keine gespeicherten Scans für dieses Projekt.</p>
             ) : (
               <div className="space-y-3">
                 {reports.slice(0, 8).map((item) => {
@@ -500,12 +500,12 @@ export default function ProjectMonitoringView({ project, report, plan = 'free' }
 
           {!latestDiff ? (
             <section className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-6">
-              <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Mindestens ein Scan ist noetig, um Issue-Historie zu berechnen.</p>
+              <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Mindestens ein Scan ist nötig, um Issue-Historie zu berechnen.</p>
             </section>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <IssueList title="Neue Probleme" issues={latestDiff.newIssues} emptyLabel="Keine neuen Probleme im letzten Vergleich." />
-              <IssueList title="Geloeste Probleme" issues={latestDiff.fixedIssues} emptyLabel="Keine geloesten Probleme im letzten Vergleich." />
+              <IssueList title="Gelöste Probleme" issues={latestDiff.fixedIssues} emptyLabel="Keine gelösten Probleme im letzten Vergleich." />
               <IssueList title="Offene Probleme" issues={latestDiff.openIssues} emptyLabel="Keine weiter offenen Probleme im letzten Vergleich." />
               <IssueList title="Reopened / Ignored" issues={[...latestDiff.reopenedIssues, ...latestDiff.ignoredIssues]} emptyLabel="Keine reopened oder ignored Probleme." />
             </div>

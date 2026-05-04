@@ -1,12 +1,20 @@
 'use client';
 
 import { useState, useEffect, useMemo, memo } from 'react';
+import { normalizePlan, type PlanType } from '../lib/plans';
 
 const DIAGNOSTIC_TERMS = [
   "FETCHING_HEADERS_SSL", "DEEP_CRAWL_IN_PROGRESS", "CSS_PARSING_METRICS", "DOM_DEPTH_CALCULATION",
   "SCHEMA_LD_JSON_AUDIT", "WAP_INTEL_ORCHESTRATION", "SECURITY_HEADER_CHECK", "SSL_CERT_VALIDATION",
   "GSC_DATA_AGGREGATION", "PSI_API_LATENCY_CHECK", "RESPONSIVE_VIEWPORT_AUDIT", "OG_SOCIAL_META_SCRAPE"
 ];
+
+const MODEL_NAMES: Record<PlanType, string> = {
+  free: "WAP Standard v1",
+  pro: "WAP Advanced v2",
+  agency: "WAP Agency v3",
+  business: "WAP Business v4",
+};
 
 function FloatingScannerProgress({ progress }: { progress: number }) {
   return (
@@ -24,7 +32,8 @@ function LoadingDisplay({ plan = 'free' }: { plan?: string }) {
   const [progress, setProgress] = useState(0);
   const [terminalLines, setTerminalLines] = useState<string[]>([]);
 
-  const modelName = plan === 'agency' ? "WAP Enterprise v3" : plan === 'pro' ? "WAP Advanced v2" : "WAP Standard v1";
+  const scanPlan = normalizePlan(plan);
+  const modelName = MODEL_NAMES[scanPlan];
 
   const steps = useMemo(() => [
     `Initialisiere ${modelName} Intelligence...`,

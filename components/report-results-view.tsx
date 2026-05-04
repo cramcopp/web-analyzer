@@ -17,7 +17,7 @@ import { useTheme } from './theme-provider';
 import { ReportData } from '../types/report';
 import ErrorBoundary from './error-boundary';
 import { SafeResponsiveContainer } from './safe-responsive-container';
-import { normalizePlan } from '../lib/plans';
+import { applyReportVisibilityLimits, buildVisibilitySummaryFromReport, normalizePlan } from '../lib/plans';
 
 // Dynamic Imports for Performance Optimization
 const SeoDeepDiveModule = dynamic(() => import('./seo-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
@@ -54,8 +54,8 @@ const itemVariants: Variants = {
 };
 
 function ReportResultsView({
-  report,
-  rawScrapeData,
+  report: sourceReport,
+  rawScrapeData: sourceRawScrapeData,
   gscData,
   isGscLoading,
   onConnectGSC,
@@ -76,7 +76,21 @@ function ReportResultsView({
 }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const scanPlan = normalizePlan(rawScrapeData?.scanPlan || rawScrapeData?.plan || (report as any)?.scanPlan || (report as any)?.plan || plan);
+  const scanPlan = normalizePlan(sourceRawScrapeData?.scanPlan || sourceRawScrapeData?.plan || (sourceReport as any)?.scanPlan || (sourceReport as any)?.plan || plan);
+  const visibleRawScrapeData = useMemo(
+    () => applyReportVisibilityLimits(sourceRawScrapeData || {}, scanPlan),
+    [sourceRawScrapeData, scanPlan]
+  );
+  const visibleReport = useMemo(
+    () => applyReportVisibilityLimits(sourceReport as any, scanPlan) as ReportData,
+    [sourceReport, scanPlan]
+  );
+  const visibilityLimits = useMemo(
+    () => buildVisibilitySummaryFromReport(sourceRawScrapeData || sourceReport, scanPlan),
+    [sourceRawScrapeData, sourceReport, scanPlan]
+  );
+  const rawScrapeData = visibleRawScrapeData;
+  const report = visibleReport;
   const crawledPagesCount = rawScrapeData?.crawlSummary?.crawledPagesCount
     ?? rawScrapeData?.crawlSummary?.crawledUrls?.length
     ?? ((rawScrapeData?.crawlSummary?.scannedSubpagesCount || 0) + 1);
@@ -122,6 +136,9 @@ function ReportResultsView({
             <p className="text-[9px] font-bold uppercase tracking-widest text-[#555]">
               Limit {rawScrapeData?.crawlLimitUsed || rawScrapeData?.crawlSummary?.crawlLimitUsed || '-'} | Tiefe {rawScrapeData?.crawlSummary?.crawlDepthReached ?? 0}
             </p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[#555]">
+              Sichtbar {visibilityLimits.visibleDetailPages} | Versteckt {visibilityLimits.hiddenDetailPages}
+            </p>
           </div>
         </div>
       </div>
@@ -132,7 +149,10 @@ function ReportResultsView({
            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
               <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest">{rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : '—'} • {new Date().toLocaleDateString('de-DE')}</p>
               <span className="text-[10px] font-black uppercase tracking-[2px] text-[#1A1A1A] dark:text-white border border-[#D4AF37]/50 px-2 py-1 bg-[#D4AF37]/10">
-                {scanPlan.toUpperCase()}
+                Gescannt: {scanPlan.toUpperCase()}
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[2px] text-[#1A1A1A] dark:text-white border border-[#1A1A1A]/10 dark:border-white/10 px-2 py-1 bg-white dark:bg-zinc-900">
+                Account: {normalizePlan(rawScrapeData?.accountPlan || (report as any)?.accountPlan || scanPlan).toUpperCase()}
               </span>
               <div className="h-4 w-[1px] bg-[#888]/30 hidden sm:block" />
               <div className="flex items-center gap-3">
@@ -147,6 +167,14 @@ function ReportResultsView({
                   <div className="flex flex-col">
                      <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Interne Links</span>
                      <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{internalLinksCount}</span>
+                  </div>
+                  <div className="flex flex-col">
+                     <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Sichtbare Detailseiten</span>
+                     <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{Math.min(visibilityLimits.visibleDetailPages, visibilityLimits.detailPagesTotal)}</span>
+                  </div>
+                  <div className="flex flex-col">
+                     <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Versteckt</span>
+                     <span className="text-[14px] font-black text-[#D4AF37] leading-tight">{visibilityLimits.hiddenDetailPages}</span>
                   </div>
                </div>
            </div>
