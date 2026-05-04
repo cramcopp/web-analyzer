@@ -60,9 +60,13 @@ export default function WebsiteAnalyzer() {
 
   const { trialDaysLeft, showTrialBadge } = useTrial();
   const accountPlan = normalizePlan(userData?.plan || 'free');
+  const rawPlanData = rawScrapeData as (AnalysisResult & {
+    scanPlan?: string;
+    plan?: string;
+  }) | null;
   const currentReportPlan = normalizePlan(
-    rawScrapeData?.scanPlan ||
-    rawScrapeData?.plan ||
+    rawPlanData?.scanPlan ||
+    rawPlanData?.plan ||
     (report as any)?.scanPlan ||
     (report as any)?.plan ||
     accountPlan
@@ -236,15 +240,22 @@ export default function WebsiteAnalyzer() {
       }
 
       setRawScrapeData(scrapeData);
-      const reportScanPlan = normalizePlan(scrapeData.scanPlan || scrapeData.plan || accountPlan);
+      const scanPlanData = scrapeData as AnalysisResult & {
+        scanPlan?: string;
+        plan?: string;
+        accountPlan?: string;
+        crawlLimitUsed?: number;
+        scannerVersion?: string;
+      };
+      const reportScanPlan = normalizePlan(scanPlanData.scanPlan || scanPlanData.plan || accountPlan);
       const finalReport = await generateReportClientSide(scrapeData, reportScanPlan);
       const reportWithAuditId = {
         ...finalReport,
         plan: reportScanPlan,
-        accountPlan: scrapeData.accountPlan || reportScanPlan,
+        accountPlan: scanPlanData.accountPlan || reportScanPlan,
         scanPlan: reportScanPlan,
-        crawlLimitUsed: scrapeData.crawlLimitUsed || scrapeData.crawlSummary?.crawlLimitUsed,
-        scannerVersion: scrapeData.scannerVersion,
+        crawlLimitUsed: scanPlanData.crawlLimitUsed || scrapeData.crawlSummary?.crawlLimitUsed,
+        scannerVersion: scanPlanData.scannerVersion,
         audit_id: finalReport.audit_id || scrapeData.audit_id,
         url: scrapeData.url || targetUrl
       };
