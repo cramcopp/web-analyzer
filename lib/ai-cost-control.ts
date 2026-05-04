@@ -84,7 +84,7 @@ export function buildGeminiEndpoint(modelId: string, apiKey: string, env: Runtim
     headers['x-goog-api-key'] = apiKey;
     headers['cf-aig-authorization'] = `Bearer ${env.AI_GATEWAY_TOKEN}`;
 
-    return {
+  return {
       url: `https://gateway.ai.cloudflare.com/v1/${env.CLOUDFLARE_ACCOUNT_ID}/${gatewayId}/google-ai-studio/v1beta/models/${modelId}:generateContent`,
       headers,
       provider: 'cloudflare-ai-gateway',
@@ -159,6 +159,7 @@ export async function requestGeminiContent({
 
 export function buildGroundedReportPayload(scrapeData: any, url: string, plan: string) {
   const crawlSummary = scrapeData.crawlSummary || {};
+  const scanPlan = scrapeData.scanPlan || scrapeData.plan || plan;
   const evidence = asArray(scrapeData.evidence).slice(0, 80).map((item: any) => ({
     id: item.id,
     type: item.type,
@@ -168,9 +169,21 @@ export function buildGroundedReportPayload(scrapeData: any, url: string, plan: s
     createdAt: item.createdAt,
   }));
 
-  return {
+    return {
     url,
-    plan,
+    plan: scanPlan,
+    accountPlan: scrapeData.accountPlan || scanPlan,
+    scanPlan,
+    scannerVersion: scrapeData.scannerVersion,
+    crawlLimitUsed: scrapeData.crawlLimitUsed || crawlSummary.crawlLimitUsed,
+    crawlDevice: scrapeData.crawlDevice,
+    renderMode: scrapeData.renderMode,
+    renderAudit: scrapeData.renderAudit,
+    psiMetrics: scrapeData.psiMetrics,
+    psiResults: scrapeData.psiResults,
+    cruxRecord: scrapeData.cruxRecord,
+    googleInspection: scrapeData.googleInspection,
+    lighthouseScores: scrapeData.lighthouseScores,
     issues: compactIssues(asArray(scrapeData.issues)),
     evidence,
     crawlSummary: {
@@ -178,10 +191,26 @@ export function buildGroundedReportPayload(scrapeData: any, url: string, plan: s
       totalUrls: crawlSummary.totalUrls,
       totalInternalLinks: crawlSummary.totalInternalLinks,
       scannedSubpagesCount: crawlSummary.scannedSubpagesCount,
+      crawledPagesCount: crawlSummary.crawledPagesCount,
+      crawlLimitUsed: crawlSummary.crawlLimitUsed,
+      crawlDepthReached: crawlSummary.crawlDepthReached,
       indexablePagesCount: crawlSummary.indexablePagesCount,
+      depthDistribution: crawlSummary.depthDistribution,
+      statusCodeDistribution: crawlSummary.statusCodeDistribution,
+      indexabilityReasons: crawlSummary.indexabilityReasons,
+      sitemapCoverage: crawlSummary.sitemapCoverage,
+      internalLinking: crawlSummary.internalLinking,
+      canonicalClusters: asArray(crawlSummary.canonicalClusters).slice(0, 50),
+      duplicateContentClusters: asArray(crawlSummary.duplicateContentClusters).slice(0, 50),
+      hreflangSummary: crawlSummary.hreflangSummary,
+      structuredDataSummary: crawlSummary.structuredDataSummary,
+      externalLinkChecks: crawlSummary.externalLinkChecks,
+      redirectChains: asArray(crawlSummary.redirectChains).slice(0, 50),
+      pageAudit: asArray(crawlSummary.pageAudit).slice(0, 80),
       crawledUrls: asArray(crawlSummary.crawledUrls).slice(0, 100),
       indexableUrls: asArray(crawlSummary.indexableUrls).slice(0, 100),
       blockedUrls: asArray(crawlSummary.blockedUrls).slice(0, 50),
+      skippedUrls: asArray(crawlSummary.skippedUrls).slice(0, 50),
       brokenLinks: asArray(crawlSummary.brokenLinks).slice(0, 80),
       scannedSubpages: asArray(crawlSummary.scannedSubpages).slice(0, 30).map((page: any) => ({
         url: page.url,
@@ -190,6 +219,12 @@ export function buildGroundedReportPayload(scrapeData: any, url: string, plan: s
         imagesWithoutAlt: page.imagesWithoutAlt,
         status: page.status,
         isIndexable: page.isIndexable,
+        indexabilityReason: page.indexabilityReason,
+        crawlDepth: page.crawlDepth,
+        crawlSource: page.crawlSource,
+        canonical: page.canonical,
+        wordCount: page.wordCount,
+        structuredDataTypes: page.structuredDataTypes,
       })),
       sitemapUrls: asArray(crawlSummary.sitemapUrls).slice(0, 100),
       sourceType: crawlSummary.sourceType,
@@ -204,7 +239,6 @@ export function buildGroundedReportPayload(scrapeData: any, url: string, plan: s
       aiVisibilityFacts: compactFacts(scrapeData.aiVisibilityFacts),
     },
     gscData: scrapeData.gscData || null,
-    psiMetrics: scrapeData.psiMetrics || null,
     cruxMetrics: scrapeData.cruxMetrics || null,
     dataSources: scrapeData.dataSources || {},
   };

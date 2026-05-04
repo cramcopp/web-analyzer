@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
+import { normalizePlan } from '@/lib/plans';
 import {
   createCloudflareScanPlaceholder,
+  getCloudflareProject,
+  getCloudflareUserProfile,
   hasCloudflareD1,
   queryCloudflareDueScheduledScans,
   updateCloudflareScheduledScanRun,
@@ -49,17 +52,30 @@ async function loadDueJobs(env: any): Promise<ScanJob[]> {
   const schedules = await queryCloudflareDueScheduledScans(env);
   const seen = new Set<string>();
 
-  return schedules
+  const jobs = await Promise.all(schedules
     .filter((schedule: any) => schedule.url)
-    .map((schedule: any) => ({
-      id: schedule.id,
-      userId: schedule.userId,
-      projectId: schedule.projectId,
-      url: schedule.url,
-      plan: schedule.plan || 'pro',
-      frequency: schedule.frequency || 'weekly',
-      source: 'scheduledScans' as const,
-    }))
+    .map(async (schedule: any) => {
+      const userProfile = schedule.userId
+        ? await getCloudflareUserProfile(env, schedule.userId).catch(() => null)
+        : null;
+      const userPlan = typeof userProfile?.plan === 'string' ? normalizePlan(userProfile.plan) : null;
+      const project = schedule.userId && schedule.projectId
+        ? await getCloudflareProject(env, schedule.projectId, schedule.userId).catch(() => null)
+        : null;
+      const projectPlan = project && !('forbidden' in project) && typeof project.plan === 'string' ? normalizePlan(project.plan) : null;
+
+      return {
+        id: schedule.id,
+        userId: schedule.userId,
+        projectId: schedule.projectId,
+        url: schedule.url,
+        plan: userPlan || projectPlan || normalizePlan(schedule.plan || 'free'),
+        frequency: schedule.frequency || 'weekly',
+        source: 'scheduledScans' as const,
+      };
+    }));
+
+  return jobs
     .filter((job) => {
       const key = `${job.id || job.projectId}:${job.url}`;
       if (seen.has(key)) return false;
@@ -75,13 +91,14 @@ async function triggerWorkflow(env: any, job: ScanJob) {
 
   const auditId = crypto.randomUUID();
   const now = new Date().toISOString();
+  const scanPlan = normalizePlan(job.plan || 'free');
 
   const created = await createCloudflareScanPlaceholder(env, {
     id: auditId,
     userId: job.userId || '',
     projectId: job.projectId,
     url: job.url,
-    plan: job.plan || 'pro',
+    plan: scanPlan,
     status: 'scanning',
     progress: 0,
     createdAt: now,
@@ -96,7 +113,7 @@ async function triggerWorkflow(env: any, job: ScanJob) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url: job.url,
-      plan: job.plan || 'pro',
+      plan: scanPlan,
       userId: job.userId,
       projectId: job.projectId,
       auditId,
@@ -115,7 +132,7 @@ async function triggerWorkflow(env: any, job: ScanJob) {
     });
   }
 
-  return { auditId, url: job.url, projectId: job.projectId, source: job.source };
+  return { auditId, url: job.url, projectId: job.projectId, plan: scanPlan, source: job.source };
 }
 
 export async function GET(req: Request) {

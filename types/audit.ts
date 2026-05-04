@@ -60,6 +60,10 @@ export interface ScoreDeduction {
   severity: AuditSeverity;
   confidence: number;
   points: number;
+  affectedUrlCount?: number;
+  groupedIssueCount?: number;
+  rawPoints?: number;
+  capped?: boolean;
 }
 
 export interface CategoryScoreBreakdown {

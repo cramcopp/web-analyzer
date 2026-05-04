@@ -17,6 +17,7 @@ import { useTheme } from './theme-provider';
 import { ReportData } from '../types/report';
 import ErrorBoundary from './error-boundary';
 import { SafeResponsiveContainer } from './safe-responsive-container';
+import { normalizePlan } from '../lib/plans';
 
 // Dynamic Imports for Performance Optimization
 const SeoDeepDiveModule = dynamic(() => import('./seo-module'), { loading: () => <div className="h-40 animate-pulse bg-zinc-100 dark:bg-zinc-800" /> });
@@ -75,6 +76,14 @@ function ReportResultsView({
 }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const scanPlan = normalizePlan(rawScrapeData?.scanPlan || rawScrapeData?.plan || (report as any)?.scanPlan || (report as any)?.plan || plan);
+  const crawledPagesCount = rawScrapeData?.crawlSummary?.crawledPagesCount
+    ?? rawScrapeData?.crawlSummary?.crawledUrls?.length
+    ?? ((rawScrapeData?.crawlSummary?.scannedSubpagesCount || 0) + 1);
+  const internalLinksCount = rawScrapeData?.crawlSummary?.internalLinksCount
+    ?? rawScrapeData?.crawlSummary?.totalInternalLinks
+    ?? rawScrapeData?.internalLinksCount
+    ?? 0;
 
   const techMetadata = useMemo(() => ({
     audit_id: rawScrapeData?.audit_id || '—',
@@ -98,23 +107,48 @@ function ReportResultsView({
       animate="visible"
       className="max-w-[1400px] mx-auto px-4 md:px-0"
     >
+      <div className="hidden print:block mb-10 pb-6 border-b border-black">
+        <div className="flex items-start justify-between gap-8">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] mb-2">Website Analyzer Pro</p>
+            <h2 className="text-[34px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A]">Audit Bericht</h2>
+            <p className="text-[11px] text-[#555] font-bold uppercase tracking-widest mt-3">
+              {rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : 'Unbekannte URL'} | {new Date().toLocaleDateString('de-DE')}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase tracking-[2px] text-[#888]">Gescannt mit Plan</p>
+            <p className="text-[24px] font-black uppercase text-[#D4AF37]">{scanPlan.toUpperCase()}</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[#555]">
+              Limit {rawScrapeData?.crawlLimitUsed || rawScrapeData?.crawlSummary?.crawlLimitUsed || '-'} | Tiefe {rawScrapeData?.crawlSummary?.crawlDepthReached ?? 0}
+            </p>
+          </div>
+        </div>
+      </div>
       <motion.div variants={itemVariants} className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-black/10 dark:border-white/10 print:hidden">
         <div>
            <span className="text-[10px] font-black uppercase tracking-[2.5px] text-[#D4AF37] mb-2 block">Audit abgeschlossen</span>
            <h2 className="text-[32px] md:text-[48px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">Audit Bericht</h2>
            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
               <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest">{rawScrapeData?.urlObj ? (() => { try { return new URL(rawScrapeData.urlObj).hostname; } catch { return rawScrapeData.urlObj; } })() : '—'} • {new Date().toLocaleDateString('de-DE')}</p>
+              <span className="text-[10px] font-black uppercase tracking-[2px] text-[#1A1A1A] dark:text-white border border-[#D4AF37]/50 px-2 py-1 bg-[#D4AF37]/10">
+                {scanPlan.toUpperCase()}
+              </span>
               <div className="h-4 w-[1px] bg-[#888]/30 hidden sm:block" />
               <div className="flex items-center gap-3">
                  <div className="flex flex-col">
                     <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Gecrawlte Seiten</span>
-                    <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{rawScrapeData?.crawlSummary?.totalInternalLinks || 1}</span>
+                    <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{crawledPagesCount || 1}</span>
                  </div>
-                 <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Indexierbare Seiten</span>
-                    <span className="text-[14px] font-black text-[#D4AF37] leading-tight">{rawScrapeData?.crawlSummary?.indexablePagesCount || 1}</span>
-                 </div>
-              </div>
+                  <div className="flex flex-col">
+                     <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Indexierbare Seiten</span>
+                     <span className="text-[14px] font-black text-[#D4AF37] leading-tight">{rawScrapeData?.crawlSummary?.indexablePagesCount || 1}</span>
+                  </div>
+                  <div className="flex flex-col">
+                     <span className="text-[9px] font-black text-[#888] uppercase tracking-tighter leading-none">Interne Links</span>
+                     <span className="text-[14px] font-black text-[#1A1A1A] dark:text-white leading-tight">{internalLinksCount}</span>
+                  </div>
+               </div>
            </div>
         </div>
         <div className="flex items-center gap-3">
@@ -194,23 +228,23 @@ function ReportResultsView({
       <div className="space-y-[80px] pb-20">
         <motion.div variants={itemVariants}>
           <ErrorBoundary moduleName="SEO Deep Dive">
-            <SeoDeepDiveModule 
-              detailedSeo={report.seo?.detailedSeo || {} as any} 
-              socialData={rawScrapeData?.social} 
-              crawlSummary={rawScrapeData?.crawlSummary} 
-              plan={plan} 
+            <SeoDeepDiveModule
+              detailedSeo={report.seo?.detailedSeo || {} as any}
+              socialData={rawScrapeData?.social}
+              crawlSummary={rawScrapeData?.crawlSummary}
+              plan={scanPlan}
             />
           </ErrorBoundary>
         </motion.div>
         
         <motion.div variants={itemVariants}>
           <ErrorBoundary moduleName="Google Search Console">
-            <SearchConsoleModule 
+            <SearchConsoleModule
               data={gscData} 
               isLoading={isGscLoading} 
               onConnect={onConnectGSC} 
               error={gscError} 
-              plan={plan}
+              plan={scanPlan}
               setActiveView={setActiveView}
             />
           </ErrorBoundary>
@@ -280,6 +314,27 @@ function ReportResultsView({
                     ssl_details: rawScrapeData?.sslCertificate,
                     performance_metrics: rawScrapeData?.lighthouseScores,
                     score_breakdown: rawScrapeData?.scoreBreakdown,
+                    scan_plan: scanPlan,
+                    scanner_version: rawScrapeData?.scannerVersion,
+                    crawl_device: rawScrapeData?.crawlDevice,
+                    render_mode: rawScrapeData?.renderMode,
+                    render_audit: rawScrapeData?.renderAudit,
+                    psi_results: rawScrapeData?.psiResults,
+                    crux_record: rawScrapeData?.cruxRecord,
+                    google_inspection: rawScrapeData?.googleInspection,
+                    crawl_limit_used: rawScrapeData?.crawlLimitUsed || rawScrapeData?.crawlSummary?.crawlLimitUsed,
+                    crawl_depth_reached: rawScrapeData?.crawlSummary?.crawlDepthReached,
+                    crawl_status_distribution: rawScrapeData?.crawlSummary?.statusCodeDistribution,
+                    crawl_depth_distribution: rawScrapeData?.crawlSummary?.depthDistribution,
+                    sitemap_coverage: rawScrapeData?.crawlSummary?.sitemapCoverage,
+                    indexability_reasons: rawScrapeData?.crawlSummary?.indexabilityReasons,
+                    internal_linking: rawScrapeData?.crawlSummary?.internalLinking,
+                    duplicate_content_clusters: rawScrapeData?.crawlSummary?.duplicateContentClusters,
+                    hreflang_summary: rawScrapeData?.crawlSummary?.hreflangSummary,
+                    structured_data_summary: rawScrapeData?.crawlSummary?.structuredDataSummary,
+                    external_link_checks: rawScrapeData?.crawlSummary?.externalLinkChecks,
+                    redirect_chains: rawScrapeData?.crawlSummary?.redirectChains,
+                    scan_diff: rawScrapeData?.scanDiff,
                     issues: rawScrapeData?.issues?.map((issue: any) => ({
                       id: issue.id,
                       type: issue.issueType,

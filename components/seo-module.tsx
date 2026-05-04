@@ -5,14 +5,37 @@ import { Search, Globe, Info, ShieldCheck, Share2, CodeXml, Activity } from 'luc
 import { CollapsibleSection } from './collapsible-section';
 import PrioritizedTasksSection from './task-section';
 import { DetailedSEO } from '../types/report';
-import { getCrawlLimit } from '../lib/plans';
+import { getCrawlLimit, normalizePlan } from '../lib/plans';
 
 export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawlSummary: any, plan?: string }) => {
   if (!crawlSummary || !crawlSummary.scannedSubpages) return null;
 
-  const displayLimit = getCrawlLimit(plan);
+  const scanPlan = normalizePlan(plan);
+  const displayLimit = crawlSummary.crawlLimitUsed || getCrawlLimit(scanPlan);
   const displayedPages = crawlSummary.scannedSubpages.slice(0, displayLimit);
   const isLimited = crawlSummary.scannedSubpagesCount > displayedPages.length;
+  const crawledPagesCount = crawlSummary.crawledPagesCount || crawlSummary.crawledUrls?.length || crawlSummary.scannedSubpagesCount;
+  const crawlDepthReached = crawlSummary.crawlDepthReached ?? 0;
+  const sitemapCoverage = crawlSummary.sitemapCoverage || {};
+  const internalLinking = crawlSummary.internalLinking || {};
+  const structuredDataSummary = crawlSummary.structuredDataSummary || {};
+  const hreflangSummary = crawlSummary.hreflangSummary || {};
+  const externalLinkChecks = crawlSummary.externalLinkChecks || {};
+  const linkGraphMetrics = internalLinking.linkGraphMetrics || {};
+  const duplicateContentClusters = crawlSummary.duplicateContentClusters || [];
+  const canonicalClusters = crawlSummary.canonicalClusters || [];
+  const nonIndexableUrls = crawlSummary.nonIndexableUrls || [];
+
+  const summaryCards = [
+    { label: 'Sitemap URLs', value: sitemapCoverage.submitted ?? crawlSummary.sitemapUrls?.length ?? 0, detail: `${sitemapCoverage.crawled ?? 0} gecrawlt` },
+    { label: 'Nicht indexierbar', value: nonIndexableUrls.length, detail: `${crawlSummary.indexablePagesCount ?? 0} indexierbar` },
+    { label: 'Orphans', value: internalLinking.orphanUrls?.length ?? 0, detail: `${internalLinking.lowInlinkUrls?.length ?? 0} low-inlink` },
+    { label: 'Duplicate Cluster', value: duplicateContentClusters.length, detail: `${canonicalClusters.length} canonical cluster` },
+    { label: 'Schema Types', value: structuredDataSummary.schemaTypes?.length ?? 0, detail: `${structuredDataSummary.jsonLdBlocks ?? 0} JSON-LD` },
+    { label: 'hreflang Tags', value: hreflangSummary.totalTags ?? 0, detail: `${hreflangSummary.missingReturnTags?.length ?? 0} return fehlt` },
+    { label: 'Externe Links', value: externalLinkChecks.checkedCount ?? 0, detail: `${externalLinkChecks.brokenCount ?? 0} defekt` },
+    { label: 'Linkgraph', value: linkGraphMetrics.topLinkedPages?.length ?? 0, detail: `Avg Tiefe ${linkGraphMetrics.averageDepth ?? 0}` },
+  ];
 
   return (
     <div className="mt-10 p-6 bg-[#F9F9F9] dark:bg-zinc-900/50 border-t-2 border-[#D4AF37] relative break-inside-avoid">
@@ -20,6 +43,43 @@ export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawl
         <Globe className="w-5 h-5 text-[#D4AF37]" />
         Site-Wide Audit (Crawling Result)
       </h4>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+        {summaryCards.map((card) => (
+          <div key={card.label} className="bg-white dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 p-3 min-h-[78px]">
+            <span className="block text-[8px] font-black uppercase tracking-widest text-[#888] leading-tight">{card.label}</span>
+            <span className="block text-[22px] font-black text-[#1A1A1A] dark:text-zinc-100 leading-none mt-2">{card.value}</span>
+            <span className="block text-[8px] font-bold uppercase tracking-tight text-[#D4AF37] mt-2">{card.detail}</span>
+          </div>
+        ))}
+      </div>
+
+      {crawlSummary.pageAudit?.length > 0 && (
+        <div className="mb-6 overflow-x-auto bg-white dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800">
+          <table className="w-full text-left min-w-[760px]">
+            <thead>
+              <tr className="border-b border-[#EEE] dark:border-zinc-800">
+                {['URL', 'Status', 'Index', 'Tiefe', 'Inlinks', 'Wörter', 'Canonical'].map((heading) => (
+                  <th key={heading} className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-[#888]">{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {crawlSummary.pageAudit.slice(0, 12).map((page: any) => (
+                <tr key={page.url} className="border-b border-[#EEE] dark:border-zinc-900 last:border-b-0">
+                  <td className="px-3 py-2 text-[10px] font-bold text-[#1A1A1A] dark:text-zinc-100 max-w-[260px] truncate">{(() => { try { return new URL(page.url).pathname || '/'; } catch { return page.url; } })()}</td>
+                  <td className="px-3 py-2 text-[10px] font-black">{page.status}</td>
+                  <td className={`px-3 py-2 text-[10px] font-black ${page.isIndexable === false ? 'text-red-500' : 'text-green-600'}`}>{page.isIndexable === false ? 'Nein' : 'Ja'}</td>
+                  <td className="px-3 py-2 text-[10px] font-bold text-[#888]">{page.crawlDepth ?? 0}</td>
+                  <td className="px-3 py-2 text-[10px] font-bold text-[#888]">{page.internalInlinks}</td>
+                  <td className="px-3 py-2 text-[10px] font-bold text-[#888]">{page.wordCount}</td>
+                  <td className={`px-3 py-2 text-[10px] font-black ${page.canonicalSelfReferenced ? 'text-green-600' : 'text-orange-500'}`}>{page.canonicalSelfReferenced ? 'Self' : 'Alt'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {displayedPages.map((page: any, idx: number) => (
@@ -54,7 +114,7 @@ export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawl
               <span className="text-[9px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">
                 +{crawlSummary.scannedSubpagesCount - displayedPages.length} Seiten gefunden
               </span>
-              <p className="text-[8px] text-[#888] font-bold mt-1">NUR IN PRO VERFÜGBAR</p>
+              <p className="text-[8px] text-[#888] font-bold mt-1">{scanPlan.toUpperCase()} LIMIT ERREICHT</p>
             </div>
           </div>
         )}
@@ -63,7 +123,7 @@ export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawl
       <div className="mt-6 flex items-center justify-between gap-4 text-[10px] text-[#888] font-bold uppercase tracking-widest bg-white dark:bg-zinc-950 p-3 border border-[#EEE] dark:border-zinc-800">
         <div className="flex items-center gap-4">
           <Info className="w-4 h-4 text-[#D4AF37]" />
-          <span>Gefundene interne Links: {crawlSummary.totalInternalLinks} | Tiefen-Audit von {crawlSummary.scannedSubpagesCount} Seiten.</span>
+          <span>Gefundene interne Links: {crawlSummary.internalLinksCount ?? crawlSummary.totalInternalLinks} | Gecrawlte Seiten: {crawledPagesCount} | Tiefe: {crawlDepthReached}</span>
         </div>
         {isLimited && (
           <span className="text-[#D4AF37] flex items-center gap-2">

@@ -1,4 +1,4 @@
-import { getMonthlyScanLimit } from './plans';
+import { getMonthlyScanLimit, normalizePlan } from './plans';
 import { compareScans } from './monitoring/diff';
 import type { AnalysisResult } from './scanner/types';
 import type { AuditIssue, EvidenceArtifact, UrlSnapshot } from '@/types/audit';
@@ -94,6 +94,15 @@ function safeJson(value: unknown) {
   }
 }
 
+function stableHash(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function compactJson(value: unknown, maxLength = 900_000) {
   const serialized = safeJson(value);
   if (serialized.length <= maxLength) return serialized;
@@ -113,6 +122,18 @@ function compactJson(value: unknown, maxLength = 900_000) {
         status: page.status,
         h1Count: page.h1Count,
         imagesWithoutAlt: page.imagesWithoutAlt,
+        crawlDepth: page.crawlDepth,
+        discoveredFrom: page.discoveredFrom,
+        crawlSource: page.crawlSource,
+        isIndexable: page.isIndexable,
+        indexabilityReason: page.indexabilityReason,
+        canonical: page.canonical,
+        wordCount: page.wordCount,
+        hreflangs: Array.isArray(page.hreflangs) ? page.hreflangs.slice(0, 20) : [],
+        structuredDataTypes: page.structuredDataTypes,
+        structuredDataParseErrors: page.structuredDataParseErrors,
+        jsonLdBlocks: page.jsonLdBlocks,
+        redirectChain: Array.isArray(page.redirectChain) ? page.redirectChain.slice(0, 10) : [],
         links: Array.isArray(page.links) ? page.links.slice(0, 100) : [],
         headings: page.headings,
       };
@@ -217,6 +238,39 @@ async function putJson(
   };
 }
 
+function base64ToBytes(value: string) {
+  if (typeof Buffer !== 'undefined') return new Uint8Array(Buffer.from(value, 'base64'));
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+async function putBinary(
+  bucket: R2BucketBinding | null,
+  bucketUri: string,
+  key: string,
+  value: Uint8Array,
+  contentType: string,
+  metadata: Record<string, string> = {}
+) {
+  if (!bucket) return null;
+  const checksum = await sha256Binary(value);
+  await bucket.put(key, value, {
+    httpMetadata: { contentType },
+    customMetadata: { ...metadata, checksum },
+  });
+
+  return {
+    key,
+    storageUri: `${bucketUri}/${key}`,
+    checksum,
+    bytes: value.byteLength,
+  };
+}
+
 async function getJson<T = unknown>(bucket: R2BucketBinding | null, key: string | null | undefined) {
   if (!bucket || !key) return null;
   const object = await bucket.get(key);
@@ -231,6 +285,21 @@ function buildReportSummary(result: AnalysisResult | Record<string, unknown>) {
     url: result.url,
     urlObj: result.urlObj || result.url,
     createdAt: result.createdAt || nowIso(),
+    scannerVersion: result.scannerVersion,
+    plan: result.plan,
+    accountPlan: result.accountPlan,
+    scanPlan: result.scanPlan || result.plan,
+    crawlLimitUsed: result.crawlLimitUsed,
+    crawlDevice: result.crawlDevice,
+    renderMode: result.renderMode,
+    renderAudit: result.renderAudit,
+    psiMetricsStr: result.psiMetricsStr,
+    psiMetrics: result.psiMetrics,
+    psiResults: result.psiResults,
+    cruxRecord: result.cruxRecord,
+    googleInspection: result.googleInspection,
+    lighthouseScores: result.lighthouseScores,
+    scanDiff: result.scanDiff,
     status: result.status || 'completed',
     progress: result.progress ?? 100,
     title: result.title,
@@ -273,6 +342,17 @@ function toReportRow(row: StoredReportRow, raw: Record<string, unknown> | null, 
   const summary = parseMaybeJson<Record<string, unknown>>(row.summary_json) || {};
   const mergedRaw = raw || summary;
   const mergedResults = results || parseMaybeJson<Record<string, unknown>>(row.results_json) || summary;
+  const scanPlan = normalizePlan(
+    (typeof mergedRaw.scanPlan === 'string' ? mergedRaw.scanPlan : null) ||
+    (typeof mergedRaw.plan === 'string' ? mergedRaw.plan : null) ||
+    row.plan ||
+    (typeof summary.scanPlan === 'string' ? summary.scanPlan : null) ||
+    'free'
+  );
+  const accountPlan = normalizePlan(
+    (typeof mergedRaw.accountPlan === 'string' ? mergedRaw.accountPlan : null) ||
+    scanPlan
+  );
 
   return {
     ...mergedRaw,
@@ -285,13 +365,16 @@ function toReportRow(row: StoredReportRow, raw: Record<string, unknown> | null, 
     urlObj: row.url,
     status: row.status,
     progress: row.progress ?? (row.status === 'completed' ? 100 : 0),
+    plan: scanPlan,
+    accountPlan,
+    scanPlan,
     score: row.score,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
     error: row.error,
-    results: mergedResults,
-    rawScrapeData: mergedRaw,
+    results: { ...mergedResults, plan: scanPlan, accountPlan, scanPlan },
+    rawScrapeData: { ...mergedRaw, plan: scanPlan, accountPlan, scanPlan },
     artifactStorage: {
       raw: row.raw_artifact_key ? `${AUDIT_BUCKET_URI}/${row.raw_artifact_key}` : null,
       results: row.result_artifact_key ? `${AUDIT_BUCKET_URI}/${row.result_artifact_key}` : null,
@@ -301,6 +384,7 @@ function toReportRow(row: StoredReportRow, raw: Record<string, unknown> | null, 
 
 export function defaultUserProfile(user: SessionUser, existing?: Record<string, unknown> | null) {
   const createdAt = String(existing?.createdAt || nowIso());
+  const plan = normalizePlan(typeof existing?.plan === 'string' ? existing.plan : 'free');
   return {
     ...(existing || {}),
     uid: user.uid,
@@ -309,9 +393,9 @@ export function defaultUserProfile(user: SessionUser, existing?: Record<string, 
     displayName: user.displayName || existing?.displayName || null,
     photoURL: user.photoURL || existing?.photoURL || null,
     role: existing?.role || 'user',
-    plan: existing?.plan || 'free',
+    plan,
     scanCount: typeof existing?.scanCount === 'number' ? existing.scanCount : 0,
-    maxScans: typeof existing?.maxScans === 'number' ? existing.maxScans : getMonthlyScanLimit('free'),
+    maxScans: typeof existing?.maxScans === 'number' ? existing.maxScans : getMonthlyScanLimit(plan),
     lastScanReset: existing?.lastScanReset || createdAt,
     stripeCustomerId: existing?.stripeCustomerId || null,
     gscTokens: existing?.gscTokens || null,
@@ -1239,12 +1323,16 @@ export async function createCloudflareScanPlaceholder(
   if (!db) return false;
 
   const createdAt = input.createdAt || nowIso();
+  const scanPlan = normalizePlan(input.plan || 'free');
   const summary = {
     audit_id: input.id,
     userId: input.userId,
     projectId: input.projectId || null,
     url: input.url,
     urlObj: input.url,
+    plan: scanPlan,
+    accountPlan: scanPlan,
+    scanPlan,
     status: input.status || 'scanning',
     progress: input.progress ?? 0,
     createdAt,
@@ -1271,7 +1359,7 @@ export async function createCloudflareScanPlaceholder(
     input.url,
     input.status || 'scanning',
     input.progress ?? 0,
-    input.plan || 'free',
+    scanPlan,
     safeJson(summary),
     createdAt,
     nowIso()
@@ -1292,6 +1380,29 @@ export async function storeCloudflareScanArtifacts(
   const userId = context.userId || result.userId || 'anonymous';
   const evidence = await Promise.all((result.evidence || []).map(async (artifact) => {
     if (!artifact.inlineValue) return artifact;
+
+    if (artifact.type === 'screenshot' && artifact.contentType?.startsWith('image/')) {
+      const extension = artifact.contentType.includes('png') ? 'png' : 'jpg';
+      const stored = await putBinary(
+        bucket,
+        AUDIT_BUCKET_URI,
+        `evidence/${userId}/${scanId}/${artifact.id}.${extension}`,
+        base64ToBytes(artifact.inlineValue),
+        artifact.contentType,
+        {
+          scanId,
+          artifactId: artifact.id,
+          type: artifact.type,
+        }
+      );
+
+      return {
+        ...artifact,
+        storageUri: stored?.storageUri || artifact.storageUri,
+        checksum: stored?.checksum || artifact.checksum,
+        inlineValue: undefined,
+      };
+    }
 
     const stored = await putJson(
       bucket,
@@ -1603,27 +1714,44 @@ function factStatements(db: D1DatabaseBinding, result: AnalysisResult, userId: s
   ];
 }
 
-async function writeScanDiffIfPossible(
+async function buildScanDiffIfPossible(
   db: D1DatabaseBinding,
   projectId: string | null,
   userId: string,
   current: AnalysisResult
 ) {
-  if (!projectId) return;
+  const currentUrl = current.urlObj || current.url || '';
+  if (!projectId && !userId) return null;
 
-  const previousRow = await db.prepare(`
+  const previousRow = projectId ? await db.prepare(`
     SELECT id, summary_json
     FROM scans
     WHERE project_id = ? AND id <> ? AND status = 'completed'
     ORDER BY datetime(completed_at) DESC, datetime(created_at) DESC
     LIMIT 1
-  `).bind(projectId, current.audit_id).first<{ id: string; summary_json: string | null }>();
+  `).bind(projectId, current.audit_id).first<{ id: string; summary_json: string | null }>() : await db.prepare(`
+    SELECT id, summary_json
+    FROM scans
+    WHERE user_id = ? AND url = ? AND id <> ? AND status = 'completed'
+    ORDER BY datetime(completed_at) DESC, datetime(created_at) DESC
+    LIMIT 1
+  `).bind(userId, currentUrl, current.audit_id).first<{ id: string; summary_json: string | null }>();
 
   const previousScan = previousRow?.summary_json
     ? parseMaybeJson<Record<string, unknown>>(previousRow.summary_json)
     : null;
 
-  const diff = compareScans(projectId, previousScan as any, current);
+  return compareScans(projectId || `user:${userId}:${stableHash(currentUrl)}`, previousScan as any, current);
+}
+
+async function writeScanDiffIfPossible(
+  db: D1DatabaseBinding,
+  projectId: string | null,
+  userId: string,
+  diff: ReturnType<typeof compareScans> | null
+) {
+  if (!projectId || !diff) return;
+
   await upsertCloudflareMonitoringItem({ DB: db }, {
     collection: 'scanDiffs',
     id: diff.id,
@@ -1645,8 +1773,14 @@ export async function writeCloudflareScanResult(
   const scanId = context.scanId || storedResult.audit_id;
   const userId = context.userId || storedResult.userId || '';
   const projectId = context.projectId || null;
+  const scanPlan = normalizePlan(storedResult.scanPlan || storedResult.plan || context.plan || 'free');
+  storedResult.plan = scanPlan;
+  storedResult.accountPlan = storedResult.accountPlan || scanPlan;
+  storedResult.scanPlan = scanPlan;
   const createdAt = storedResult.createdAt || nowIso();
   const now = nowIso();
+  const scanDiff = await buildScanDiffIfPossible(db, projectId, userId, storedResult);
+  storedResult.scanDiff = scanDiff;
   const auditBucket = getAuditBucket(env);
   const rawArtifact = await putJson(
     auditBucket,
@@ -1685,7 +1819,7 @@ export async function writeCloudflareScanResult(
     storedResult.url,
     'completed',
     100,
-    context.plan || 'free',
+    scanPlan,
     score,
     compactJson(summary),
     rawArtifact?.key || null,
@@ -1702,7 +1836,7 @@ export async function writeCloudflareScanResult(
   ];
 
   await runBatch(db, statements);
-  await writeScanDiffIfPossible(db, projectId, userId, storedResult);
+  await writeScanDiffIfPossible(db, projectId, userId, scanDiff);
   return true;
 }
 
@@ -1712,6 +1846,7 @@ export async function markCloudflareScanError(
 ) {
   const db = getDb(env);
   if (!db) return false;
+  const scanPlan = normalizePlan(input.plan || 'free');
 
   await db.prepare(`
     INSERT INTO scans (id, user_id, project_id, url, status, progress, plan, error, created_at, updated_at)
@@ -1726,7 +1861,7 @@ export async function markCloudflareScanError(
     input.userId || null,
     input.projectId || null,
     input.url,
-    input.plan || 'free',
+    scanPlan,
     input.message,
     nowIso(),
     nowIso()
@@ -1754,7 +1889,14 @@ export async function upsertCloudflareReportDocument(
     ? await putJson(auditBucket, AUDIT_BUCKET_URI, `scans/${context.userId}/${reportId}/ai-report.json`, results, { scanId: reportId, kind: 'ai-report' })
     : null;
   const summarySource = raw || results || report;
-  const summary = buildReportSummary({ ...summarySource, ...report, audit_id: reportId, userId: context.userId } as Record<string, unknown>);
+  const scanPlan = normalizePlan(
+    context.plan ||
+    (typeof report.scanPlan === 'string' ? report.scanPlan : null) ||
+    (typeof report.plan === 'string' ? report.plan : null) ||
+    (isObject(raw) && typeof raw.scanPlan === 'string' ? raw.scanPlan : null) ||
+    'free'
+  );
+  const summary = buildReportSummary({ ...summarySource, ...report, audit_id: reportId, userId: context.userId, plan: scanPlan, accountPlan: scanPlan, scanPlan } as Record<string, unknown>);
   const url = String(context.url || report.url || report.urlObj || summary.url || '');
   const status = String(report.status || summary.status || 'completed');
   const progress = typeof report.progress === 'number' ? report.progress : status === 'completed' ? 100 : 0;
@@ -1789,7 +1931,7 @@ export async function upsertCloudflareReportDocument(
     url,
     status,
     progress,
-    context.plan || 'free',
+    scanPlan,
     score,
     compactJson(summary),
     results ? compactJson(results) : null,

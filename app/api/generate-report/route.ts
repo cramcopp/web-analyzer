@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyReportGrounding } from '@/lib/reporting/report-verifier';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import { getCacheJson, putCacheJson } from '@/lib/cloudflare-cache';
+import { normalizePlan } from '@/lib/plans';
 import {
   buildDeterministicReport,
   buildGroundedReportPayload,
@@ -32,12 +33,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No scrape data provided' }, { status: 400 });
     }
 
-    const groundedData = buildGroundedReportPayload(scrapeData, url, plan);
+    const scanPlan = normalizePlan(scrapeData.scanPlan || scrapeData.plan || plan);
+    scrapeData.scanPlan = scanPlan;
+    scrapeData.plan = scanPlan;
+
+    const groundedData = buildGroundedReportPayload(scrapeData, url, scanPlan);
     const aiMode = getAiReportMode(env);
     const cacheKey = await createAiReportCacheKey({
       version: 'report-v2',
       url,
-      plan,
+      plan: scanPlan,
       aiMode,
       groundedData,
     });
@@ -359,14 +364,14 @@ export async function POST(req: NextRequest) {
     let lastModelError = null;
     let aiProvider = 'not-run';
 
-    const models = getAiReportModels(plan, aiMode, env);
+    const models = getAiReportModels(scanPlan, aiMode, env);
     const attemptsPerModel = getAiAttemptLimit(aiMode);
 
 
     for (const modelId of models) {
       for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
         try {
-          let prompt = plan === 'agency'
+          let prompt = scanPlan === 'agency'
             ? `Du bist ein Senior Technical SEO Consultant fuer ein DACH Website-Governance-SaaS. Erstelle einen klaren, direkten Agenturbericht fuer ${url}.`
             : `Du bist ein hilfreicher und konstruktiver SEO- und Website-Berater. Erstelle einen ehrlichen Bericht in deutscher Sprache fuer ${url}.`;
 
@@ -444,7 +449,7 @@ export async function POST(req: NextRequest) {
     await putCacheJson(env, `ai-report:${cacheKey}`, {
       report: reportWithCost,
       url,
-      plan,
+      plan: scanPlan,
       aiMode,
       createdAt: new Date().toISOString(),
     }, getAiReportCacheTtl(env)).catch((error) => {

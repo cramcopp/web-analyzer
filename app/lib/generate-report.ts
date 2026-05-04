@@ -14,6 +14,9 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
   // Back-populate both fields for consistency
   scrapeData.url = targetUrl;
   scrapeData.urlObj = targetUrl;
+  const scanPlan = scrapeData.scanPlan || scrapeData.plan || plan;
+  scrapeData.plan = scanPlan;
+  scrapeData.scanPlan = scanPlan;
 
   // Check for content
   if (!scrapeData.bodyText || scrapeData.bodyText.trim() === '') {
@@ -36,7 +39,7 @@ export async function generateReportClientSide(scrapeData: any, plan: string = '
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ scrapeData, url: targetUrl, plan }),
+        body: JSON.stringify({ scrapeData, url: targetUrl, plan: scanPlan }),
       });
 
       if (!response.ok) {

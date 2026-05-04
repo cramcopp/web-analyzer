@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
 import { projectCreateSchema } from '@/lib/validations';
+import { getCrawlLimit, normalizePlan } from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { hasCloudflareD1, queryCloudflareProjects, upsertCloudflareProject } from '@/lib/cloudflare-storage';
+import { getCloudflareUserProfile, hasCloudflareD1, queryCloudflareProjects, upsertCloudflareProject } from '@/lib/cloudflare-storage';
 
 export const runtime = 'nodejs';
 
@@ -43,11 +44,15 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
+    const userData = await getCloudflareUserProfile(env, user.uid);
+    const accountPlan = normalizePlan(typeof userData?.plan === 'string' ? userData.plan : 'free');
     const projectId = crypto.randomUUID();
     const projectData = {
       id: projectId,
       name: result.data.name,
       url: result.data.url || null,
+      plan: accountPlan,
+      crawlLimit: getCrawlLimit(accountPlan),
       teamId: result.data.teamId || null,
       userId: user.uid,
       members: [user.uid],

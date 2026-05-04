@@ -3,7 +3,7 @@ import type { ProviderAvailability, ProviderStatus } from '@/types/provider-fact
 export function getProviderAvailability(env: Record<string, any> = process.env): ProviderAvailability {
   return {
     keyword: Boolean(env.DATAFORSEO_API_KEY || env.KEYWORD_PROVIDER_KEY),
-    serp: Boolean(env.DATAFORSEO_API_KEY || env.SERPAPI_KEY || env.SERP_PROVIDER_KEY),
+    serp: Boolean(env.DATAFORSEO_API_KEY || env.SERPAPI_KEY || env.SERP_PROVIDER_KEY || (env.GOOGLE_SEARCH_API_KEY && env.GOOGLE_CX)),
     backlink: Boolean(env.MAJESTIC_API_KEY || env.DATAFORSEO_API_KEY || env.BACKLINK_PROVIDER_KEY),
     traffic: Boolean(env.SIMILARWEB_API_KEY || env.TRAFFIC_PROVIDER_KEY),
     aiVisibility: Boolean(env.AI_VISIBILITY_PROVIDER_KEY || env.SERPAPI_KEY),
@@ -30,11 +30,11 @@ export function getProviderStatuses(env: Record<string, any> = process.env): Pro
       envVars: ['DATAFORSEO_API_KEY', 'KEYWORD_PROVIDER_KEY'],
       capabilities: ['keyword_fact', 'volume', 'cpc', 'competition', 'difficulty', 'intent'],
     }),
-    status(Boolean(env.DATAFORSEO_API_KEY || env.SERPAPI_KEY || env.SERP_PROVIDER_KEY), {
+    status(Boolean(env.DATAFORSEO_API_KEY || env.SERPAPI_KEY || env.SERP_PROVIDER_KEY || (env.GOOGLE_SEARCH_API_KEY && env.GOOGLE_CX)), {
       id: env.SERPAPI_KEY ? 'serpapi' : 'dataforseo',
       kind: 'serp',
-      name: env.SERPAPI_KEY ? 'SerpApi SERP Data' : 'DataForSEO SERP Data',
-      envVars: ['DATAFORSEO_API_KEY', 'SERPAPI_KEY', 'SERP_PROVIDER_KEY'],
+      name: env.SERPAPI_KEY ? 'SerpApi SERP Data' : env.GOOGLE_SEARCH_API_KEY ? 'Google Custom Search' : 'DataForSEO SERP Data',
+      envVars: ['DATAFORSEO_API_KEY', 'SERPAPI_KEY', 'SERP_PROVIDER_KEY', 'GOOGLE_SEARCH_API_KEY', 'GOOGLE_CX'],
       capabilities: ['rank_fact', 'rank', 'previousRank', 'serpFeatures'],
     }),
     status(Boolean(env.MAJESTIC_API_KEY || env.DATAFORSEO_API_KEY || env.BACKLINK_PROVIDER_KEY), {
