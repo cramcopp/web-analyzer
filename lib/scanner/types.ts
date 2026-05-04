@@ -11,6 +11,7 @@ export interface ScanOptions {
   userId?: string;
   projectId?: string;
   auditId?: string;
+  crawlLimitOverride?: number;
   env?: Record<string, any>;
 }
 
@@ -234,6 +235,11 @@ export interface AnalysisResult {
   accountPlan?: string;
   scanPlan?: string;
   crawlLimitUsed?: number;
+  visibilityLimits?: {
+    visibleDetailPages: number;
+    issueUrlsVisible: number;
+    evidencePerReport: number;
+  };
   crawlDevice?: 'desktop' | 'mobile';
   renderMode?: 'fetch' | 'browser' | 'auto';
   renderAudit?: RenderAuditData;
@@ -306,6 +312,11 @@ export interface AnalysisResult {
     startUrl?: string;
     sourceType?: string;
     crawlLimitUsed?: number;
+    visibilityLimits?: {
+      visibleDetailPages: number;
+      issueUrlsVisible: number;
+      evidencePerReport: number;
+    };
     crawlDepthReached?: number;
     totalInternalLinks: number; 
     scannedSubpagesCount: number; 

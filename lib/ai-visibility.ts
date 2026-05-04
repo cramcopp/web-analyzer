@@ -115,7 +115,7 @@ export function evaluateAiVisibilityChecks(params: {
   const hasLogoSchema = hasPattern(jsonLd, /"logo"\s*:/i);
   const hasContactSchema = hasPattern(jsonLd, /"contactPoint"\s*:/i);
   const hasSameAs = hasPattern(jsonLd, /"sameAs"\s*:/i) || root.querySelectorAll('a[rel~="me"]').length > 0;
-  const hasAbout = anchorTexts.some((text: string) => text.includes('about') || text.includes('ueber') || text.includes('\u00fcber') || text.includes('unternehmen'));
+  const hasAbout = anchorTexts.some((text: string) => text.includes('about') || text.includes('ueber') || text.includes('über') || text.includes('\u00fcber') || text.includes('unternehmen'));
   const hasContact = anchorTexts.some((text: string) => text.includes('kontakt') || text.includes('contact'));
   const hasImpressum = anchorTexts.some((text: string) => text.includes('impressum'));
   const hasPrivacy = anchorTexts.some((text: string) => text.includes('datenschutz') || text.includes('privacy'));
@@ -156,13 +156,13 @@ export function evaluateAiVisibilityChecks(params: {
       key: 'about_contact_impressum',
       label: 'About/Kontakt/Impressum Struktur',
       signals: [
-        ...(hasAbout ? ['About/Ueber-Seite verlinkt'] : []),
+        ...(hasAbout ? ['About/Über-Seite verlinkt'] : []),
         ...(hasContact ? ['Kontakt verlinkt'] : []),
         ...(hasImpressum ? ['Impressum verlinkt'] : []),
         ...(hasPrivacy ? ['Datenschutz verlinkt'] : []),
       ],
       missing: [
-        ...(!hasAbout ? ['About/Ueber-Seite'] : []),
+        ...(!hasAbout ? ['About/Über-Seite'] : []),
         ...(!hasContact ? ['Kontakt-Seite'] : []),
         ...(!hasImpressum ? ['Impressum'] : []),
       ],
@@ -178,7 +178,7 @@ export function evaluateAiVisibilityChecks(params: {
         ...(hasEntityBasics ? ['DACH-Vertrauensstruktur'] : []),
       ],
       missing: [
-        ...(!hasReadableTitle ? ['Aussagekraeftiger Title'] : []),
+        ...(!hasReadableTitle ? ['Aussagekräftiger Title'] : []),
         ...(!hasOrganizationSchema ? ['Organization Schema'] : []),
         ...(!hasSameAs ? ['SameAs Profile'] : []),
         ...(!hasEntityBasics ? ['About/Kontakt/Impressum als Entity-Signale'] : []),
@@ -218,14 +218,14 @@ export function evaluateAiVisibilityChecks(params: {
       label: 'AI Overview Tracking',
       status: 'unavailable',
       sourceType: 'unavailable',
-      provider: 'SERP Provider spaeter',
+      provider: 'SERP Provider später',
     },
     promptMonitoring: {
       key: 'prompt_monitoring',
       label: 'Prompt Monitoring',
       status: 'unavailable',
       sourceType: 'unavailable',
-      provider: 'AI Visibility Provider spaeter',
+      provider: 'AI Visibility Provider später',
     },
   };
 }

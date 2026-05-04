@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { getCrawlLimit, getMonthlyScanLimit, normalizePlan } from '@/lib/plans';
+import {
+  getEffectiveCrawlLimit,
+  getMonthlyCrawlPageLimit,
+  getMonthlyScanLimit,
+  getVisibilityLimits,
+  normalizePlan,
+} from '@/lib/plans';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import {
   createCloudflareScanPlaceholder,
@@ -34,16 +40,16 @@ async function readAnalyzeBody(req: Request) {
     try {
       parsedUrl = new URL(url);
     } catch {
-      return { error: 'Ungueltige URL' };
+      return { error: 'Ungültige URL' };
     }
 
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      return { error: 'Nur HTTP- und HTTPS-URLs koennen analysiert werden' };
+      return { error: 'Nur HTTP- und HTTPS-URLs können analysiert werden' };
     }
 
     return { url: parsedUrl.toString(), projectId, device, renderMode };
   } catch {
-    return { error: 'Ungueltiges JSON im Request Body' };
+    return { error: 'Ungültiges JSON im Request Body' };
   }
 }
 
@@ -75,19 +81,30 @@ export async function POST(req: Request) {
       });
 
       if (!synced) {
-        return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+        return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
       }
     }
 
     const plan = normalizePlan(userData?.plan || 'free');
-    const crawlLimitUsed = getCrawlLimit(plan);
     const scanCount = userData?.scanCount || 0;
     const maxScans = getMonthlyScanLimit(plan);
+    const crawlPagesCount = userData?.crawlPagesCount || 0;
+    const maxCrawlPages = getMonthlyCrawlPageLimit(plan);
+    const remainingCrawlPages = Math.max(maxCrawlPages - crawlPagesCount, 0);
+    const crawlLimitUsed = getEffectiveCrawlLimit(plan, remainingCrawlPages);
+    const visibilityLimits = getVisibilityLimits(plan);
 
     if (scanCount >= maxScans) {
       return NextResponse.json({
         error: 'Scan-Limit erreicht',
         details: `Du hast ${scanCount}/${maxScans} Scans verbraucht. Bitte upgrade deinen Plan.`,
+      }, { status: 403 });
+    }
+
+    if (remainingCrawlPages <= 0 || crawlLimitUsed <= 0) {
+      return NextResponse.json({
+        error: 'Crawl-Seiten-Limit erreicht',
+        details: `Du hast ${crawlPagesCount}/${maxCrawlPages} Crawl-Seiten verbraucht. Bitte upgrade deinen Plan.`,
       }, { status: 403 });
     }
 
@@ -135,6 +152,7 @@ export async function POST(req: Request) {
           auditId: audit_id,
           device,
           renderMode,
+          crawlLimitOverride: crawlLimitUsed,
         }),
       }));
 
@@ -151,6 +169,9 @@ export async function POST(req: Request) {
         accountPlan: plan,
         scanPlan: plan,
         crawlLimitUsed,
+        monthlyCrawlPagesUsed: crawlPagesCount,
+        monthlyCrawlPagesLimit: maxCrawlPages,
+        visibilityLimits,
         crawlDevice: device,
         renderMode,
       });
@@ -159,7 +180,7 @@ export async function POST(req: Request) {
     console.warn('Workflow nicht gebunden. Nutze langsamen Direct-Scan.');
     const { performAnalysis } = await import('@/lib/scanner');
 
-    void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, device, renderMode, env }).then(async (result) => {
+    void performAnalysis({ url, plan, userId: user.uid, projectId, auditId: audit_id, device, renderMode, crawlLimitOverride: crawlLimitUsed, env }).then(async (result) => {
       const storedResult = await storeCloudflareScanArtifacts(env, result, { scanId: audit_id, userId: user.uid });
       await writeCloudflareScanResult(env, storedResult, { scanId: audit_id, userId: user.uid, projectId, plan })
         .catch((storageError) => console.warn('D1/R2 scan write failed:', getErrorMessage(storageError)));
@@ -173,6 +194,9 @@ export async function POST(req: Request) {
       accountPlan: plan,
       scanPlan: plan,
       crawlLimitUsed,
+      monthlyCrawlPagesUsed: crawlPagesCount,
+      monthlyCrawlPagesLimit: maxCrawlPages,
+      visibilityLimits,
       crawlDevice: device,
       renderMode,
     });

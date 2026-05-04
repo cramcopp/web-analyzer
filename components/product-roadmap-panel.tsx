@@ -30,11 +30,11 @@ function statusLabel(status: RoadmapStatus) {
     case 'foundation':
       return 'grundlage';
     case 'provider_required':
-      return 'provider noetig';
+      return 'provider nötig';
     case 'planned':
       return 'geplant';
     case 'later':
-      return 'spaeter';
+      return 'später';
     case 'not_now':
       return 'nicht jetzt';
     default:

@@ -3,6 +3,7 @@
 import { Archive, FileSearch, Globe2, ShieldCheck } from 'lucide-react';
 import DataSourceBadge from './data-source-badge';
 import type { EvidenceArtifact, UrlSnapshot } from '@/types/audit';
+import { applyReportVisibilityLimits, buildVisibilitySummaryFromReport } from '@/lib/plans';
 
 type ProjectEvidenceReport = {
   evidence?: EvidenceArtifact[];
@@ -10,13 +11,15 @@ type ProjectEvidenceReport = {
 };
 
 function formatDate(value?: string) {
-  if (!value) return 'Nicht verfuegbar';
+  if (!value) return 'Nicht verfügbar';
   return new Date(value).toLocaleString('de-DE');
 }
 
-export default function ProjectEvidenceView({ report }: { report: ProjectEvidenceReport | null }) {
-  const evidence = report?.evidence || [];
-  const snapshots = report?.urlSnapshots || [];
+export default function ProjectEvidenceView({ report, plan = 'free' }: { report: ProjectEvidenceReport | null; plan?: string }) {
+  const visibleReport = applyReportVisibilityLimits(report || {}, plan) as ProjectEvidenceReport & { visibilityLimits?: any };
+  const visibility = visibleReport.visibilityLimits || buildVisibilitySummaryFromReport(report || {}, plan);
+  const evidence = visibleReport?.evidence || [];
+  const snapshots = visibleReport?.urlSnapshots || [];
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -31,6 +34,11 @@ export default function ProjectEvidenceView({ report }: { report: ProjectEvidenc
           <p className="text-[12px] text-[#888] font-bold mt-2 uppercase tracking-widest max-w-xl">
             Nachweis-Artefakte und URL-Snapshots aus dem Crawl. Rohes HTML wird hier bewusst nicht als Debugdump angezeigt.
           </p>
+          {(visibility.hiddenEvidence > 0 || visibility.hiddenDetailPages > 0) && (
+            <p className="text-[10px] text-[#D4AF37] font-black mt-3 uppercase tracking-widest">
+              {visibility.hiddenEvidence} Evidence-Artefakte und {visibility.hiddenDetailPages} Detailseiten wegen Planlimit ausgeblendet
+            </p>
+          )}
         </div>
       </div>
 
@@ -52,7 +60,7 @@ export default function ProjectEvidenceView({ report }: { report: ProjectEvidenc
       {evidence.length === 0 && snapshots.length === 0 ? (
         <section className="min-h-[280px] bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8 flex flex-col items-center justify-center text-center gap-4">
           <FileSearch className="w-10 h-10 text-[#888]" />
-          <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Evidence verfuegbar</h3>
+          <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Evidence verfügbar</h3>
           <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest max-w-md">
             Starte einen neuen Scan. Diese Ansicht zeigt nur gespeicherte Crawl-Artefakte und URL-Snapshots.
           </p>
@@ -108,8 +116,8 @@ export default function ProjectEvidenceView({ report }: { report: ProjectEvidenc
                           <span className="text-[9px] font-black uppercase tracking-widest text-[#888]">{snapshot.contentType || 'Content-Type unbekannt'}</span>
                         </div>
                         <p className="font-mono text-[11px] text-[#1A1A1A] dark:text-zinc-100 truncate">{snapshot.url}</p>
-                        <h4 className="text-[14px] font-black text-[#1A1A1A] dark:text-zinc-100 mt-3">{snapshot.title || 'Title nicht verfuegbar'}</h4>
-                        <p className="text-[11px] text-[#888] mt-1">{snapshot.metaDescription || 'Meta Description nicht verfuegbar'}</p>
+                        <h4 className="text-[14px] font-black text-[#1A1A1A] dark:text-zinc-100 mt-3">{snapshot.title || 'Title nicht verfügbar'}</h4>
+                        <p className="text-[11px] text-[#888] mt-1">{snapshot.metaDescription || 'Meta Description nicht verfügbar'}</p>
                       </div>
                       <div className="shrink-0">
                         <DataSourceBadge type="real" label="Snapshot" />

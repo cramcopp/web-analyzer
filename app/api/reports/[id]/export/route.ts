@@ -3,7 +3,8 @@ import { getSessionUser } from '@/lib/auth-server';
 import { publicReportCsv, publicReportJson, publicReportPdf } from '@/lib/reporting/exports';
 import { sanitizeReportForClient } from '@/lib/reporting/sanitize-report';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { getCloudflareReport, hasCloudflareD1, putReportExportText } from '@/lib/cloudflare-storage';
+import { getCloudflareReport, getCloudflareUserProfile, hasCloudflareD1, putReportExportText } from '@/lib/cloudflare-storage';
+import { getPlanConfig, normalizePlan, type ExportFormat } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -17,17 +18,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   const { id } = await params;
   const { searchParams } = new URL(req.url);
-  const format = searchParams.get('format') || 'json';
+  const requestedFormat = searchParams.get('format') || 'json';
+  const format = (requestedFormat === 'csv' || requestedFormat === 'pdf' ? requestedFormat : 'json') as ExportFormat;
 
   try {
     const report = await getCloudflareReport(env, id, user.uid);
     if (!report) return NextResponse.json({ error: 'Report nicht gefunden' }, { status: 404 });
     if ('forbidden' in report) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
+
+    const userProfile = await getCloudflareUserProfile(env, user.uid);
+    const accountPlan = normalizePlan(userProfile?.plan || 'free');
+    const allowedExports = getPlanConfig(accountPlan).exports as readonly string[];
+    if (!allowedExports.includes(format)) {
+      return NextResponse.json({ error: 'Export-Format ist in deinem Plan nicht verfügbar' }, { status: 403 });
+    }
 
     const sanitized = sanitizeReportForClient(report);
     const baseName = `wap_report_${id}`;

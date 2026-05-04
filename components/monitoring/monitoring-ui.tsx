@@ -18,7 +18,7 @@ export function IssueList({ title, issues, emptyLabel }: { title: string; issues
                 <span className="text-[9px] font-black uppercase tracking-widest text-[#888]">{issue.severity}</span>
               </div>
               <p className="text-[12px] font-bold text-[#1A1A1A] dark:text-zinc-100">{issue.title}</p>
-              <p className="text-[10px] text-[#888] mt-1 truncate">{issue.affectedUrls[0] || 'URL nicht verfuegbar'}</p>
+              <p className="text-[10px] text-[#888] mt-1 truncate">{issue.affectedUrls[0] || 'URL nicht verfügbar'}</p>
             </div>
           ))}
         </div>
@@ -29,7 +29,7 @@ export function IssueList({ title, issues, emptyLabel }: { title: string; issues
 
 export function ScoreDeltaList({ diff }: { diff: ScanDiff | null }) {
   if (!diff || Object.keys(diff.scoreDelta).length === 0) {
-    return <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch kein Score-Vergleich verfuegbar.</p>;
+    return <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest">Noch kein Score-Vergleich verfügbar.</p>;
   }
 
   return (

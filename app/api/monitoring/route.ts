@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { hasCloudflareD1, queryCloudflareMonitoring, upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
+import { hasCloudflareD1, getCloudflareUserProfile, queryCloudflareMonitoring, upsertCloudflareMonitoringItem } from '@/lib/cloudflare-storage';
+import { getPlanConfig } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -18,7 +19,12 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
+  }
+
+  const userProfile = await getCloudflareUserProfile(env, user.uid);
+  if (!getPlanConfig(userProfile?.plan).monitoring) {
+    return NextResponse.json({ error: 'Monitoring ist ab Pro verfügbar' }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -39,14 +45,19 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
+    const userProfile = await getCloudflareUserProfile(env, user.uid);
+    if (!getPlanConfig(userProfile?.plan).monitoring) {
+      return NextResponse.json({ error: 'Monitoring ist ab Pro verfügbar' }, { status: 403 });
+    }
+
     const body = await req.json();
     const collection = body.collection as string | null;
     if (!isMonitoredCollection(collection)) {
-      return NextResponse.json({ error: 'Ungueltige Monitoring Collection' }, { status: 400 });
+      return NextResponse.json({ error: 'Ungültige Monitoring Collection' }, { status: 400 });
     }
 
     const now = new Date().toISOString();

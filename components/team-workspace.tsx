@@ -14,6 +14,7 @@ import {
   UserPlus,
   UserMinus
 } from "lucide-react";
+import { getEffectivePlanConfig, hasPlanRank } from "../lib/plans";
 
 interface TeamMember {
   uid: string;
@@ -49,7 +50,8 @@ function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
     setLoading(!!user);
   }
 
-  const isAgency = userData?.plan === 'agency';
+  const isAgency = hasPlanRank(userData?.plan, 'agency');
+  const seatLimit = getEffectivePlanConfig(userData?.plan, userData?.addOns).seats;
 
   const fetchTeamData = useCallback(async () => {
     if (!user) return;
@@ -134,7 +136,7 @@ function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
   };
 
   const handleInvite = async () => {
-    if (!inviteEmail.trim() || !team || !isAgency) return;
+    if (!inviteEmail.trim() || !team || !isAgency || members.length >= seatLimit) return;
     
     setIsInviting(true);
     setInviteStatus(null);
@@ -211,7 +213,7 @@ function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
         <AlertTriangle className="w-12 h-12 text-[#EB5757] mx-auto mb-4" />
         <h2 className="text-[20px] font-black uppercase text-[#EB5757] mb-2">Agency Plan Erforderlich</h2>
         <p className="text-[14px] text-[#888] max-w-[500px] mx-auto mb-6">
-          Zusammenarbeit in Teams ist exklusiv für unsere Agency-Kunden verfügbar. 
+          Zusammenarbeit in Teams ist ab Agency verfügbar.
           Upgrade dein Konto, um dein eigenes Team zu gründen.
         </p>
       </div>
@@ -288,7 +290,7 @@ function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest px-2 py-1 bg-[#F5F5F3] dark:bg-zinc-800">
-                    {members.length} {members.length === 1 ? 'Mitglied' : 'Mitglieder'}
+                    {members.length} / {seatLimit} {members.length === 1 ? 'Mitglied' : 'Mitglieder'}
                   </span>
                   {isUserOwner && (
                     <button 
@@ -404,7 +406,7 @@ function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
 
                 <button 
                   onClick={handleInvite}
-                  disabled={isInviting || !inviteEmail.trim() || !isUserAdmin}
+                  disabled={isInviting || !inviteEmail.trim() || !isUserAdmin || members.length >= seatLimit}
                   className="w-full bg-[#D4AF37] text-white py-3 text-[10px] font-black uppercase tracking-[2px] hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2"
                 >
                   {isInviting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Einladung Senden"}
@@ -422,6 +424,11 @@ function TeamWorkspace({ user, userData }: { user: any, userData: any }) {
                 {!isUserAdmin && (
                   <p className="text-[9px] text-[#EB5757] italic text-center mt-4 font-bold uppercase tracking-widest">
                     Keine Admin-Rechte
+                  </p>
+                )}
+                {members.length >= seatLimit && (
+                  <p className="text-[9px] text-[#EB5757] italic text-center mt-4 font-bold uppercase tracking-widest">
+                    Seat-Limit erreicht
                   </p>
                 )}
               </div>

@@ -32,7 +32,7 @@ export default function AGBPage() {
           <section className="flex flex-col gap-4">
             <h2 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 border-b-2 border-[#1A1A1A] dark:border-zinc-100 w-fit pb-1">2. Leistungsbeschreibung</h2>
             <p>
-              Website Analyzer Pro bietet ein Tool zur Analyse von Webseiten hinsichtlich SEO, Security, Performance und DSGVO-Konformität. Die genauen Leistungsumfänge ergeben sich aus der jeweiligen Paketbeschreibung (Free, Pro, Agency).
+              Website Analyzer Pro bietet ein Tool zur Analyse von Webseiten hinsichtlich SEO, Security, Performance und DSGVO-Konformität. Die genauen Leistungsumfänge ergeben sich aus der jeweiligen Paketbeschreibung (Free, Pro, Agency, Business).
             </p>
           </section>
 

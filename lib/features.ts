@@ -1,5 +1,5 @@
 import type { DataSourceType } from '@/types/data-source';
-import { getPlanConfig, normalizePlan, type PlanType } from './plans';
+import { getEffectivePlanConfig, getPlanConfig, type PlanType } from './plans';
 
 export type FeatureKey =
   | 'monitoring'
@@ -49,54 +49,66 @@ export const FEATURE_DATA_SOURCES: Record<FeatureKey, DataSourceType> = {
   aiVisibilityProvider: 'heuristic',
 };
 
-export function hasPlanFeature(plan: string | null | undefined, feature: FeatureKey): boolean {
-  const config = getPlanConfig(plan);
+export function hasPlanFeature(plan: string | null | undefined, feature: FeatureKey, addOns?: unknown): boolean {
+  const config = getEffectivePlanConfig(plan, addOns);
 
   switch (feature) {
     case 'monitoring':
-      return config.monitoring;
+      return Boolean(config.monitoring);
     case 'whiteLabel':
       return config.whiteLabel;
     case 'api':
-      return config.api;
+      return Boolean(config.api);
     case 'keywordProvider':
       return config.rankKeywords > 0;
     case 'rankProvider':
       return config.rankKeywords > 0;
     case 'backlinkProvider':
+      return config.backlinkAddon;
     case 'trafficProvider':
+      return getPlanConfig(plan).rankKeywords > 0;
     case 'aiVisibilityProvider':
-      return normalizePlan(plan) !== 'free';
+      return config.aiVisibilityAddon;
     default:
       return false;
   }
 }
 
-export function getPlanFeatureSummary(plan: PlanType) {
-  const config = getPlanConfig(plan);
+export function getPlanFeatureSummary(plan: PlanType, addOns?: unknown) {
+  const config = getEffectivePlanConfig(plan, addOns);
 
   return {
     plan,
     name: config.name,
     scanLimitMonthly: config.scanLimitMonthly,
     crawlLimit: config.crawlLimit,
+    monthlyCrawlPages: config.monthlyCrawlPages,
+    visibleDetailPages: config.visibleDetailPages,
+    issueUrlsVisible: config.issueUrlsVisible,
+    evidencePerReport: config.evidencePerReport,
     projects: config.projects,
     rankKeywords: config.rankKeywords,
     competitors: config.competitors,
+    seats: config.seats,
     exports: config.exports,
     monitoring: config.monitoring,
     whiteLabel: config.whiteLabel,
+    whiteLabelCustomDomain: config.whiteLabelCustomDomain,
+    backlinkAddon: config.backlinkAddon,
+    aiVisibilityAddon: config.aiVisibilityAddon,
+    monthlyAddonPrice: config.monthlyAddonPrice,
+    addOns: config.addOns,
     api: config.api,
   };
 }
 
 export const PRODUCT_POSITIONING = {
   decision: 'Kein billiger Semrush-Klon.',
-  market: 'DACH-fokussiertes Website-Governance- und Audit-SaaS fuer Agenturen, Freelancer und KMU.',
+  market: 'DACH-fokussiertes Website-Governance- und Audit-SaaS für Agenturen, Freelancer und KMU.',
   pillars: [
-    'Semrush-inspirierter externer Datenlayer fuer SEO, Keywords, Rankings, Backlinks, Wettbewerber und AI Visibility.',
-    'Seobility-inspirierter laufender Betrieb mit Monitoring, Alerts, Reports, White Label und KMU-Verstaendlichkeit.',
-    'BERTlinker-inspiriertes Spezialmodul fuer interne Verlinkung, Topic Hubs, semantische Linkjobs und Export.',
+    'Semrush-inspirierter externer Datenlayer für SEO, Keywords, Rankings, Backlinks, Wettbewerber und AI Visibility.',
+    'Seobility-inspirierter laufender Betrieb mit Monitoring, Alerts, Reports, White Label und KMU-Verständlichkeit.',
+    'BERTlinker-inspiriertes Spezialmodul für interne Verlinkung, Topic Hubs, semantische Linkjobs und Export.',
   ],
   guardrails: [
     'Keine Fake-Daten als echte Produktdaten anzeigen.',
@@ -114,7 +126,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'foundation',
     dataSource: 'real',
     route: 'Dashboard / Projekte',
-    note: 'Projektuebersicht, Audit-Scores und Crawl-Fakten sind vorbereitet; externe Marktwerte bleiben providerpflichtig.',
+    note: 'Projektübersicht, Audit-Scores und Crawl-Fakten sind vorbereitet; externe Marktwerte bleiben providerpflichtig.',
   },
   {
     key: 'organic_research',
@@ -154,7 +166,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     dataSource: 'unavailable',
     providerRequired: true,
     route: 'Wettbewerber / Keywords',
-    note: 'Gap-Daten brauchen echte Domain-, Keyword- und Ranking-Facts fuer beide Seiten.',
+    note: 'Gap-Daten brauchen echte Domain-, Keyword- und Ranking-Facts für beide Seiten.',
   },
   {
     key: 'keyword_strategy_builder',
@@ -211,7 +223,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     dataSource: 'unavailable',
     providerRequired: true,
     route: 'Backlinks',
-    note: 'Spaeter nach stabiler Backlink-Erfassung und Risiko-Metriken.',
+    note: 'Später nach stabiler Backlink-Erfassung und Risiko-Metriken.',
   },
   {
     key: 'traffic_analytics',
@@ -225,13 +237,13 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
   },
   {
     key: 'market_explorer_lite',
-    label: 'Market Explorer spaeter',
+    label: 'Market Explorer später',
     pillar: 'semrush',
     status: 'later',
     dataSource: 'unavailable',
     providerRequired: true,
     route: 'Wettbewerber',
-    note: 'Nur fokussierte Wettbewerber-/Kategorie-Sicht spaeter; kein Full Market Explorer jetzt.',
+    note: 'Nur fokussierte Wettbewerber-/Kategorie-Sicht später; kein Full Market Explorer jetzt.',
   },
   {
     key: 'competitor_monitoring',
@@ -276,7 +288,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'foundation',
     dataSource: 'real',
     route: 'Audit / Evidence',
-    note: 'URL Snapshots, Linkdaten und Crawl Summary sind verfuegbar, wenn ein Scan existiert.',
+    note: 'URL Snapshots, Linkdaten und Crawl Summary sind verfügbar, wenn ein Scan existiert.',
   },
   {
     key: 'technical_seo_checks',
@@ -323,7 +335,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'later',
     dataSource: 'unavailable',
     route: 'Keywords / Audit',
-    note: 'Spaeter, wenn Content-Korpus und Wettbewerberdaten belastbar sind.',
+    note: 'Später, wenn Content-Korpus und Wettbewerberdaten belastbar sind.',
   },
   {
     key: 'competitor_analysis',
@@ -351,7 +363,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'foundation',
     dataSource: 'real',
     route: 'Monitoring',
-    note: 'Collections und Alerttypen sind vorbereitet; Versandkanal kann spaeter angebunden werden.',
+    note: 'Collections und Alerttypen sind vorbereitet; Versandkanal kann später angebunden werden.',
   },
   {
     key: 'ai_overview_tracking',
@@ -361,7 +373,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     dataSource: 'unavailable',
     providerRequired: true,
     route: 'AI Visibility',
-    note: 'Spaeter ueber SERP-Provider, keine erfundenen AI-Overview-Daten.',
+    note: 'Später über SERP-Provider, keine erfundenen AI-Overview-Daten.',
   },
   {
     key: 'white_label_share_members_free_check',
@@ -374,12 +386,12 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
   },
   {
     key: 'csv_excel_import',
-    label: 'CSV/Excel Import spaeter',
+    label: 'CSV/Excel Import später',
     pillar: 'bertlinker',
     status: 'later',
     dataSource: 'unavailable',
     route: 'Interne Verlinkung',
-    note: 'Import kommt spaeter; aktuell wird aus echten Crawl-Daten gerechnet.',
+    note: 'Import kommt später; aktuell wird aus echten Crawl-Daten gerechnet.',
   },
   {
     key: 'semantic_internal_link_opportunities',
@@ -415,7 +427,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'foundation',
     dataSource: 'real',
     route: 'Interne Verlinkung',
-    note: 'LinkGraph, Inlinks, Outlinks, Orphans, Anchors und Prioritaeten kommen aus Crawl-Daten.',
+    note: 'LinkGraph, Inlinks, Outlinks, Orphans, Anchors und Prioritäten kommen aus Crawl-Daten.',
   },
   {
     key: 'csv_export_shareable_dashboard',
@@ -424,7 +436,7 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'foundation',
     dataSource: 'real',
     route: 'Interne Verlinkung / Reports',
-    note: 'CSV-Export und sharebare Reports sind vorbereitet; Excel folgt spaeter.',
+    note: 'CSV-Export und sharebare Reports sind vorbereitet; Excel folgt später.',
   },
   {
     key: 'multi_language_link_status',
@@ -433,17 +445,17 @@ export const PRODUCT_ROADMAP: RoadmapFeature[] = [
     status: 'planned',
     dataSource: 'unavailable',
     route: 'Interne Verlinkung',
-    note: 'Geplant fuer Link-Workflow und mehrsprachige Projekte, ohne aktuelle Scheindaten.',
+    note: 'Geplant für Link-Workflow und mehrsprachige Projekte, ohne aktuelle Scheindaten.',
   },
 ];
 
 export const NOT_NOW_FEATURES: NotNowFeature[] = [
   { key: 'ppc_research', label: 'PPC Research', reason: 'Lenkt vom Website-Governance- und Audit-Kern ab.' },
   { key: 'pla_research', label: 'PLA Research', reason: 'Kein aktueller DACH-Audit-SaaS-Kernnutzen.' },
-  { key: 'social_poster', label: 'Social Poster', reason: 'Wuerde Produktfokus und Datenmodell verwässern.' },
+  { key: 'social_poster', label: 'Social Poster', reason: 'Würde Produktfokus und Datenmodell verwässern.' },
   { key: 'social_analytics', label: 'Social Analytics', reason: 'Nicht Teil der Audit-, Monitoring- oder Governance-Datenwahrheit.' },
-  { key: 'full_market_explorer', label: 'Full Market Explorer', reason: 'Spaeter nur fokussiert, nicht als grosser Semrush-Klon.' },
-  { key: 'audience_demographics', label: 'Audience Demographics', reason: 'Provider- und Datenschutzkomplexitaet ohne jetzige Prioritaet.' },
+  { key: 'full_market_explorer', label: 'Full Market Explorer', reason: 'Später nur fokussiert, nicht als grosser Semrush-Klon.' },
+  { key: 'audience_demographics', label: 'Audience Demographics', reason: 'Provider- und Datenschutzkomplexität ohne jetzige Priorität.' },
   { key: 'app_marketplace', label: 'App Marketplace', reason: 'Vor stabilen Datenmodellen nicht sinnvoll.' },
   { key: 'pr_suite', label: 'PR Suite', reason: 'Nicht Teil des Website-Governance-Produkts.' },
   { key: 'large_api', label: 'Riesige API vor stabilen Datenmodellen', reason: 'API bleibt klein, erst Datenmodelle und Evidence Engine stabilisieren.' },

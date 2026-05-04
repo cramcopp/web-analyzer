@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import DataSourceBadge from './data-source-badge';
 import { AgencyStat, AgencyTabButton, EmptyPanel, FieldLabel } from './agency-reporting/agency-ui';
-import { getPlanConfig } from '@/lib/plans';
+import { applyReportVisibilityLimits, buildVisibilitySummaryFromReport, getPlanConfig } from '@/lib/plans';
 import type { AuditIssueStatus } from '@/types/audit';
 import type { IssueComment, IssueTask, ReportBuilderConfig, ReportSectionKey, ReportVisibility, ScheduledReport, TeamBranding } from '@/types/reporting';
 
@@ -100,7 +100,7 @@ export default function ProjectAgencyReportsView({
   const [includeTasks, setIncludeTasks] = useState(true);
   const [issueTasks, setIssueTasks] = useState<IssueTask[]>([]);
   const [issueComments, setIssueComments] = useState<IssueComment[]>([]);
-  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([]);
+  const [_scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([]);
   const [scheduleRecipients, setScheduleRecipients] = useState('');
   const [scheduleFrequency, setScheduleFrequency] = useState<'weekly' | 'monthly'>('weekly');
   const [activeIssueId, setActiveIssueId] = useState('');
@@ -108,7 +108,9 @@ export default function ProjectAgencyReportsView({
 
   const config = getPlanConfig(plan);
   const exportFormats = config.exports as readonly string[];
-  const rows = useMemo(() => issueRows(report), [report]);
+  const visibleReport = useMemo(() => applyReportVisibilityLimits(report || {}, plan), [report, plan]);
+  const visibilitySummary = useMemo(() => buildVisibilitySummaryFromReport(report || {}, plan), [report, plan]);
+  const rows = useMemo(() => issueRows(visibleReport), [visibleReport]);
   const taskByIssue = useMemo(() => new Map(issueTasks.map((task) => [task.issueId, task])), [issueTasks]);
   const commentsByIssue = useMemo(() => {
     const grouped = new Map<string, IssueComment[]>();
@@ -283,7 +285,7 @@ export default function ProjectAgencyReportsView({
         <AgencyStat label="Issues" value={rows.length} />
         <AgencyStat label="Tasks" value={issueTasks.length} />
         <AgencyStat label="Comments" value={issueComments.length} />
-        <AgencyStat label="Schedules" value={scheduledReports.length} />
+        <AgencyStat label="Versteckt" value={visibilitySummary.hiddenDetailPages} />
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-[#EEE] dark:border-zinc-800 pb-4">
@@ -370,7 +372,7 @@ export default function ProjectAgencyReportsView({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><FieldLabel>Display Name</FieldLabel><input value={branding.displayName || ''} onChange={(event) => setBranding({ ...branding, displayName: event.target.value })} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 text-[13px]" /></div>
             <div><FieldLabel>Primary Color</FieldLabel><input value={branding.primaryColor || '#D4AF37'} onChange={(event) => setBranding({ ...branding, primaryColor: event.target.value })} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 text-[13px]" /></div>
-            <div><FieldLabel>Logo URL spaeter Upload</FieldLabel><input value={branding.logoUrl || ''} onChange={(event) => setBranding({ ...branding, logoUrl: event.target.value })} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 text-[13px]" /></div>
+            <div><FieldLabel>Logo URL später Upload</FieldLabel><input value={branding.logoUrl || ''} onChange={(event) => setBranding({ ...branding, logoUrl: event.target.value })} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 text-[13px]" /></div>
             <div><FieldLabel>Footer Note</FieldLabel><input value={branding.footerNote || ''} onChange={(event) => setBranding({ ...branding, footerNote: event.target.value })} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 text-[13px]" /></div>
           </div>
           <button onClick={saveBranding} disabled={isSaving || !config.whiteLabel} className="mt-5 px-6 py-3 bg-[#1A1A1A] dark:bg-white text-white dark:text-zinc-900 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-3">
@@ -385,7 +387,7 @@ export default function ProjectAgencyReportsView({
           <h3 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100 mb-5 flex items-center gap-2">
             <CalendarClock className="w-4 h-4 text-[#D4AF37]" /> Scheduled Reports per Mail
           </h3>
-          <FieldLabel>Empfaenger, kommasepariert</FieldLabel>
+          <FieldLabel>Empfänger, kommasepariert</FieldLabel>
           <input value={scheduleRecipients} onChange={(event) => setScheduleRecipients(event.target.value)} placeholder="kunde@example.com" className="w-full mb-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-950 border border-[#EEE] dark:border-zinc-800 text-[13px]" />
           <div className="flex flex-wrap gap-3 mb-5">
             {(['weekly', 'monthly'] as const).map((frequency) => (
@@ -466,7 +468,7 @@ export default function ProjectAgencyReportsView({
       <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-5 flex items-start gap-3">
         <Lock className="w-4 h-4 text-[#D4AF37] mt-0.5" />
         <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest leading-relaxed">
-          Client Portal Links funktionieren ohne Kundenlogin. Passwort-Reports pruefen das Passwort serverseitig.
+          Client Portal Links funktionieren ohne Kundenlogin. Passwort-Reports prüfen das Passwort serverseitig.
         </p>
       </div>
     </div>

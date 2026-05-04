@@ -5,15 +5,17 @@ import { Search, Globe, Info, ShieldCheck, Share2, CodeXml, Activity } from 'luc
 import { CollapsibleSection } from './collapsible-section';
 import PrioritizedTasksSection from './task-section';
 import { DetailedSEO } from '../types/report';
-import { getCrawlLimit, normalizePlan } from '../lib/plans';
+import { getVisibilityLimits, normalizePlan } from '../lib/plans';
 
 export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawlSummary: any, plan?: string }) => {
   if (!crawlSummary || !crawlSummary.scannedSubpages) return null;
 
   const scanPlan = normalizePlan(plan);
-  const displayLimit = crawlSummary.crawlLimitUsed || getCrawlLimit(scanPlan);
+  const visibility = crawlSummary.visibilityLimits || getVisibilityLimits(scanPlan);
+  const displayLimit = visibility.visibleDetailPages;
   const displayedPages = crawlSummary.scannedSubpages.slice(0, displayLimit);
-  const isLimited = crawlSummary.scannedSubpagesCount > displayedPages.length;
+  const detailPagesTotal = crawlSummary.scannedSubpagesCount ?? visibility.detailPagesTotal ?? crawlSummary.scannedSubpages.length;
+  const isLimited = detailPagesTotal > displayedPages.length;
   const crawledPagesCount = crawlSummary.crawledPagesCount || crawlSummary.crawledUrls?.length || crawlSummary.scannedSubpagesCount;
   const crawlDepthReached = crawlSummary.crawlDepthReached ?? 0;
   const sitemapCoverage = crawlSummary.sitemapCoverage || {};
@@ -112,9 +114,9 @@ export const CrawlerAuditModule = memo(({ crawlSummary, plan = 'free' }: { crawl
             <div className="relative z-10 flex flex-col items-center">
               <ShieldCheck className="w-5 h-5 text-[#D4AF37] mb-1" />
               <span className="text-[9px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">
-                +{crawlSummary.scannedSubpagesCount - displayedPages.length} Seiten gefunden
+                +{detailPagesTotal - displayedPages.length} Seiten gefunden
               </span>
-              <p className="text-[8px] text-[#888] font-bold mt-1">{scanPlan.toUpperCase()} LIMIT ERREICHT</p>
+              <p className="text-[8px] text-[#888] font-bold mt-1">SICHTBARKEITS-LIMIT {scanPlan.toUpperCase()}</p>
             </div>
           </div>
         )}

@@ -78,7 +78,7 @@ export interface InternalLinkingAnalysis {
 }
 
 const STOP_WORDS = new Set([
-  'aber', 'alle', 'auch', 'auf', 'aus', 'bei', 'das', 'den', 'der', 'die', 'ein', 'eine', 'fuer', 'mit',
+  'aber', 'alle', 'auch', 'auf', 'aus', 'bei', 'das', 'den', 'der', 'die', 'ein', 'eine', 'für', 'mit',
   'nicht', 'oder', 'sich', 'und', 'von', 'wie', 'wir', 'you', 'your', 'the', 'and', 'for', 'with',
 ]);
 
@@ -268,9 +268,9 @@ export function buildInternalLinkGraph(report: any): LinkGraphNode[] {
 
 function reasonForOpportunity(target: LinkGraphNode, similarity: number) {
   if (target.isOrphan) return 'Zielseite ist im Crawl als Orphan erkannt und passt thematisch zur Quellseite.';
-  if (target.isMoneyPage) return 'Markierte Money Page hat thematische Naehe und kann interne Linkstaerke gebrauchen.';
-  if (target.inlinks.length <= 1) return 'Zielseite hat wenige interne Inlinks und thematische Naehe zur Quellseite.';
-  return `Thematische Naehe erkannt (${Math.round(similarity * 100)}%).`;
+  if (target.isMoneyPage) return 'Markierte Money Page hat thematische Nähe und kann interne Linkstärke gebrauchen.';
+  if (target.inlinks.length <= 1) return 'Zielseite hat wenige interne Inlinks und thematische Nähe zur Quellseite.';
+  return `Thematische Nähe erkannt (${Math.round(similarity * 100)}%).`;
 }
 
 function priorityFor(confidence: number, target: LinkGraphNode): LinkOpportunity['priority'] {

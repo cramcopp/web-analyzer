@@ -4,10 +4,12 @@ import { getRuntimeEnv } from '@/lib/cloudflare-env';
 import type { ReportVisibility } from '@/types/reporting';
 import {
   getCloudflareReport,
+  getCloudflareUserProfile,
   hasCloudflareD1,
   queryCloudflareReportShares,
   upsertCloudflareReportShare,
 } from '@/lib/cloudflare-storage';
+import { getPlanConfig } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -28,7 +30,7 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -64,6 +66,12 @@ export async function POST(req: Request) {
     const visibility = normalizeVisibility(body.visibility);
     if (visibility === 'password' && !body.password) {
       return NextResponse.json({ error: 'Passwort fehlt' }, { status: 400 });
+    }
+
+    const userProfile = await getCloudflareUserProfile(env, user.uid);
+    const planConfig = getPlanConfig(userProfile?.plan);
+    if ((body.branding || body.builder) && !planConfig.whiteLabel) {
+      return NextResponse.json({ error: 'White Label ist ab Agency verfügbar' }, { status: 403 });
     }
 
     const tokenId = crypto.randomUUID();

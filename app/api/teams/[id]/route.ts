@@ -12,7 +12,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
   }
 
   try {
@@ -22,11 +22,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
     const deleted = await deleteCloudflareTeam(env, id, user.uid);
     if (!deleted) {
-      return NextResponse.json({ error: 'Team konnte nicht aus D1 geloescht werden' }, { status: 503 });
+      return NextResponse.json({ error: 'Team konnte nicht aus D1 gelöscht werden' }, { status: 503 });
     }
 
     return NextResponse.json({ success: true, storage: 'cloudflare' });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Team konnte nicht geloescht werden' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Team konnte nicht gelöscht werden' }, { status: 500 });
   }
 }

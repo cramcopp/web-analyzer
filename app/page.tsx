@@ -20,7 +20,7 @@ import { ReportData, PrioritizedTask, GscData } from '../types/report';
 import { AnalysisResult } from '../lib/scanner';
 import { Notification, Project } from '../types/common';
 import { useTrial } from '../hooks/use-trial';
-import { getMonthlyScanLimit, normalizePlan } from '../lib/plans';
+import { getMonthlyCrawlPageLimit, getMonthlyScanLimit, normalizePlan } from '../lib/plans';
 import { normalizeStoredReport } from '../lib/report-normalizer';
 
 type ActiveView = 'home' | 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
@@ -74,6 +74,9 @@ export default function WebsiteAnalyzer() {
   const scanLimitMonthly = getMonthlyScanLimit(accountPlan);
   const scanCount = userData?.scanCount || 0;
   const scanUsageRatio = scanLimitMonthly > 0 ? scanCount / scanLimitMonthly : 0;
+  const crawlPagesCount = userData?.crawlPagesCount || 0;
+  const crawlPagesLimitMonthly = getMonthlyCrawlPageLimit(accountPlan);
+  const crawlUsageRatio = crawlPagesLimitMonthly > 0 ? crawlPagesCount / crawlPagesLimitMonthly : 0;
 
   const addNotification = (title: string, message: string) => {
     const newNotif: Notification = {
@@ -180,7 +183,7 @@ export default function WebsiteAnalyzer() {
 
     try {
       if (user && userData && scanCount >= scanLimitMonthly) {
-        if (userData.plan === 'free') {
+        if (accountPlan === 'free') {
           setActiveView('pricing');
           setIsLoading(false);
           return;
@@ -189,6 +192,17 @@ export default function WebsiteAnalyzer() {
           setIsLoading(false);
           return;
         }
+      }
+
+      if (user && userData && crawlPagesCount >= crawlPagesLimitMonthly) {
+        if (accountPlan === 'free') {
+          setActiveView('pricing');
+          setIsLoading(false);
+          return;
+        }
+        setError(`Limit von ${crawlPagesLimitMonthly} Crawl-Seiten erreicht.`);
+        setIsLoading(false);
+        return;
       }
 
       const response = await fetch('/api/analyze', {
@@ -245,6 +259,7 @@ export default function WebsiteAnalyzer() {
         plan?: string;
         accountPlan?: string;
         crawlLimitUsed?: number;
+        visibilityLimits?: AnalysisResult['visibilityLimits'];
         scannerVersion?: string;
       };
       const reportScanPlan = normalizePlan(scanPlanData.scanPlan || scanPlanData.plan || accountPlan);
@@ -255,6 +270,7 @@ export default function WebsiteAnalyzer() {
         accountPlan: scanPlanData.accountPlan || reportScanPlan,
         scanPlan: reportScanPlan,
         crawlLimitUsed: scanPlanData.crawlLimitUsed || scrapeData.crawlSummary?.crawlLimitUsed,
+        visibilityLimits: scanPlanData.visibilityLimits || scrapeData.crawlSummary?.visibilityLimits,
         scannerVersion: scanPlanData.scannerVersion,
         audit_id: finalReport.audit_id || scrapeData.audit_id,
         url: scrapeData.url || targetUrl
@@ -451,7 +467,7 @@ export default function WebsiteAnalyzer() {
             </h1>
             <p className="mt-3 max-w-[720px] text-[13px] font-bold uppercase tracking-[0.12em] text-[#7b8495]">
               {activeView === 'analyzer'
-                ? 'Domain eingeben, Deep-Scan starten und daraus einen vermarktbaren Massnahmenplan machen.'
+                ? 'Domain eingeben, Deep-Scan starten und daraus einen vermarktbaren Maßnahmenplan machen.'
                 : 'Projekte, Reports, Monitoring und Team-Workflows.'}
             </p>
             </div>
@@ -474,6 +490,13 @@ export default function WebsiteAnalyzer() {
                        style={{ width: `${Math.min(100, scanUsageRatio * 100)}%` }}
                      />
                    </div>
+                   <span className="mt-2 text-[10px] font-black tracking-tighter">{crawlPagesCount} / {crawlPagesLimitMonthly} <span className="text-[8px] font-bold text-[#888] uppercase ml-1">Crawl-Seiten</span></span>
+                   <div className="w-32 h-1 bg-black/5 dark:bg-white/10 mt-1.5 overflow-hidden rounded-full">
+                      <div
+                        className={`h-full transition-all duration-1000 ${ crawlUsageRatio > 0.8 ? 'bg-[#EB5757]' : 'bg-[#27AE60]' }`}
+                       style={{ width: `${Math.min(100, crawlUsageRatio * 100)}%` }}
+                     />
+                   </div>
                 </div>
               )}
             </div>
@@ -489,8 +512,8 @@ export default function WebsiteAnalyzer() {
               )}
               <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
-                  ['SEO Audit', 'Crawl, Indexierung, Struktur und Onpage-Prioritaeten.'],
-                  ['KI-Sichtbarkeit', 'AI-Crawler, semantische Luecken und LLM-Lesbarkeit.'],
+                  ['SEO Audit', 'Crawl, Indexierung, Struktur und Onpage-Prioritäten.'],
+                  ['KI-Sichtbarkeit', 'AI-Crawler, semantische Lücken und LLM-Lesbarkeit.'],
                   ['Security & DSGVO', 'Header, SSL, Cookies, Datenschutz und Risiken.'],
                   ['Agentur Reports', 'White-Label Exporte, Kundenlinks und Monitoring.'],
                 ].map(([title, text]) => (

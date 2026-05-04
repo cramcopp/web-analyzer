@@ -17,7 +17,7 @@ export default function ProjectBacklinksView({ report }: { report: any }) {
         <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-[#888] mb-4">
           <LinkIcon className="w-8 h-8" />
         </div>
-        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfuegbar</h3>
+        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfügbar</h3>
         <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest italic">Starten Sie einen Scan, um das Projekt zu laden.</p>
       </div>
     );
@@ -78,7 +78,7 @@ export default function ProjectBacklinksView({ report }: { report: any }) {
                 <tr key={`${link.sourceUrl}-${link.targetUrl}`} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
                   <td className="px-6 py-4 text-[12px] font-bold text-[#1A1A1A] dark:text-zinc-100 break-all">{link.sourceUrl}</td>
                   <td className="px-6 py-4 text-[12px] font-bold text-[#888] break-all">{link.targetUrl}</td>
-                  <td className="px-6 py-4 text-[12px] font-bold text-[#888]">{link.anchor || 'Nicht verfuegbar'}</td>
+                  <td className="px-6 py-4 text-[12px] font-bold text-[#888]">{link.anchor || 'Nicht verfügbar'}</td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase ${link.lost ? 'text-red-500' : 'text-[#27AE60]'}`}>
                       {link.lost ? <AlertCircle className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}

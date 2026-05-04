@@ -33,36 +33,42 @@ const platformAreas = [
     text: 'SEO, Technik, Security, DSGVO, Content und AI Visibility in einem Audit.',
     icon: Sparkles,
     tone: 'bg-[#eaf8ef] text-[#118557]',
+    href: '/tools',
   },
   {
     title: 'SEO Audit',
-    text: 'Crawling, Meta-Daten, Struktur, Indexierung, interne Links und Prioritaeten.',
+    text: 'Crawling, Meta-Daten, Struktur, Indexierung, interne Links und Prioritäten.',
     icon: Search,
     tone: 'bg-[#e8f2ff] text-[#0b7de3]',
+    href: '/tools/seo-checker',
   },
   {
     title: 'KI-Sichtbarkeit',
-    text: 'Pruefe, ob Inhalte fuer ChatGPT, Gemini, Perplexity und AI Search lesbar sind.',
+    text: 'Prüfe, ob Inhalte für ChatGPT, Gemini, Perplexity und AI Search lesbar sind.',
     icon: BrainCircuit,
     tone: 'bg-[#f2ecff] text-[#8656ff]',
+    href: '/tools/ai-visibility-checker',
   },
   {
     title: 'Security & DSGVO',
     text: 'Header, SSL, Cookies, Datenschutz-Hinweise und Compliance-Risiken.',
     icon: ShieldCheck,
     tone: 'bg-[#fff3df] text-[#bd7714]',
+    href: '/tools/security-check',
   },
   {
     title: 'Performance',
     text: 'Core-Web-Vitals-nahe Checks, Ladezeiten, Ressourcen und UX-Bremsen.',
     icon: Zap,
     tone: 'bg-[#fff0f0] text-[#cf3f3f]',
+    href: '/tools/pagespeed-test',
   },
   {
     title: 'Agentur Reports',
     text: 'White-Label Reports, Kundenfreigaben, Exporte und wiederkehrendes Monitoring.',
     icon: FileText,
     tone: 'bg-[#e8fbf8] text-[#0d8f83]',
+    href: '/preise',
   },
 ];
 
@@ -141,7 +147,7 @@ function ProductPreview() {
             <div className="space-y-3">
               {[
                 ['High', 'Canonical-Konflikte beheben'],
-                ['High', 'Cookie Consent rechtssicher pruefen'],
+                ['High', 'Cookie Consent rechtssicher prüfen'],
                 ['Medium', 'Core Web Vitals priorisieren'],
                 ['Medium', 'AI-Crawler nicht blockieren'],
               ].map(([priority, task], index) => (
@@ -209,7 +215,7 @@ export default function MarketingHome({
               Sichtbarkeit gewinnen, bevor Probleme Umsatz kosten.
             </h1>
             <p className="mt-7 max-w-[560px] text-[19px] font-medium leading-[1.45] text-[#384152] dark:text-zinc-300">
-              Website Analyzer Pro scannt SEO, Performance, Security, DSGVO, Content und AI Visibility und macht daraus einen priorisierten Massnahmenplan.
+              Website Analyzer Pro scannt SEO, Performance, Security, DSGVO, Content und AI Visibility und macht daraus einen priorisierten Maßnahmenplan.
             </p>
 
             <form
@@ -253,7 +259,7 @@ export default function MarketingHome({
       <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <div className="mx-auto flex max-w-[1380px] flex-col gap-6 px-6 py-8 md:px-10 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-[13px] font-black uppercase tracking-[0.16em] text-[#7b8495]">
-            Gebaut fuer Betreiber, Freelancer und Agenturen, die Audits nicht nur sehen, sondern verkaufen muessen.
+            Gebaut für Betreiber, Freelancer und Agenturen, die Audits nicht nur sehen, sondern verkaufen müssen.
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {['Lead Audit', 'AI Plan', 'White Label', 'Monitoring'].map((label) => (
@@ -270,17 +276,17 @@ export default function MarketingHome({
         <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <h2 className="text-[34px] font-black tracking-tight text-[#141a28] dark:text-white md:text-[46px]">
-              Eine Plattform fuer den kompletten Website-Check.
+              Eine Plattform für den kompletten Website-Check.
             </h2>
             <p className="mt-3 max-w-[720px] text-[16px] font-medium leading-relaxed text-[#5d6878] dark:text-zinc-400">
-              Die Navigation ist nach Arbeitsbereichen aufgebaut: erst Ueberblick, dann tiefe Module, dann Reports und wiederkehrendes Monitoring.
+              Die Navigation ist nach Arbeitsbereichen aufgebaut: erst Überblick, dann tiefe Module, dann Reports und wiederkehrendes Monitoring.
             </p>
           </div>
           <button
             onClick={onOpenAnalyzer}
             className="flex w-fit items-center gap-2 rounded-md border border-[#cfd7e5] bg-white px-5 py-3 text-[12px] font-black text-[#172033] shadow-sm transition-colors hover:border-[#D4AF37] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
           >
-            Scanner oeffnen
+            Scanner öffnen
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>
@@ -289,9 +295,9 @@ export default function MarketingHome({
           {platformAreas.map((area) => {
             const Icon = area.icon;
             return (
-              <button
+              <a
                 key={area.title}
-                onClick={onOpenAnalyzer}
+                href={area.href}
                 className="group min-h-[154px] rounded-lg border border-[#dfe3ea] bg-white p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <div className={`mb-5 flex h-10 w-10 items-center justify-center rounded-md ${area.tone}`}>
@@ -305,7 +311,7 @@ export default function MarketingHome({
                   Bereich ansehen
                   <ArrowRight className="h-3.5 w-3.5" />
                 </span>
-              </button>
+              </a>
             );
           })}
         </div>
@@ -318,14 +324,14 @@ export default function MarketingHome({
               Von Scan zu Umsatz: Reports, die Kunden verstehen.
             </h2>
             <p className="mt-4 max-w-[620px] text-[16px] font-medium leading-relaxed text-[#c7d2e3]">
-              Der Scanner ist der Einstieg. Das Geld entsteht ueber klare Prioritaeten, wiederkehrende Audits, White-Label-Auswertungen und Agentur-Workflows.
+              Der Scanner ist der Einstieg. Das Geld entsteht über klare Prioritäten, wiederkehrende Audits, White-Label-Auswertungen und Agentur-Workflows.
             </p>
             <div className="mt-8 grid grid-cols-2 gap-4">
               {[
                 ['50+', 'Scan-Signale'],
                 ['8', 'Audit-Bereiche'],
                 ['24/7', 'Monitoring ready'],
-                ['AI', 'Massnahmenplan'],
+                ['AI', 'Maßnahmenplan'],
               ].map(([metric, label]) => (
                 <div key={label} className="border-t border-white/15 pt-4">
                   <p className="text-[32px] font-black text-[#D4AF37]">{metric}</p>
@@ -339,10 +345,10 @@ export default function MarketingHome({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {[
-              [Target, 'Prioritaeten statt Datenfriedhof', 'Tasks werden nach Impact und Risiko sortiert.'],
-              [Users, 'Agenturfaehig', 'Reports, Kundenfreigaben und Team-Workspace sind eingebaut.'],
+              [Target, 'Prioritäten statt Datenfriedhof', 'Tasks werden nach Impact und Risiko sortiert.'],
+              [Users, 'Agenturfähig', 'Reports, Kundenfreigaben und Team-Workspace sind eingebaut.'],
               [Activity, 'Monitoring', 'Wiederkehrende Scans zeigen, was sich verbessert oder verschlechtert.'],
-              [LockKeyhole, 'Mehr als SEO', 'Security, DSGVO und Accessibility gehoeren direkt zum Audit.'],
+              [LockKeyhole, 'Mehr als SEO', 'Security, DSGVO und Accessibility gehören direkt zum Audit.'],
             ].map(([Icon, title, text]) => {
               const TypedIcon = Icon as typeof Target;
               return (
@@ -362,10 +368,10 @@ export default function MarketingHome({
       <section className="mx-auto grid max-w-[1380px] grid-cols-1 gap-10 px-6 py-16 md:px-10 lg:grid-cols-[1fr_0.9fr]">
         <div>
           <h2 className="text-[34px] font-black tracking-tight text-[#141a28] dark:text-white md:text-[46px]">
-            Bereit fuer den ersten vermarktbaren Audit?
+            Bereit für den ersten vermarktbaren Audit?
           </h2>
           <p className="mt-4 max-w-[680px] text-[16px] font-medium leading-relaxed text-[#5d6878] dark:text-zinc-400">
-            Starte mit einem kostenlosen Kurzscan. Danach kannst du den vollstaendigen Report speichern, exportieren und als Projekt weiter ueberwachen.
+            Starte mit einem kostenlosen Kurzscan. Danach kannst du den vollständigen Report speichern, exportieren und als Projekt weiter überwachen.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <button
@@ -398,9 +404,9 @@ export default function MarketingHome({
           </p>
           <div className="space-y-4">
             {[
-              [Globe2, 'Domain eingeben', 'Niedrige Einstiegshuerde fuer kalten Traffic.'],
+              [Globe2, 'Domain eingeben', 'Niedrige Einstiegshürde für kalten Traffic.'],
               [BarChart3, 'Top-Probleme zeigen', 'Sofort Wert liefern, aber nicht alles verschenken.'],
-              [BrainCircuit, 'AI Action Plan freischalten', 'Lead oder Upgrade fuer den vollstaendigen Report.'],
+              [BrainCircuit, 'AI Action Plan freischalten', 'Lead oder Upgrade für den vollständigen Report.'],
               [LineChart, 'Monitoring verkaufen', 'Aus einmaligem Scan wird wiederkehrender Umsatz.'],
             ].map(([Icon, title, text]) => {
               const TypedIcon = Icon as typeof Globe2;

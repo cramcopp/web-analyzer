@@ -40,7 +40,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
   declare env: Env;
 
   async run(event: WorkflowEvent<ScanOptions>, step: WorkflowStep) {
-    const { url, plan = 'free', auditId, userId = '', projectId, device = 'desktop', renderMode = 'auto' } = event.payload;
+    const { url, plan = 'free', auditId, userId = '', projectId, device = 'desktop', renderMode = 'auto', crawlLimitOverride } = event.payload;
     const scanPlan = normalizePlan(plan);
     const targetUrl = normalizeTargetUrl(url);
     const reportId = auditId || crypto.randomUUID();
@@ -71,6 +71,7 @@ export class ScanWorkflow extends WorkflowEntrypoint<Env, ScanOptions> {
           auditId: reportId,
           device,
           renderMode,
+          crawlLimitOverride,
           env: this.env,
         });
 

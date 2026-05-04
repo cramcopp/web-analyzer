@@ -92,15 +92,15 @@ function CompetitorMap({ competitors, userScore, userName }: { competitors?: any
   if (overallDiff > 5) {
     analysisIcon = <TrendingUp className="w-3.5 h-3.5 text-[#27AE60]" />;
     analysisTitle = 'Wettbewerbs-Vorteil';
-    analysisText = `KI-Hinweis: Der Schaetzwert liegt ueber dem Vergleichsschnitt (SEO +${seoDiff.toFixed(0)} Pkt., Performance +${perfDiff.toFixed(0)} Pkt.). Bitte mit Provider-Daten verifizieren.`;
+    analysisText = `KI-Hinweis: Der Schätzwert liegt über dem Vergleichsschnitt (SEO +${seoDiff.toFixed(0)} Pkt., Performance +${perfDiff.toFixed(0)} Pkt.). Bitte mit Provider-Daten verifizieren.`;
     borderColor = '#27AE60';
   } else if (overallDiff < -5) {
     analysisIcon = <TrendingDown className="w-3.5 h-3.5 text-[#EB5757]" />;
     analysisTitle = 'Aufholbedarf';
-    analysisText = `KI-Hinweis: Der Schaetzwert liegt ${Math.abs(seoDiff).toFixed(0)} SEO-Punkte und ${Math.abs(perfDiff).toFixed(0)} Performance-Punkte unter dem Vergleichsschnitt. Bitte mit Provider-Daten verifizieren.`;
+    analysisText = `KI-Hinweis: Der Schätzwert liegt ${Math.abs(seoDiff).toFixed(0)} SEO-Punkte und ${Math.abs(perfDiff).toFixed(0)} Performance-Punkte unter dem Vergleichsschnitt. Bitte mit Provider-Daten verifizieren.`;
     borderColor = '#EB5757';
   } else {
-    analysisText = `KI-Hinweis: Der Schaetzwert liegt nah am Vergleichsschnitt (SEO ${seoDiff > 0 ? '+' : ''}${seoDiff.toFixed(0)}, Performance ${perfDiff > 0 ? '+' : ''}${perfDiff.toFixed(0)}). Bitte mit Provider-Daten verifizieren.`;
+    analysisText = `KI-Hinweis: Der Schätzwert liegt nah am Vergleichsschnitt (SEO ${seoDiff > 0 ? '+' : ''}${seoDiff.toFixed(0)}, Performance ${perfDiff > 0 ? '+' : ''}${perfDiff.toFixed(0)}). Bitte mit Provider-Daten verifizieren.`;
   }
 
   return (

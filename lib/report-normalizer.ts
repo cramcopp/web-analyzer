@@ -1,3 +1,5 @@
+import { normalizePlan } from './plans';
+
 type ScoreSection = { score?: number };
 
 const SCORE_KEYS = [
@@ -57,7 +59,7 @@ function numeric(value: unknown) {
 }
 
 function normalizePlanValue(value: unknown) {
-  return value === 'agency' || value === 'pro' ? value : 'free';
+  return normalizePlan(typeof value === 'string' ? value : null);
 }
 
 function sectionScore(source: any, key: typeof SCORE_KEYS[number]) {

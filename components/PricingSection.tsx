@@ -1,66 +1,124 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
-  Check, 
-  X, 
-  Rocket, 
-  Star, 
-  Crown, 
-  ArrowRight, 
-  ShieldCheck, 
-  CreditCard,
-  ChevronDown,
-  ChevronUp,
+  ArrowRight,
+  Brain,
+  Building2,
+  Check,
+  Crown,
+  FileSearch,
+  Gauge,
+  Globe2,
+  Link2,
+  Loader2,
+  Plus,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  Tags,
   Users,
-  Award,
-  Loader2
+  X,
 } from 'lucide-react';
 import { useAuth } from './auth-provider';
-import { PLAN_CONFIG, formatExports } from '@/lib/plans';
+import {
+  ADDON_CONFIG,
+  ADDON_ORDER,
+  PLAN_CONFIG,
+  formatApiAccess,
+  formatExports,
+  formatMonitoring,
+  normalizeAddonQuantities,
+  type AddonKey,
+  type PlanType,
+} from '@/lib/plans';
 
-interface FeatureRowProps {
-  label: string;
-  free: string | boolean;
-  pro: string | boolean;
-  agency: string | boolean;
-  isMain?: boolean;
+const PLAN_KEYS: PlanType[] = ['free', 'pro', 'agency', 'business'];
+const PAID_PLANS: Exclude<PlanType, 'free'>[] = ['pro', 'agency', 'business'];
+
+const PLAN_META: Record<PlanType, { eyebrow: string; icon: typeof FileSearch; cta: string; tone: string }> = {
+  free: {
+    eyebrow: 'Einstieg',
+    icon: FileSearch,
+    cta: 'Aktueller Startplan',
+    tone: 'border-[#E5E5E5] dark:border-zinc-800',
+  },
+  pro: {
+    eyebrow: 'Wachstum',
+    icon: Rocket,
+    cta: 'Pro starten',
+    tone: 'border-[#D4AF37] shadow-[0_24px_70px_rgba(212,175,55,0.16)]',
+  },
+  agency: {
+    eyebrow: 'Agentur',
+    icon: Users,
+    cta: 'Agency buchen',
+    tone: 'border-[#172033] dark:border-zinc-100',
+  },
+  business: {
+    eyebrow: 'High End',
+    icon: Building2,
+    cta: 'Business buchen',
+    tone: 'border-[#0B7DE3] shadow-[0_24px_70px_rgba(11,125,227,0.12)]',
+  },
+};
+
+const ADDON_META: Record<AddonKey, { icon: typeof Tags }> = {
+  keywords_100: { icon: Tags },
+  project_100_keywords: { icon: Plus },
+  team_seat: { icon: Users },
+  white_label_domain: { icon: Globe2 },
+  backlinks: { icon: Link2 },
+  ai_visibility: { icon: Brain },
+};
+
+const COMPARISON_ROWS = [
+  ['Scans pro Monat', 'scanLimitMonthly'],
+  ['Seiten pro Crawl', 'crawlLimit'],
+  ['Crawl-Seiten pro Monat', 'monthlyCrawlPages'],
+  ['Sichtbare Detailseiten', 'visibleDetailPages'],
+  ['Issue-URLs sichtbar', 'issueUrlsVisible'],
+  ['Screenshots/Evidence', 'evidencePerReport'],
+  ['Projekte', 'projects'],
+  ['Rank-Keywords', 'rankKeywords'],
+  ['Wettbewerber', 'competitors'],
+  ['Nutzer/Seats', 'seats'],
+] as const;
+
+function numberValue(value: number) {
+  return new Intl.NumberFormat('de-DE').format(value);
 }
 
-function FeatureRow({ label, free, pro, agency, isMain }: FeatureRowProps) {
-  const renderValue = (val: string | boolean) => {
-    if (typeof val === 'boolean') {
-      return val ? (
-        <Check className="w-5 h-5 text-[#27AE60] mx-auto" />
-      ) : (
-        <X className="w-5 h-5 text-[#EB5757] mx-auto opacity-20" />
-      );
-    }
-    return <span className="text-[13px] font-bold text-[#1A1A1A] dark:text-white">{val}</span>;
-  };
+function priceLabel(plan: PlanType, interval: 'monthly' | 'yearly') {
+  const config = PLAN_CONFIG[plan];
+  const price = interval === 'yearly' ? config.yearlyMonthlyPrice : config.monthlyPrice;
+  return price === 0 ? '0' : String(price);
+}
 
-  return (
-    <div className={`grid grid-cols-4 border-b border-[#EEE] dark:border-zinc-800 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.01] ${isMain ? 'bg-[#F9F9F9] dark:bg-zinc-950/50' : ''}`}>
-      <div className={`p-4 text-[12px] font-medium text-[#444] dark:text-zinc-400 flex items-center gap-2 ${isMain ? 'font-black uppercase tracking-widest text-[#888]' : ''}`}>
-        {label}
-      </div>
-      <div className="p-4 text-center border-l border-[#EEE] dark:border-zinc-800">{renderValue(free)}</div>
-      <div className="p-4 text-center border-l border-[#EEE] dark:border-zinc-800 bg-[#D4AF37]/5">{renderValue(pro)}</div>
-      <div className="p-4 text-center border-l border-[#EEE] dark:border-zinc-800">{renderValue(agency)}</div>
-    </div>
+function BooleanValue({ value }: { value: boolean }) {
+  return value ? (
+    <Check className="mx-auto h-4 w-4 text-[#27AE60]" />
+  ) : (
+    <X className="mx-auto h-4 w-4 text-[#EB5757] opacity-30" />
   );
+}
+
+function CellValue({ value }: { value: string | number | boolean }) {
+  if (typeof value === 'boolean') return <BooleanValue value={value} />;
+  return <span className="text-[12px] font-black text-[#1A1A1A] dark:text-zinc-100">{typeof value === 'number' ? numberValue(value) : value}</span>;
 }
 
 export default function PricingSection() {
   const { user, userData } = useAuth();
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<PlanType | null>(null);
+  const [loadingAddon, setLoadingAddon] = useState<AddonKey | null>(null);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const { free, pro, agency } = PLAN_CONFIG;
+  const addOnQuantities = normalizeAddonQuantities(userData?.addOns);
 
-
-  const handleCheckout = async (planName: string) => {
+  const handleCheckout = async (planName: PlanType) => {
+    if (planName === 'free') return;
     if (!user) {
-      alert("Bitte logge dich zuerst ein, um ein Abo abzuschließen.");
+      alert('Bitte logge dich zuerst ein, um ein Abo abzuschließen.');
       return;
     }
 
@@ -69,384 +127,294 @@ export default function PricingSection() {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planName,
-          interval: billingInterval,
-        }),
+        body: JSON.stringify({ planName, interval: billingInterval }),
       });
 
-
       const data = await response.json();
-      if (data.url) {
-        const checkoutLink = document.createElement('a');
-        checkoutLink.href = data.url;
-        checkoutLink.rel = 'noopener noreferrer';
-        document.body.appendChild(checkoutLink);
-        checkoutLink.click();
-        checkoutLink.remove();
-      } else {
-        throw new Error(data.error || 'Checkout failed');
-      }
+      if (!response.ok || !data.url) throw new Error(data.error || 'Checkout failed');
+      window.location.assign(data.url);
     } catch (err) {
       console.error(err);
-      alert("Checkout fehlgeschlagen. Bitte versuche es später erneut.");
+      alert('Checkout fehlgeschlagen. Bitte versuche es später erneut.');
       setLoadingPlan(null);
     }
   };
 
-  const isTrialEligible = userData?.plan === 'free' || !userData;
+  const handleAddonCheckout = async (addonKey: AddonKey) => {
+    if (!user) {
+      alert('Bitte logge dich zuerst ein, um ein Add-on zu buchen.');
+      return;
+    }
+
+    if (!userData?.plan || userData.plan === 'free') {
+      alert('Add-ons benötigen zuerst einen aktiven bezahlten Plan.');
+      return;
+    }
+
+    setLoadingAddon(addonKey);
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkoutType: 'addon', addonKey, quantity: 1 }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.url) throw new Error(data.error || 'Checkout failed');
+      window.location.assign(data.url);
+    } catch (err) {
+      console.error(err);
+      alert('Add-on Checkout fehlgeschlagen. Bitte versuche es später erneut.');
+      setLoadingAddon(null);
+    }
+  };
 
   return (
-    <section className="py-24 px-4 md:px-10 animate-in fade-in slide-in-from-bottom-5 duration-1000 bg-[#F5F5F3] dark:bg-zinc-950 min-h-screen relative">
-
-
-      <div className="max-w-[1240px] mx-auto">
-        <div className="text-center mb-24">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-black/[0.03] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 text-[#D4AF37] text-[10px] font-black uppercase tracking-[4px] rounded-full mb-8">
-            <Award className="w-3.5 h-3.5" />
-            WAP Enterprise Solutions
-          </div>
-          <h2 className="text-[56px] md:text-[80px] font-black text-[#1A1A1A] dark:text-white tracking-tighter uppercase leading-[0.85] mb-8">
-            Die passenden Tools <br /><span className="text-[#D4AF37]">für jedes Projekt.</span>
-          </h2>
-          <p className="text-[17px] text-[#888] max-w-[700px] mx-auto font-medium leading-[1.6] italic">
-            &quot;Von der ersten Analyse bis zur skalierbaren Agency-Lösung. Unsere KI-gestützte Plattform wächst mit deinem Erfolg.&quot;
-          </p>
-
-          {/* Billing Switcher (Seobility Style) */}
-          <div className="mt-16 flex flex-col items-center gap-6">
-            <div className="bg-white dark:bg-zinc-900 p-1.5 rounded-full inline-flex items-center shadow-xl border border-[#EEE] dark:border-zinc-800">
-              <button 
-                onClick={() => setBillingInterval('monthly')}
-                className={`px-8 py-3 rounded-full text-[12px] font-black uppercase tracking-widest transition-all ${billingInterval === 'monthly' ? 'bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-950 shadow-md' : 'text-[#888] hover:text-[#1A1A1A] dark:hover:text-white'}`}
-              >
-                Monatlich
-              </button>
-              <button 
-                onClick={() => setBillingInterval('yearly')}
-                className={`px-8 py-3 rounded-full text-[12px] font-black uppercase tracking-widest transition-all relative ${billingInterval === 'yearly' ? 'bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-950 shadow-md' : 'text-[#888] hover:text-[#1A1A1A] dark:hover:text-white'}`}
-              >
-                Jährlich
-                <span className="absolute -top-7 right-0 bg-[#27AE60] text-white text-[9px] font-black px-2 py-1 rounded-sm shadow-sm animate-bounce">
-                  Best Value: -20%
-                </span>
-              </button>
+    <section className="min-h-screen bg-[#F5F5F3] px-4 py-20 text-[#1A1A1A] dark:bg-zinc-950 dark:text-zinc-100 md:px-10">
+      <div className="mx-auto max-w-[1440px]">
+        <div className="mb-14 flex flex-col gap-8 border-b border-[#E5E5E5] pb-10 dark:border-zinc-800 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-5 inline-flex items-center gap-2 border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[3px] text-[#D4AF37]">
+              <Sparkles className="h-3.5 w-3.5" />
+              Abo-Plan 2026
             </div>
-            <p className="text-[11px] text-[#AAA] font-bold uppercase tracking-wider">Keine versteckten Gebühren. Jederzeit kündbar.</p>
+            <h2 className="max-w-[820px] text-[42px] font-black uppercase leading-[0.92] tracking-tight md:text-[64px]">
+              Crawlen gross, sichtbar passend zum Plan.
+            </h2>
+            <p className="mt-5 max-w-[720px] text-[13px] font-bold uppercase leading-relaxed tracking-[0.12em] text-[#7b8495]">
+              Scanner bewertet alle gecrawlten Seiten. Detailseiten, Issue-URLs, Evidence und Exporte werden separat je Plan freigeschaltet.
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-3 lg:w-auto lg:items-end">
+            <div className="inline-flex w-full rounded-md border border-[#E5E5E5] bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900 lg:w-auto">
+              {(['monthly', 'yearly'] as const).map((interval) => (
+                <button
+                  key={interval}
+                  onClick={() => setBillingInterval(interval)}
+                  className={`flex-1 px-5 py-3 text-[11px] font-black uppercase tracking-widest transition-colors lg:flex-none ${
+                    billingInterval === interval
+                      ? 'bg-[#1A1A1A] text-white dark:bg-zinc-100 dark:text-zinc-950'
+                      : 'text-[#888] hover:text-[#1A1A1A] dark:hover:text-zinc-100'
+                  }`}
+                >
+                  {interval === 'monthly' ? 'Monatlich' : 'Jährlich'}
+                </button>
+              ))}
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#27AE60]">
+              Jährlich reduziert den monatlichen Preis.
+            </span>
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border border-[#EEE] dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl relative">
-          
-          {/* FREE PLAN */}
-          <div className="p-10 flex flex-col border-b lg:border-b-0 lg:border-r border-[#EEE] dark:border-zinc-800 hover:bg-[#F9F9F9] dark:hover:bg-zinc-950/20 transition-colors">
-            <div className="mb-10">
-              <div className="text-[12px] font-black uppercase tracking-[3px] text-[#888] mb-1">Einstieg</div>
-              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">{free.name}</h3>
-              <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-[48px] font-black text-[#1A1A1A] dark:text-white">0</span>
-                <span className="text-[20px] font-black text-[#1A1A1A] dark:text-white">€</span>
-              </div>
-              <p className="text-[11px] text-[#AAA] font-bold uppercase tracking-widest">Dauerhaft kostenlos</p>
-            </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+          {PLAN_KEYS.map((plan) => {
+            const config = PLAN_CONFIG[plan];
+            const meta = PLAN_META[plan];
+            const Icon = meta.icon;
+            const isPaid = plan !== 'free';
+            const isCurrent = userData?.plan === plan || (!userData?.plan && plan === 'free');
 
-            <ul className="flex-1 space-y-4 mb-10">
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> {free.crawlLimit} Unterseiten-Crawl
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> WAP v1 Intelligence
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400 opacity-50 italic">
-                <X className="w-4 h-4 text-[#EB5757]" /> Kein Monitoring
-              </li>
-            </ul>
-
-            <button className="w-full py-4 border-2 border-[#1A1A1A] dark:border-zinc-100 text-[#1A1A1A] dark:text-white text-[11px] font-black uppercase tracking-[3px] hover:bg-[#1A1A1A] hover:text-white dark:hover:bg-white dark:hover:text-black transition-all">
-              Projekt anlegen
-            </button>
-          </div>
-
-          {/* PREMIUM/PRO PLAN */}
-          <div className="p-10 flex flex-col border-b lg:border-b-0 lg:border-r border-[#D4AF37] bg-white dark:bg-zinc-900 relative scale-y-[1.05] shadow-[0_30px_60px_rgba(212,175,55,0.15)] z-10 border-t-4 border-t-[#D4AF37]">
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#D4AF37] text-white text-[9px] font-black px-4 py-1 uppercase tracking-[2px] whitespace-nowrap">
-              Beliebteste Wahl
-            </div>
-            
-            <div className="mb-10 text-center">
-              <div className="text-[12px] font-black uppercase tracking-[3px] text-[#D4AF37] mb-1">Strategisch</div>
-              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">{pro.name}</h3>
-              <div className="flex items-baseline justify-center gap-1 mb-2">
-                <span className="text-[48px] font-black text-[#1A1A1A] dark:text-white leading-none">
-                  {billingInterval === 'yearly' ? '39' : '49'}
-                </span>
-                <span className="text-[20px] font-black text-[#1A1A1A] dark:text-white">€</span>
-              </div>
-              <p className="text-[11px] text-[#AAA] font-bold uppercase tracking-widest">{billingInterval === 'yearly' ? 'Pro Monat, jährlich' : 'Monatliche Abrechnung'}</p>
-            </div>
-
-            <ul className="flex-1 space-y-4 mb-10">
-              <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Star className="w-4 h-4 text-[#D4AF37] fill-[#D4AF37]" /> {pro.crawlLimit} Unterseiten-Crawl
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> WAP v2 Intelligence
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> Rank Tracking (täglich)
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> Search Console Sync
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> CSV Export
-              </li>
-            </ul>
-
-            <button 
-              onClick={() => handleCheckout('pro')}
-              className="w-full py-5 bg-[#D4AF37] text-white text-[12px] font-black uppercase tracking-[3px] hover:bg-[#1A1A1A] dark:hover:bg-zinc-100 dark:hover:text-black transition-all shadow-xl flex items-center justify-center gap-2"
-            >
-              {loadingPlan === 'pro' ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Starten <ArrowRight className="w-4 h-4" /></>}
-            </button>
-            <p className="text-[9px] text-center text-[#AAA] mt-4 font-bold uppercase tracking-widest">{isTrialEligible ? "Inklusive 7 Tage Testphase" : ""}</p>
-          </div>
-
-          {/* AGENCY/ENTERPRISE PLAN */}
-          <div className="p-10 flex flex-col hover:bg-[#F9F9F9] dark:hover:bg-zinc-950/20 transition-colors">
-            <div className="mb-10">
-              <div className="text-[12px] font-black uppercase tracking-[3px] text-[#888] mb-1">Skalierbar</div>
-              <h3 className="text-[28px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-white mb-6">{agency.name}</h3>
-              <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-[48px] font-black text-[#1A1A1A] dark:text-white">
-                  {billingInterval === 'yearly' ? '119' : '149'}
-                </span>
-                <span className="text-[20px] font-black text-[#1A1A1A] dark:text-white">€</span>
-              </div>
-              <p className="text-[11px] text-[#AAA] font-bold uppercase tracking-widest">{billingInterval === 'yearly' ? 'Pro Monat, jährlich' : 'Monatliche Abrechnung'}</p>
-            </div>
-
-            <ul className="flex-1 space-y-4 mb-10">
-              <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Crown className="w-4 h-4 text-[#D4AF37] shadow-sm" /> {agency.crawlLimit} Unterseiten
-              </li>
-              <li className="flex items-center gap-3 text-[14px] font-bold text-[#1A1A1A] dark:text-white">
-                <Users className="w-4 h-4 text-[#D4AF37]" /> Team Workspace
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> White-Label PDF Reports
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> Multi-Domain Monitoring
-              </li>
-              <li className="flex items-center gap-3 text-[13px] font-medium text-[#444] dark:text-zinc-400">
-                <Check className="w-4 h-4 text-[#27AE60]" /> API Zugang (Alpha)
-              </li>
-            </ul>
-
-            <button 
-              onClick={() => handleCheckout('agency')}
-              className="w-full py-4 bg-[#1A1A1A] dark:bg-white text-white dark:text-black text-[11px] font-black uppercase tracking-[3px] hover:bg-[#D4AF37] hover:text-white transition-all"
-            >
-              {loadingPlan === 'agency' ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enterprise beitreten"}
-            </button>
-          </div>
-        </div>
-
-        {/* COMPARISON TABLE (Seobility Style) */}
-        <div className="mt-20">
-          <div 
-            className="w-full flex items-center justify-between p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 text-[14px] font-black uppercase tracking-[2px] transition-colors"
-          >
-            Alle Funktionen im Detail
-          </div>
-
-            <div className="bg-white dark:bg-zinc-900 border-x border-b border-[#EEE] dark:border-zinc-800 animate-in fade-in slide-in-from-top-4 duration-500 overflow-x-auto">
-              <div className="min-w-[800px]">
-                <div className="grid grid-cols-4 bg-[#1A1A1A] dark:bg-zinc-800 text-white text-[10px] font-black uppercase tracking-[3px]">
-                  <div className="p-6">Features</div>
-                  <div className="p-6 text-center border-l border-white/10">WAP Basic</div>
-                  <div className="p-6 text-center border-l border-white/10 bg-[#D4AF37]/20 text-[#D4AF37]">WAP Premium</div>
-                  <div className="p-6 text-center border-l border-white/10">WAP Agency</div>
+            return (
+              <article key={plan} className={`flex min-h-[520px] flex-col border bg-white p-6 shadow-sm dark:bg-zinc-900 ${meta.tone}`}>
+                <div className="mb-7 flex items-start justify-between gap-4">
+                  <div>
+                    <span className="mb-2 block text-[10px] font-black uppercase tracking-[3px] text-[#888]">{meta.eyebrow}</span>
+                    <h3 className="text-[26px] font-black uppercase tracking-tight">{config.name}</h3>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center bg-[#F5F5F3] text-[#D4AF37] dark:bg-zinc-950">
+                    <Icon className="h-5 w-5" />
+                  </div>
                 </div>
 
-                <FeatureRow label="Analyse & Crawling" isMain={true} free="" pro="" agency="" />
-                <FeatureRow label="Unterseiten pro Crawl" free={String(free.crawlLimit)} pro={String(pro.crawlLimit)} agency={String(agency.crawlLimit)} />
-                <FeatureRow label="WAP Intelligence v." free="v1" pro="v2" agency="v3+" />
-                <FeatureRow label="Crawl-Häufigkeit" free="Manuell" pro="Täglich" agency="On-Demand+" />
-                <FeatureRow label="Automatisches Monitoring" free={false} pro={true} agency={true} />
-                
-                <FeatureRow label="SEO & Inhalte" isMain={true} free="" pro="" agency="" />
-                <FeatureRow label="Keyword Gap Analyse" free={false} pro={true} agency={true} />
-                <FeatureRow label="Sentiment Check (KI)" free={true} pro={true} agency={true} />
-                <FeatureRow label="Wettbewerbs-Tracker" free={String(free.competitors)} pro={String(pro.competitors)} agency={String(agency.competitors)} />
-                <FeatureRow label="TF-IDF Analyse" free={false} pro={true} agency={true} />
+                <div className="mb-7">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[48px] font-black leading-none">{priceLabel(plan, billingInterval)}</span>
+                    <span className="text-[18px] font-black">EUR</span>
+                  </div>
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-[#888]">
+                    {plan === 'free' ? 'dauerhaft kostenlos' : billingInterval === 'yearly' ? 'pro Monat, jährlich' : 'monatlich kündbar'}
+                  </p>
+                </div>
 
-                <FeatureRow label="Business & Team" isMain={true} free="" pro="" agency="" />
-                <FeatureRow label="Team Workspace" free={false} pro={false} agency={true} />
-                <FeatureRow label="Mitglieder Einladungen" free={false} pro={false} agency={true} />
-                <FeatureRow label="Export-Formate" free={formatExports(free.exports)} pro={formatExports(pro.exports)} agency={formatExports(agency.exports)} />
-                <FeatureRow label="White-Label Reports" free={free.whiteLabel} pro={pro.whiteLabel} agency={agency.whiteLabel} />
-                <FeatureRow label="Rest API Support" free={free.api} pro={pro.api} agency={agency.api ? 'Alpha' : false} />
+                <div className="mb-7 grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="border border-[#EEE] p-3 dark:border-zinc-800">
+                    <span className="block text-[8px] font-black uppercase tracking-widest text-[#888]">Crawl</span>
+                    <strong className="mt-1 block text-[14px]">{numberValue(config.crawlLimit)}</strong>
+                  </div>
+                  <div className="border border-[#EEE] p-3 dark:border-zinc-800">
+                    <span className="block text-[8px] font-black uppercase tracking-widest text-[#888]">Sichtbar</span>
+                    <strong className="mt-1 block text-[14px]">{numberValue(config.visibleDetailPages)}</strong>
+                  </div>
+                </div>
 
-                <FeatureRow label="Support & Service" isMain={true} free="" pro="" agency="" />
-                <FeatureRow label="Ticket Support" free={true} pro={true} agency={true} />
-                <FeatureRow label="Priorisierter Support" free={false} pro={true} agency={true} />
-                <FeatureRow label="Persönlicher Success Manager" free={false} pro={false} agency={true} />
+                <ul className="mb-8 flex-1 space-y-3 text-[12px] font-bold text-[#555] dark:text-zinc-400">
+                  <li className="flex items-center gap-2"><Gauge className="h-4 w-4 text-[#D4AF37]" /> {numberValue(config.scanLimitMonthly)} Scans pro Monat</li>
+                  <li className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-[#D4AF37]" /> {numberValue(config.monthlyCrawlPages)} Crawl-Seiten/Monat</li>
+                  <li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#D4AF37]" /> {numberValue(config.issueUrlsVisible)} Issue-URLs sichtbar</li>
+                  <li className="flex items-center gap-2"><Users className="h-4 w-4 text-[#D4AF37]" /> {numberValue(config.seats)} Seat{config.seats === 1 ? '' : 's'}</li>
+                  {config.whiteLabel && <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-[#D4AF37]" /> White Label aktiv</li>}
+                </ul>
+
+                <button
+                  onClick={() => handleCheckout(plan)}
+                  disabled={!isPaid || isCurrent || loadingPlan === plan}
+                  className={`flex w-full items-center justify-center gap-2 px-5 py-4 text-[11px] font-black uppercase tracking-[2px] transition-all ${
+                    isPaid && !isCurrent
+                      ? 'bg-[#1A1A1A] text-white hover:bg-[#D4AF37] dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-[#D4AF37]'
+                      : 'border border-[#E5E5E5] text-[#888] dark:border-zinc-800'
+                  }`}
+                >
+                  {loadingPlan === plan ? <Loader2 className="h-4 w-4 animate-spin" /> : isCurrent ? 'Aktueller Plan' : meta.cta}
+                  {isPaid && !isCurrent && loadingPlan !== plan && <ArrowRight className="h-4 w-4" />}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+
+        <section className="mt-16 border border-[#E5E5E5] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="border-b border-[#E5E5E5] p-6 dark:border-zinc-800">
+            <h3 className="text-[18px] font-black uppercase tracking-widest">Limit-Vergleich</h3>
+            <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-[#888]">
+              Gecrawlte Seiten sind die Analysebasis. Sichtbare Detailseiten, Issue-URLs und Evidence sind eigene Ausgabe-Limits.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-5 bg-[#1A1A1A] text-[10px] font-black uppercase tracking-[2px] text-white dark:bg-zinc-800">
+                <div className="p-4">Limit</div>
+                {PLAN_KEYS.map((plan) => <div key={plan} className="border-l border-white/10 p-4 text-center">{PLAN_CONFIG[plan].name}</div>)}
+              </div>
+              {COMPARISON_ROWS.map(([label, key]) => (
+                <div key={key} className="grid grid-cols-5 border-b border-[#EEE] text-center dark:border-zinc-800">
+                  <div className="p-4 text-left text-[12px] font-black uppercase tracking-widest text-[#555] dark:text-zinc-400">{label}</div>
+                  {PLAN_KEYS.map((plan) => (
+                    <div key={plan} className="border-l border-[#EEE] p-4 dark:border-zinc-800">
+                      <CellValue value={PLAN_CONFIG[plan][key]} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div className="grid grid-cols-5 border-b border-[#EEE] text-center dark:border-zinc-800">
+                <div className="p-4 text-left text-[12px] font-black uppercase tracking-widest text-[#555] dark:text-zinc-400">API</div>
+                {PLAN_KEYS.map((plan) => <div key={plan} className="border-l border-[#EEE] p-4 dark:border-zinc-800"><CellValue value={formatApiAccess(PLAN_CONFIG[plan].api)} /></div>)}
+              </div>
+              <div className="grid grid-cols-5 border-b border-[#EEE] text-center dark:border-zinc-800">
+                <div className="p-4 text-left text-[12px] font-black uppercase tracking-widest text-[#555] dark:text-zinc-400">White Label</div>
+                {PLAN_KEYS.map((plan) => <div key={plan} className="border-l border-[#EEE] p-4 dark:border-zinc-800"><BooleanValue value={PLAN_CONFIG[plan].whiteLabel} /></div>)}
+              </div>
+              <div className="grid grid-cols-5 border-b border-[#EEE] text-center dark:border-zinc-800">
+                <div className="p-4 text-left text-[12px] font-black uppercase tracking-widest text-[#555] dark:text-zinc-400">Monitoring</div>
+                {PLAN_KEYS.map((plan) => <div key={plan} className="border-l border-[#EEE] p-4 dark:border-zinc-800"><CellValue value={formatMonitoring(PLAN_CONFIG[plan].monitoring)} /></div>)}
+              </div>
+              <div className="grid grid-cols-5 text-center">
+                <div className="p-4 text-left text-[12px] font-black uppercase tracking-widest text-[#555] dark:text-zinc-400">Exporte</div>
+                {PLAN_KEYS.map((plan) => <div key={plan} className="border-l border-[#EEE] p-4 dark:border-zinc-800"><CellValue value={formatExports(PLAN_CONFIG[plan].exports)} /></div>)}
+              </div>
             </div>
-        </div>
+          </div>
+        </section>
+
+        <section className="mt-16">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h3 className="text-[24px] font-black uppercase tracking-widest">Add-ons</h3>
+              <p className="mt-2 max-w-[760px] text-[11px] font-bold uppercase tracking-widest text-[#888]">
+                Monatliche Erweiterungen für Keywords, Projekte, Seats, White-Label-Domain, Backlinks und AI Visibility.
+              </p>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#555] dark:text-zinc-400">
+              Aktive Add-ons: {ADDON_ORDER.reduce((sum, key) => sum + (addOnQuantities[key] || 0), 0)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {ADDON_ORDER.map((addonKey) => {
+              const addon = ADDON_CONFIG[addonKey];
+              const Icon = ADDON_META[addonKey].icon;
+              const quantity = addOnQuantities[addonKey] || 0;
+              const requiresPaidPlan = !userData?.plan || userData.plan === 'free';
+
+              return (
+                <article key={addonKey} className="flex min-h-[250px] flex-col border border-[#E5E5E5] bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="mb-5 flex items-start justify-between gap-4">
+                    <div>
+                      <span className="mb-2 block text-[10px] font-black uppercase tracking-[3px] text-[#D4AF37]">Add-on</span>
+                      <h4 className="text-[18px] font-black uppercase tracking-tight">{addon.name}</h4>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center bg-[#F5F5F3] text-[#D4AF37] dark:bg-zinc-950">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                  </div>
+
+                  <p className="mb-5 flex-1 text-[12px] font-bold leading-relaxed text-[#555] dark:text-zinc-400">
+                    {addon.description}
+                  </p>
+
+                  <div className="mb-5 flex items-end justify-between gap-4 border-t border-[#EEE] pt-4 dark:border-zinc-800">
+                    <div>
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-[#888]">Preis</span>
+                      <strong className="text-[28px] font-black">{addon.monthlyPrice} EUR</strong>
+                      <span className="ml-1 text-[10px] font-black uppercase tracking-widest text-[#888]">/ Monat</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[10px] font-black uppercase tracking-widest text-[#888]">Aktiv</span>
+                      <strong className="text-[16px] font-black">{quantity}x</strong>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleAddonCheckout(addonKey)}
+                    disabled={requiresPaidPlan || loadingAddon === addonKey}
+                    className={`flex w-full items-center justify-center gap-2 px-5 py-3 text-[10px] font-black uppercase tracking-[2px] transition-all ${
+                      requiresPaidPlan
+                        ? 'border border-[#E5E5E5] text-[#888] dark:border-zinc-800'
+                        : 'bg-[#1A1A1A] text-white hover:bg-[#D4AF37] dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-[#D4AF37]'
+                    }`}
+                  >
+                    {loadingAddon === addonKey ? <Loader2 className="h-4 w-4 animate-spin" /> : requiresPaidPlan ? 'Plan benötigt' : 'Add-on buchen'}
+                    {!requiresPaidPlan && loadingAddon !== addonKey && <ArrowRight className="h-4 w-4" />}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="border-l-4 border-[#D4AF37] bg-white p-5 dark:bg-zinc-900">
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">Gecrawlt</span>
+            <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#555] dark:text-zinc-400">Der Scanner bewertet bis zum Seiten-pro-Crawl-Limit und zählt diese Seiten ins monatliche Crawl-Budget.</p>
+          </div>
+          <div className="border-l-4 border-[#0B7DE3] bg-white p-5 dark:bg-zinc-900">
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">Sichtbar</span>
+            <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#555] dark:text-zinc-400">Reports zeigen je Plan nur die freigeschalteten Detailseiten, Issue-URLs und Evidence-Artefakte.</p>
+          </div>
+          <div className="border-l-4 border-[#27AE60] bg-white p-5 dark:bg-zinc-900">
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">Business</span>
+            <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#555] dark:text-zinc-400">Business ist ein eigener High-End-Plan mit Business-Checkout, Full API, 50 Seats und 5 Mio. Crawl-Seiten.</p>
+          </div>
         </div>
 
-        {/* TRUST BADGES */}
-        <div className="mt-24 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 border-t border-[#EEE] dark:border-zinc-800 pt-16">
-          <div className="flex flex-col gap-4">
-             <div className="w-12 h-12 bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]">
-                <ShieldCheck className="w-6 h-6" />
-             </div>
-             <h4 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-white">DSGVO Konform</h4>
-             <p className="text-[12px] text-[#888] leading-relaxed font-medium">Alle Daten werden auf europäischen Servern verarbeitet und sind zu 100% DSGVO-konform verschlüsselt.</p>
-          </div>
-          <div className="flex flex-col gap-4">
-             <div className="w-12 h-12 bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]">
-                <CreditCard className="w-6 h-6" />
-             </div>
-             <h4 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-white">Secure Payment</h4>
-             <p className="text-[12px] text-[#888] leading-relaxed font-medium">Sicherer Checkout über Stripe mit 256-Bit-Verschlüsselung. Alle gängigen Kreditkarten und SEPA werden unterstützt.</p>
-          </div>
-          <div className="flex flex-col gap-4">
-             <div className="w-12 h-12 bg-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]">
-                <Rocket className="w-6 h-6" />
-             </div>
-             <h4 className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-white">Keine Wartezeit</h4>
-             <p className="text-[12px] text-[#888] leading-relaxed font-medium">Nach dem Upgrade wird dein Account sofort freigeschaltet. Keine manuelle Aktivierung durch den Support nötig.</p>
-          </div>
-        </div>
-
-        {/* FAQ Section */}
-        <div className="mt-40 max-w-[850px] mx-auto">
-           <div className="text-center mb-16">
-             <h3 className="text-[28px] md:text-[34px] font-black uppercase tracking-[4px] mb-4 text-[#1A1A1A] dark:text-white">Häufig gestellte Fragen</h3>
-             <p className="text-[14px] text-[#888] font-medium uppercase tracking-widest">Alles, was du über Website Analyzer Pro wissen musst</p>
-           </div>
-           
-           <div className="flex flex-col gap-4">
-              <AccordionItem 
-                question="Kann ich mein Abo jederzeit kündigen?" 
-                answer="Ja, absolut! Du kannst dein Abonnement jederzeit mit nur einem Klick in deinen Profileinstellungen zum Ende des aktuellen Abrechnungszeitraums kündigen. Es gibt keine Mindestlaufzeiten über den gebuchten Zeitraum hinaus."
-              />
-              <AccordionItem 
-                question="Wie funktioniert die 7-tägige Testphase?" 
-                answer="Du kannst den Premium-Plan für 7 Tage völlig kostenlos und ohne Einschränkungen testen. Wir bitten dich beim Start eine Zahlungsmethode zu hinterlegen, buchen aber erst nach Ablauf der 7 Tage ab. Kündigst du vor Ablauf der 7 Tage, zahlst du keinen Cent."
-              />
-              <AccordionItem 
-                question="Welche Zahlungsmethoden werden akzeptiert?" 
-                answer="Wir bieten maximale Flexibilität beim Bezahlen. Über unseren Partner Stripe akzeptieren wir alle gängigen Kreditkarten (Visa, Mastercard, American Express), SEPA-Lastschrift, Google Pay und Apple Pay."
-              />
-              <AccordionItem 
-                question="Sind meine Daten und die meiner Kunden sicher?" 
-                answer="Datenschutz hat bei uns höchste Priorität. Alle Analysen und Nutzerdaten werden auf verschlüsselten Servern in Frankfurt am Main (Deutschland) gespeichert. Wir sind zu 100% DSGVO-konform und geben keine Daten an Dritte weiter."
-              />
-              <AccordionItem 
-                question="Kann ich zwischen den Plänen wechseln?" 
-                answer="Ja, du kannst jederzeit zwischen den Plänen (Basic, Premium, Agency) wechseln. Bei einem Upgrade wird der Differenzbetrag für den laufenden Zeitraum anteilig berechnet, sodass du sofort von den neuen Funktionen profitierst."
-              />
-              <AccordionItem 
-                question="Gibt es einen Rabatt für jährliche Zahlung?" 
-                answer="Ja! Wenn du dich für die jährliche Abrechnung entscheidest, sparst du ca. 20% im Vergleich zur monatlichen Zahlung. Dies ist die beste Option für langfristig orientierte SEO-Strategen und Agenturen."
-              />
-           </div>
+        <div className="fixed bottom-6 left-1/2 z-[70] hidden -translate-x-1/2 gap-3 border border-[#E5E5E5] bg-white p-3 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 md:flex">
+          {PAID_PLANS.map((plan) => (
+            <button
+              key={plan}
+              onClick={() => handleCheckout(plan)}
+              disabled={loadingPlan === plan}
+              className="flex items-center gap-3 bg-[#1A1A1A] px-5 py-3 text-white transition-colors hover:bg-[#D4AF37] disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950"
+            >
+              <span className="text-left text-[10px] font-black uppercase tracking-widest">
+                {PLAN_CONFIG[plan].name}<br />
+                <span className="text-[12px]">{priceLabel(plan, billingInterval)} EUR / Mo</span>
+              </span>
+              {loadingPlan === plan ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+            </button>
+          ))}
         </div>
       </div>
-      {/* Sticky Subscription Bar (Scroll Appearance) */}
-      <StickyAboBar 
-        billingInterval={billingInterval} 
-        onCheckout={handleCheckout} 
-        loadingPlan={loadingPlan}
-      />
     </section>
   );
 }
-
-
-function StickyAboBar({ billingInterval, onCheckout, loadingPlan }: { billingInterval: string, onCheckout: (plan: string) => void, loadingPlan: string | null }) {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 800) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  return (
-    <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[70] transition-all duration-500 max-w-[95%] md:max-w-none ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
-      <div className="bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 shadow-2xl rounded-sm p-4 flex flex-col md:flex-row items-center gap-6">
-        <div className="hidden lg:flex flex-col">
-          <span className="text-[10px] font-black uppercase text-[#D4AF37] tracking-[2px]">Einfach abschließen</span>
-          <span className="text-[12px] font-black uppercase text-[#1A1A1A] dark:text-white">Wähle dein WAP Abo</span>
-        </div>
-        
-        <div className="flex items-center gap-3 md:gap-4 overflow-x-auto md:overflow-visible w-full md:w-auto">
-          {/* Pro Sticky */}
-          <button 
-            onClick={() => onCheckout('pro')}
-            className="flex items-center gap-3 px-6 py-3 bg-[#D4AF37] text-white rounded-sm hover:-translate-y-0.5 transition-all shadow-lg whitespace-nowrap min-w-fit"
-          >
-            <div className="flex flex-col items-start leading-none text-left">
-              <span className="text-[9px] font-black uppercase opacity-80">Premium</span>
-              <span className="text-[13px] font-black">{billingInterval === 'yearly' ? '39' : '49'}€ / Mo</span>
-            </div>
-            {loadingPlan === 'pro' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-4 h-4 ml-2" />}
-          </button>
-
-          {/* Agency Sticky */}
-          <button 
-            onClick={() => onCheckout('agency')}
-            className="flex items-center gap-3 px-6 py-3 bg-[#1A1A1A] dark:bg-white text-white dark:text-black rounded-sm hover:-translate-y-0.5 transition-all shadow-lg whitespace-nowrap min-w-fit"
-          >
-             <div className="flex flex-col items-start leading-none text-left">
-              <span className="text-[9px] font-black uppercase opacity-70">Agency</span>
-              <span className="text-[13px] font-black">{billingInterval === 'yearly' ? '119' : '149'}€ / Mo</span>
-            </div>
-            {loadingPlan === 'agency' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-4 h-4 ml-2 text-[#D4AF37]" />}
-          </button>
-        </div>
-
-        <div className="hidden md:flex flex-col items-end pr-4 border-l border-[#EEE] dark:border-zinc-800 pl-4">
-           <span className="text-[9px] font-black text-[#27AE60] uppercase tracking-widest whitespace-nowrap flex items-center gap-1.5">
-             <ShieldCheck className="w-3 h-3" /> 7 Tage Trial
-           </span>
-           <span className="text-[10px] text-[#888] font-bold uppercase tracking-tighter italic">Jederzeit kündbar</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AccordionItem({ question, answer }: { question: string, answer: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <div className="border border-[#EEE] dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden transition-all duration-300">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-6 text-left flex items-center justify-between hover:bg-[#F9F9F9] dark:hover:bg-zinc-950/50 transition-colors"
-      >
-        <span className="text-[14px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-white">{question}</span>
-        {isOpen ? <ChevronUp className="w-5 h-5 text-[#D4AF37]" /> : <ChevronDown className="w-5 h-5 text-[#888]" />}
-      </button>
-      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[500px] border-t border-[#EEE] dark:border-zinc-800' : 'max-h-0'}`}>
-        <div className="p-6 text-[13px] text-[#555] dark:text-zinc-400 font-medium leading-relaxed bg-[#F9F9F9] dark:bg-zinc-950/20">
-          {answer}
-        </div>
-      </div>
-    </div>
-  );
-}
-

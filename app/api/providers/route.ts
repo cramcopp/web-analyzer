@@ -25,7 +25,7 @@ export async function GET(req: Request) {
       availability,
       providers,
       facts,
-      note: 'Provider API gibt nur konfigurierte Provider und gespeicherte D1-Facts zurueck. Es werden keine Werte simuliert.',
+      note: 'Provider API gibt nur konfigurierte Provider und gespeicherte D1-Facts zurück. Es werden keine Werte simuliert.',
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Provider Status konnte nicht geladen werden' }, { status: 500 });

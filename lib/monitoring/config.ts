@@ -31,7 +31,7 @@ export function alertLabel(type: AlertType) {
     case 'robots_blocked_important_url':
       return 'robots.txt blockiert wichtige URL';
     case 'canonical_changed':
-      return 'Canonical geaendert';
+      return 'Canonical geändert';
     case 'sitemap_missing':
       return 'Sitemap verschwunden';
     case 'security_header_missing':

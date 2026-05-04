@@ -34,7 +34,7 @@ export default function ProjectRankingsView({ report }: { report: AnalysisResult
         <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-[#888] mb-4">
           <TrendingUp className="w-8 h-8" />
         </div>
-        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfuegbar</h3>
+        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfügbar</h3>
         <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest italic">Starten Sie einen Scan, um das Projekt zu laden.</p>
       </div>
     );
@@ -67,7 +67,7 @@ export default function ProjectRankingsView({ report }: { report: AnalysisResult
         <div className="h-[220px] w-full border border-dashed border-[#EEE] dark:border-zinc-800 bg-[#F5F5F3] dark:bg-zinc-950 flex flex-col items-center justify-center text-center gap-3">
           <TrendingUp className="w-8 h-8 text-zinc-300 dark:text-zinc-700" />
           <p className="text-[11px] text-[#888] font-black uppercase tracking-widest max-w-md">
-            Kein Chart ohne echte Rankinghistorie. Verbinde spaeter DataForSEO, SerpApi oder GSC-Daten.
+            Kein Chart ohne echte Rankinghistorie. Verbinde später DataForSEO, SerpApi oder GSC-Daten.
           </p>
         </div>
       </div>
@@ -129,7 +129,7 @@ export default function ProjectRankingsView({ report }: { report: AnalysisResult
                     <tr key={`${fact.keyword}-${fact.url}-${fact.checkedAt}`} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
                       <td className="px-6 py-4 text-[13px] font-bold text-[#1A1A1A] dark:text-zinc-100">{fact.keyword}</td>
                       <td className="px-6 py-4 text-[13px] font-black text-[#D4AF37]">{fact.rank}</td>
-                      <td className="px-6 py-4 text-[11px] font-bold text-[#888] break-all">{fact.url || 'Nicht verfuegbar'}</td>
+                      <td className="px-6 py-4 text-[11px] font-bold text-[#888] break-all">{fact.url || 'Nicht verfügbar'}</td>
                       <td className="px-6 py-4"><DataSourceBadge type="provider" provider={fact.provider} /></td>
                     </tr>
                   ))}

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
 import { getRuntimeEnv } from '@/lib/cloudflare-env';
-import { hasCloudflareD1, queryCloudflareAgencyData, upsertCloudflareAgencyItem } from '@/lib/cloudflare-storage';
+import { getCloudflareUserProfile, hasCloudflareD1, queryCloudflareAgencyData, upsertCloudflareAgencyItem } from '@/lib/cloudflare-storage';
+import { hasPlanRank } from '@/lib/plans';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +16,12 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
+  }
+
+  const userProfile = await getCloudflareUserProfile(env, user.uid);
+  if (!hasPlanRank(userProfile?.plan, 'agency')) {
+    return NextResponse.json({ error: 'Agency Reporting ist ab dem Agency-Plan verfügbar.' }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
@@ -36,7 +42,12 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
 
   if (!hasCloudflareD1(env)) {
-    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfuegbar' }, { status: 503 });
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });
+  }
+
+  const userProfile = await getCloudflareUserProfile(env, user.uid);
+  if (!hasPlanRank(userProfile?.plan, 'agency')) {
+    return NextResponse.json({ error: 'Agency Reporting ist ab dem Agency-Plan verfügbar.' }, { status: 403 });
   }
 
   try {
@@ -122,7 +133,7 @@ export async function POST(req: Request) {
         : NextResponse.json({ error: 'Geplanter Report konnte nicht in D1 gespeichert werden' }, { status: 503 });
     }
 
-    return NextResponse.json({ error: 'Ungueltige Aktion' }, { status: 400 });
+    return NextResponse.json({ error: 'Ungültige Aktion' }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Agency Reporting konnte nicht gespeichert werden' }, { status: 500 });
   }

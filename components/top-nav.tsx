@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowRight,
   Bell,
@@ -115,12 +116,18 @@ export default function TopNav({
           >
             Projekte
           </button>
-          <button
-            onClick={() => onNavigate('pricing')}
+          <Link
+            href="/tools"
+            className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Tools
+          </Link>
+          <Link
+            href="/preise"
             className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
           >
             Preise
-          </button>
+          </Link>
           <button className="flex items-center gap-1 rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900">
             Mehr
             <ChevronDown className="h-3.5 w-3.5" />
@@ -157,7 +164,7 @@ export default function TopNav({
                       }}
                       className="w-full rounded-sm px-3 py-2 text-left text-[12px] font-bold text-[#172033] hover:bg-[#f4f6fb] dark:text-zinc-100 dark:hover:bg-zinc-900"
                     >
-                      Profil oeffnen
+                      Profil öffnen
                     </button>
                     <button
                       onClick={() => {

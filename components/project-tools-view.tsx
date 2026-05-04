@@ -128,7 +128,7 @@ Sitemap: ${project.url}/sitemap.xml`;
                     {project.url} <span className="text-[10px]">▼</span>
                   </div>
                   <div className="text-[13px] text-[#4d5156] dark:text-zinc-400 leading-snug">
-                    Platzhalter fuer eine manuell gepflegte Meta Description. Keine Ranking-, Traffic- oder Backlink-Fakten ohne Providerdaten.
+                    Platzhalter für eine manuell gepflegte Meta Description. Keine Ranking-, Traffic- oder Backlink-Fakten ohne Providerdaten.
                   </div>
                </div>
 

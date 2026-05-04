@@ -14,7 +14,7 @@ export default function ProjectCompetitionView({ report }: { report: AnalysisRes
         <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-[#888] mb-4">
           <Trophy className="w-8 h-8" />
         </div>
-        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfuegbar</h3>
+        <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Daten verfügbar</h3>
         <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest italic">Starten Sie einen Scan, um Wettbewerber-Analysen zu erhalten.</p>
       </div>
     );
@@ -129,7 +129,7 @@ export default function ProjectCompetitionView({ report }: { report: AnalysisRes
               ))}
             </div>
             <button className="mt-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white opacity-60 cursor-not-allowed">
-              Provider-Vergleich spaeter <ArrowRight className="w-3.5 h-3.5" />
+              Provider-Vergleich später <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

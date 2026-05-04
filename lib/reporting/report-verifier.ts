@@ -36,7 +36,7 @@ export interface VerificationNotice {
   reason: string;
 }
 
-const MISSING = 'Nicht verfuegbar';
+const MISSING = 'Nicht verfügbar';
 const PROVIDER_MISSING = 'Provider nicht verbunden';
 
 function asArray<T = any>(value: unknown): T[] {
@@ -57,7 +57,7 @@ function issueVocabulary(issues: AuditIssue[]) {
 
 function hasGroundingReference(value: string, grounding: GroundingData) {
   const normalized = value.toLowerCase();
-  if (normalized.includes('nicht verfuegbar') || normalized.includes('provider nicht verbunden')) return true;
+  if (normalized.includes('nicht verfügbar') || normalized.includes('provider nicht verbunden')) return true;
   if (grounding.issues.length === 0 && grounding.evidence.length === 0 && !grounding.crawlSummary) return false;
 
   const vocab = issueVocabulary(grounding.issues);
@@ -75,7 +75,7 @@ function hasGroundingReference(value: string, grounding: GroundingData) {
 
 function hasExplicitGroundingReference(value: string, grounding: GroundingData) {
   const normalized = value.toLowerCase();
-  if (normalized.includes('nicht verfuegbar') || normalized.includes('provider nicht verbunden')) return true;
+  if (normalized.includes('nicht verfügbar') || normalized.includes('provider nicht verbunden')) return true;
 
   for (const issue of grounding.issues) {
     const tokens = [
@@ -244,7 +244,7 @@ function scrubPerformanceClaims(report: any, grounding: GroundingData, notices: 
   notices.push({
     action: 'performance_metrics_cleared',
     path: 'performance.detailedPerformance',
-    reason: 'PSI/CrUX fehlen; konkrete Performance-Feldwerte duerfen nicht behauptet werden.',
+    reason: 'PSI/CrUX fehlen; konkrete Performance-Feldwerte dürfen nicht behauptet werden.',
   });
 }
 

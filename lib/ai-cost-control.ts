@@ -262,7 +262,7 @@ function sectionFromScanner(section: any, missingLabel: string) {
 }
 
 export function buildDeterministicReport(scrapeData: any, url: string, reason: string) {
-  const missing = `Nicht verfuegbar: ${reason}`;
+  const missing = `Nicht verfügbar: ${reason}`;
   const providerMissing = 'Provider nicht verbunden';
   const seo = sectionFromScanner(scrapeData.seo, missing);
   const security = sectionFromScanner(scrapeData.security, missing);
@@ -278,11 +278,11 @@ export function buildDeterministicReport(scrapeData: any, url: string, reason: s
       targetAudienceProfile: missing,
       uniqueSellingPropositions: [],
     },
-    overallAssessment: `Deterministischer Scanner-Bericht fuer ${url}. ${reason}`,
+    overallAssessment: `Deterministischer Scanner-Bericht für ${url}. ${reason}`,
     industryNews: [providerMissing],
     implementationPlan: {
       phase1: { title: 'Kritische Issues beheben', tasks: asArray(scrapeData.issues).slice(0, 5).map((issue: any) => `${issue.id}: ${issue.fixHint}`) },
-      phase2: { title: 'Monitoring stabilisieren', tasks: ['Neue und geloeste Issues aus Scan-History beobachten.'] },
+      phase2: { title: 'Monitoring stabilisieren', tasks: ['Neue und gelöste Issues aus Scan-History beobachten.'] },
       phase3: { title: 'Provider anbinden', tasks: ['Keywords, Rankings, Backlinks und Traffic erst nach Provider-Anbindung ausweisen.'] },
       developerPrompt: 'Nutze nur Issues, Evidence und echte Provider-Facts aus diesem Report.',
     },

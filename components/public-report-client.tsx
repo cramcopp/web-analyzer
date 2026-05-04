@@ -92,7 +92,7 @@ export default function PublicReportClient({ token }: { token: string }) {
         <section className="w-full max-w-md bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 p-8">
           <div className="flex items-center gap-3 mb-5">
             {passwordRequired ? <Lock className="w-5 h-5 text-[#D4AF37]" /> : <AlertTriangle className="w-5 h-5 text-red-500" />}
-            <h1 className="text-[18px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">{passwordRequired ? 'Passwort erforderlich' : 'Report nicht verfuegbar'}</h1>
+            <h1 className="text-[18px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">{passwordRequired ? 'Passwort erforderlich' : 'Report nicht verfügbar'}</h1>
           </div>
           <p className="text-[12px] text-[#888] font-bold uppercase tracking-widest mb-5">{error}</p>
           {passwordRequired && (
@@ -109,7 +109,7 @@ export default function PublicReportClient({ token }: { token: string }) {
                 disabled={!password}
                 className="w-full px-5 py-3 bg-[#1A1A1A] dark:bg-white text-white dark:text-zinc-900 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
               >
-                Report oeffnen
+                Report öffnen
               </button>
             </div>
           )}
