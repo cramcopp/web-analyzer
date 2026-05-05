@@ -33,7 +33,8 @@ function renderAuthErrorPage(message: string, appUrl: string) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-  return `
+  /* eslint-disable no-secrets/no-secrets */
+  const html = `
     <html lang="de">
       <body style="margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;">
         <script>
@@ -50,6 +51,8 @@ function renderAuthErrorPage(message: string, appUrl: string) {
       </body>
     </html>
   `;
+  /* eslint-enable no-secrets/no-secrets */
+  return html;
 }
 
 export async function GET(req: Request) {

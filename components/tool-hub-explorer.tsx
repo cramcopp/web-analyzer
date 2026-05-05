@@ -95,8 +95,8 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
   const auditCount = tools.filter((tool) => tool.status === 'audit' || tool.status === 'planned').length;
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {[
           ['Unterseiten', tools.length, 'Eigene URLs für einzelne Suchintents'],
           ['Live Checks', liveCount, 'Ohne Full Audit sofort testbar'],
@@ -104,9 +104,9 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
         ].map(([label, value, text]) => (
           <div
             key={String(label)}
-            className="rounded-lg border border-[#dfe3ea] bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+            className="rounded-md border border-[#dfe3ea] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
           >
-            <p className="text-[34px] font-black text-[#172033] dark:text-zinc-100">{String(value)}</p>
+            <p className="text-[28px] font-black text-[#172033] dark:text-zinc-100">{String(value)}</p>
             <p className="mt-2 text-[12px] font-black uppercase tracking-[0.12em] text-[#526071] dark:text-zinc-400">
               {String(label)}
             </p>
@@ -203,7 +203,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
           </p>
         </div>
         <Link
-          href="/"
+          href="/scanner"
           className="flex w-fit items-center gap-2 rounded-md bg-[#172033] px-5 py-3 text-[12px] font-black text-white transition-colors hover:bg-[#0b7de3]"
         >
           Full Audit starten
@@ -220,7 +220,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
               <Link
                 key={tool.slug}
                 href={`/tools/${tool.slug}`}
-                className="group flex min-h-[246px] flex-col rounded-lg border border-[#dfe3ea] bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+              className="group flex min-h-[218px] flex-col rounded-lg border border-[#dfe3ea] bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
               >
                 <div className="mb-5 flex items-start justify-between gap-4">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-950">

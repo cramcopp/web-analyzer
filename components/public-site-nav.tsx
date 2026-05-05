@@ -15,6 +15,7 @@ export default function PublicSiteNav({ activeView = 'tools' }: PublicSiteNavPro
   const navigate = (view: string) => {
     const routes: Record<string, string> = {
       home: '/',
+      dashboard: '/?view=dashboard',
       analyzer: '/scanner',
       projects: '/projekte',
       pricing: '/preise',
@@ -27,7 +28,7 @@ export default function PublicSiteNav({ activeView = 'tools' }: PublicSiteNavPro
   };
 
   const startScan = (url: string) => {
-    router.push(`/scanner?url=${encodeURIComponent(url)}`);
+    router.push(`/scanner?url=${encodeURIComponent(url)}&start=1`);
   };
 
   const logout = async () => {

@@ -142,7 +142,7 @@ export default async function ToolDetailPage({ params }: ToolPageProps) {
               Dieser Check ist ein eigener Einstieg. Er kann Leads erzeugen, intern verlinken und ein konkretes Problem prüfen, ohne direkt Scan- oder Crawl-Seitenbudget zu verbrauchen.
             </p>
             <Link
-              href="/"
+              href="/scanner"
               className="mt-6 flex w-fit items-center gap-2 rounded-md bg-[#172033] px-5 py-3 text-[12px] font-black text-white transition-colors hover:bg-[#0b7de3]"
             >
               Zum Full Audit

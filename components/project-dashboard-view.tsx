@@ -1,10 +1,10 @@
 'use client';
 
-import { memo, useState, useCallback, useMemo } from 'react';
-import { 
+import { memo, useEffect, useState, useCallback, useMemo } from 'react';
+import {
   Zap, RefreshCw, LayoutDashboard, Search,
   ShieldCheck, TrendingUp, Network, Link, Trophy, 
-  History, Settings, Sparkles, ChevronRight, CheckCircle2,
+  History, Settings, Sparkles, ChevronDown, ChevronRight, CheckCircle2,
   Activity, FileText, BrainCircuit, FileSearch, ListChecks, Wrench
 } from 'lucide-react';
 import LoadingDisplay from './loading-display';
@@ -24,17 +24,13 @@ import ProjectAgencyReportsView from './project-agency-reports-view';
 import ProjectAiVisibilityView from './project-ai-visibility-view';
 import ProjectIssuesView from './project-issues-view';
 import ProjectEvidenceView from './project-evidence-view';
+import ProjectFavicon, { getProjectDomain } from './project-favicon';
 import { AnalysisResult, PrioritizedTask } from '@/lib/scanner/types';
-
-interface Project {
-  id: string;
-  name: string;
-  url: string;
-  lastScore?: number;
-}
+import type { Project } from '@/types/common';
 
 interface ProjectDashboardProps {
   project: Project;
+  onSelectProject?: (project: Project) => void;
   onStartScan: (url: string) => void;
   isLoading: boolean;
   report: any;
@@ -73,6 +69,7 @@ const NAV_ITEMS = [
 
 function ProjectDashboardView({
   project,
+  onSelectProject,
   onStartScan,
   isLoading,
   report,
@@ -88,6 +85,33 @@ function ProjectDashboardView({
 }: ProjectDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [viewingHistoricalReport, setViewingHistoricalReport] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
+
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const response = await fetch('/api/projects');
+        if (!response.ok) return;
+        const data = await response.json();
+        setProjects((data || []).sort((a: Project, b: Project) => String(a.name).localeCompare(String(b.name), 'de')));
+      } catch {
+        setProjects([]);
+      }
+    }
+
+    void loadProjects();
+  }, []);
+
+  const switcherProjects = useMemo(() => {
+    const needle = projectQuery.trim().toLowerCase();
+    if (!needle) return projects;
+    return projects.filter((item) => {
+      const domain = getProjectDomain(item.url).toLowerCase();
+      return item.name.toLowerCase().includes(needle) || item.url.toLowerCase().includes(needle) || domain.includes(needle);
+    });
+  }, [projectQuery, projects]);
 
   const handleSelectHistoricalReport = useCallback((reportData: any) => {
     setViewingHistoricalReport(reportData);
@@ -129,31 +153,23 @@ function ProjectDashboardView({
     aiVisibilityFacts: activeRaw?.aiVisibilityFacts || activeReport?.aiVisibilityFacts || [],
   }), [activeRaw, activeReport]);
 
-  const faviconDomain = useMemo(() => {
-    try {
-      return new URL(project.url.startsWith('http') ? project.url : `https://${project.url}`).hostname;
-    } catch {
-      return project.url;
-    }
-  }, [project.url]);
-
   const renderContent = () => {
     if (isLoading) return <LoadingDisplay plan={plan} />;
 
     switch (activeTab) {
       case 'overview':
         return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
              {/* Main Hero Stats */}
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                <div className="lg:col-span-2 p-8 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 relative overflow-hidden group">
+             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_260px_260px]">
+                <div className="p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
                     <ShieldCheck className="w-48 h-48 text-[#1A1A1A] dark:text-white" />
                   </div>
                   <div className="relative z-10">
                     <span className="text-[10px] font-black uppercase tracking-[3px] text-[#D4AF37] mb-2 block">Global Health Score</span>
                     <div className="flex items-end gap-4">
-                      <h3 className="text-[64px] font-black tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">
+                      <h3 className="text-[54px] font-black tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">
                         {activeReport?.seo?.score || project.lastScore || 'N/A'}
                         <span className="text-[20px] opacity-20 ml-2">%</span>
                       </h3>
@@ -183,7 +199,7 @@ function ProjectDashboardView({
                   </div>
                 </div>
 
-                <div className="p-8 bg-[#1A1A1A] dark:bg-zinc-950 border border-white/5 flex flex-col justify-between group">
+                <div className="p-5 bg-[#1A1A1A] dark:bg-zinc-950 border border-white/5 flex flex-col justify-between group">
                    <div>
                       <span className="text-[9px] font-black uppercase tracking-[3px] text-[#D4AF37] mb-4 block">Indexierung</span>
                     <div className="text-[18px] sm:text-[24px] font-black text-white uppercase tracking-tighter mb-1 truncate">
@@ -199,7 +215,7 @@ function ProjectDashboardView({
                    </div>
                 </div>
 
-                <div className="p-8 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex flex-col justify-between">
+                <div className="p-5 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 flex flex-col justify-between">
                    <div>
                       <span className="text-[9px] font-black uppercase tracking-[3px] text-[#888] mb-4 block">Nischen-Fokus</span>
                       <div className="text-[16px] sm:text-[20px] font-black text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-tighter leading-tight mb-3">
@@ -224,13 +240,13 @@ function ProjectDashboardView({
                 </div>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-4">
                    <div className="flex items-center justify-between px-2">
                       <h4 className="text-[12px] font-black uppercase tracking-widest text-[#1A1A1A] dark:text-zinc-100">Performance Trend</h4>
                       <span className="text-[10px] font-bold text-[#888] uppercase tracking-widest">Letzte 30 Tage</span>
                    </div>
-                   <div className="p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 h-auto min-h-[300px] flex flex-col">
+                   <div className="p-5 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 h-auto min-h-[260px] flex flex-col">
                       <ScoreTrend url={project.url} />
                    </div>
                 </div>
@@ -275,7 +291,7 @@ function ProjectDashboardView({
              </div>
 
              {!activeReport && !isLoading && (
-               <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-16 flex flex-col items-center justify-center text-center gap-6 relative overflow-hidden">
+               <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-8 flex flex-col items-center justify-center text-center gap-5 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-[#D4AF37]" />
                   <RefreshCw className="w-12 h-12 text-[#D4AF37] animate-spin-slow opacity-20 absolute -right-4 -bottom-4" />
                   
@@ -285,10 +301,10 @@ function ProjectDashboardView({
                   </p>
                   <button 
                     onClick={() => onStartScan(project.url)}
-                    className="px-12 py-6 bg-[#D4AF37] text-white text-[14px] font-black uppercase tracking-widest hover:bg-[#1A1A1A] dark:hover:bg-zinc-100 transition-all flex items-center gap-4 shadow-2xl shadow-[#D4AF37]/30 group"
+                    className="px-8 py-4 bg-[#D4AF37] text-white text-[12px] font-black uppercase tracking-widest hover:bg-[#1A1A1A] dark:hover:bg-zinc-100 transition-all flex items-center gap-3 shadow-xl shadow-[#D4AF37]/20 group"
                   >
                     <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                    KI-Audit jetzt starten
+                    Full Audit jetzt starten
                   </button>
                </div>
              )}
@@ -366,11 +382,7 @@ function ProjectDashboardView({
       <div className="pb-8 border-b border-[#E5E5E5] dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 animate-in fade-in duration-700">
         <div className="flex-1">
           <div className="flex items-center gap-4 mb-3">
-              <img 
-                 src={`https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=128`} 
-                 alt={`${project.name} Favicon`}
-                 className="w-12 h-12 md:w-14 md:h-14 object-contain shrink-0 drop-shadow-md"
-               />
+              <ProjectFavicon url={project.url} name={project.name} className="h-12 w-12 md:h-14 md:w-14" iconClassName="h-6 w-6" />
              <div>
                 <h2 className="text-[32px] md:text-[44px] font-black uppercase tracking-tighter leading-none text-[#1A1A1A] dark:text-zinc-100">
                   {project.name}
@@ -384,6 +396,53 @@ function ProjectDashboardView({
                 </div>
              </div>
           </div>
+          {projects.length > 1 && (
+            <div className="relative max-w-[420px]">
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen((value) => !value)}
+                className="flex w-full items-center justify-between gap-3 rounded-md border border-[#cfd7e5] bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-[#0b7de3] dark:border-zinc-800 dark:bg-zinc-900"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-black text-[#172033] dark:text-zinc-100">Projekt wechseln</span>
+                  <span className="block truncate text-[11px] font-semibold text-[#7b8495]">{getProjectDomain(project.url) || project.url}</span>
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-[#64748b] transition-transform ${switcherOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {switcherOpen && (
+                <div className="absolute left-0 top-[calc(100%+8px)] z-40 w-full overflow-hidden rounded-md border border-[#cfd7e5] bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="border-b border-[#e3e8f0] p-3 dark:border-zinc-800">
+                    <input
+                      value={projectQuery}
+                      onChange={(event) => setProjectQuery(event.target.value)}
+                      placeholder="Projekt oder URL suchen"
+                      className="h-10 w-full rounded-md border border-[#cfd7e5] bg-[#f8fafc] px-3 text-[12px] font-bold outline-none focus:border-[#0b7de3] dark:border-zinc-800 dark:bg-zinc-900"
+                    />
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {switcherProjects.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setSwitcherOpen(false);
+                          onSelectProject?.(item);
+                        }}
+                        className="flex w-full items-center gap-3 border-b border-[#eef2f7] px-3 py-3 text-left transition-colors hover:bg-[#f8fafc] dark:border-zinc-900 dark:hover:bg-zinc-900"
+                      >
+                        <ProjectFavicon url={item.url} name={item.name} className="h-8 w-8" iconClassName="h-4 w-4" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-black text-[#172033] dark:text-zinc-100">{item.name}</span>
+                          <span className="block truncate text-[11px] font-medium text-[#0b7de3]">{item.url}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-4">
@@ -392,7 +451,7 @@ function ProjectDashboardView({
              className="px-6 py-3 bg-[#1A1A1A] dark:bg-zinc-100 text-white dark:text-zinc-900 text-[9px] font-black uppercase tracking-widest hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 shadow-lg"
            >
              <RefreshCw className="w-3.5 h-3.5" />
-             Schnell-Audit
+             Full Audit
            </button>
         </div>
       </div>

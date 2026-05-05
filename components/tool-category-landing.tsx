@@ -178,7 +178,7 @@ export default function ToolCategoryLandingSections({
             </p>
           </div>
           <Link
-            href="/"
+            href="/scanner"
             className="flex w-fit items-center gap-2 rounded-md bg-[#172033] px-5 py-3 text-[12px] font-black text-white transition-colors hover:bg-[#0b7de3]"
           >
             Full Audit starten

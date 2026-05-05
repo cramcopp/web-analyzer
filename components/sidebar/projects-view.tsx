@@ -5,6 +5,7 @@ import {
   Folder, Plus, X, AlertTriangle, Edit3, Trash2, Save 
 } from 'lucide-react';
 import { Project } from '../../types/common';
+import ProjectFavicon, { getProjectDomain } from '../project-favicon';
 
 interface SidebarProjectsProps {
   projects: Project[];
@@ -25,12 +26,10 @@ const isValidUrl = (urlString: string) => {
   }
 };
 
-const getDomain = (urlString: string) => {
-  try {
-    return new URL(urlString.startsWith('http') ? urlString : `https://${urlString}`).hostname;
-  } catch {
-    return urlString;
-  }
+const normalizeProjectUrl = (urlString: string) => {
+  const value = urlString.trim();
+  if (!value) return '';
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 };
 
 export function SidebarProjects({
@@ -54,7 +53,8 @@ export function SidebarProjects({
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
 
-    if (newProjectUrl.trim() && !isValidUrl(newProjectUrl.trim())) {
+    const projectUrl = normalizeProjectUrl(newProjectUrl);
+    if (projectUrl && !isValidUrl(projectUrl)) {
       setValidationError("Ungültige URL (http:// oder https://)");
       return;
     }
@@ -65,7 +65,7 @@ export function SidebarProjects({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newProjectName.trim(),
-          url: newProjectUrl.trim(),
+          url: projectUrl,
           teamId: teamId
         })
       });
@@ -93,7 +93,8 @@ export function SidebarProjects({
       setValidationError("Name darf nicht leer sein");
       return;
     }
-    if (editUrl.trim() && !isValidUrl(editUrl.trim())) {
+    const projectUrl = normalizeProjectUrl(editUrl);
+    if (projectUrl && !isValidUrl(projectUrl)) {
       setValidationError("Ungültige URL (http:// oder https://)");
       return;
     }
@@ -104,7 +105,7 @@ export function SidebarProjects({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName.trim(),
-          url: editUrl.trim(),
+          url: projectUrl,
         })
       });
       
@@ -245,20 +246,10 @@ export function SidebarProjects({
                 onClick={() => onItemClick(() => onSelectProject?.(proj))}
                 className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-white dark:hover:bg-zinc-900 border border-transparent hover:border-[#E5E5E5] dark:border-zinc-800 transition-all text-left group cursor-pointer"
               >
-                <span className="w-6 h-6 rounded bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 flex items-center justify-center shrink-0 overflow-hidden">
-                  {proj.url ? (
-                    <img 
-                      src={`https://www.google.com/s2/favicons?domain=${getDomain(proj.url)}&sz=32`} 
-                      alt=""
-                      className="w-4 h-4 object-contain"
-                    />
-                  ) : (
-                    <Folder className="w-3 h-3 text-[#888]" />
-                  )}
-                </span>
+                <ProjectFavicon url={proj.url} name={proj.name} className="h-6 w-6 rounded" iconClassName="h-3 w-3" />
                 <div className="flex flex-col flex-1 min-w-0">
                   <span className="text-[11px] font-bold text-[#1A1A1A] dark:text-zinc-100 uppercase tracking-wide truncate">{proj.name}</span>
-                  {proj.url && <span className="text-[9px] text-[#888] truncate">{proj.url.replace(/^https?:\/\//, "")}</span>}
+                  {proj.url && <span className="text-[9px] text-[#888] truncate">{getProjectDomain(proj.url)}</span>}
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={(e) => { e.stopPropagation(); startEditing(proj); }} className="p-1 hover:bg-[#D4AF37]/10 rounded transition-colors text-[#888] hover:text-[#D4AF37]"><Edit3 className="w-3 h-3" /></button>

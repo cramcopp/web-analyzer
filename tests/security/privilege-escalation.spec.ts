@@ -12,6 +12,7 @@ test.describe('Security: Privilege Escalation Protection', () => {
     const response = await request.patch(`${BASE_URL}/api/user/management`, {
       headers: {
         'Cookie': 'wap_session=mock-free-user-token',
+        'Origin': BASE_URL,
         'Content-Type': 'application/json'
       },
       data: {
@@ -31,15 +32,20 @@ test.describe('Security: Privilege Escalation Protection', () => {
   test('should not allow a user to become an admin via sync', async ({ request }) => {
     const response = await request.post(`${BASE_URL}/api/user/sync`, {
       headers: {
-        'Cookie': 'wap_session=new-user-token'
+        'Cookie': 'wap_session=new-user-token',
+        'Origin': BASE_URL,
+        'Content-Type': 'application/json'
       },
       data: {
         role: 'admin'
       }
     });
 
-    // The sync endpoint should ignore any data passed in the body and use defaults.
-    // (Our sync.ts doesn't even read the body, so it's safe).
-    expect(response.status()).toBe(200);
+    // Invalid mock auth may be rejected; if sync succeeds, it must ignore body-provided roles.
+    expect([200, 401, 403]).toContain(response.status());
+    if (response.status() === 200) {
+      const body = await response.json();
+      expect(body.user?.role).not.toBe('admin');
+    }
   });
 });

@@ -5,6 +5,33 @@ import { deleteCloudflareProject, getCloudflareProject, hasCloudflareD1, patchCl
 
 export const runtime = 'nodejs';
 
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const env = getRuntimeEnv();
+  const { id } = await params;
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (!hasCloudflareD1(env)) {
+    return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfugbar' }, { status: 503 });
+  }
+
+  try {
+    const project = await getCloudflareProject(env, id, user.uid);
+    if (project && 'forbidden' in project) {
+      return NextResponse.json({ error: 'Nicht autorisiert' }, { status: 403 });
+    }
+
+    if (!project) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(project);
+  } catch (error) {
+    console.error('[GET /api/projects/:id] Fetch error:', error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Projekt konnte nicht geladen werden' }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const env = getRuntimeEnv();
   const { id } = await params;

@@ -34,7 +34,6 @@ import {
 } from '@/lib/plans';
 
 const PLAN_KEYS: PlanType[] = ['free', 'pro', 'agency', 'business'];
-const PAID_PLANS: Exclude<PlanType, 'free'>[] = ['pro', 'agency', 'business'];
 
 const PLAN_META: Record<PlanType, { eyebrow: string; icon: typeof FileSearch; cta: string; tone: string }> = {
   free: {
@@ -170,15 +169,15 @@ export default function PricingSection() {
   };
 
   return (
-    <section className="min-h-screen bg-[#F5F5F3] px-4 py-20 text-[#1A1A1A] dark:bg-zinc-950 dark:text-zinc-100 md:px-10">
+    <section className="bg-[#F5F5F3] px-4 py-12 text-[#1A1A1A] dark:bg-zinc-950 dark:text-zinc-100 md:px-10 md:py-14">
       <div className="mx-auto max-w-[1440px]">
-        <div className="mb-14 flex flex-col gap-8 border-b border-[#E5E5E5] pb-10 dark:border-zinc-800 lg:flex-row lg:items-end lg:justify-between">
+        <div className="mb-10 flex flex-col gap-6 border-b border-[#E5E5E5] pb-8 dark:border-zinc-800 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-5 inline-flex items-center gap-2 border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[3px] text-[#D4AF37]">
               <Sparkles className="h-3.5 w-3.5" />
               Abo-Plan 2026
             </div>
-            <h2 className="max-w-[820px] text-[42px] font-black uppercase leading-[0.92] tracking-tight md:text-[64px]">
+            <h2 className="max-w-[760px] text-[38px] font-black uppercase leading-[0.95] tracking-tight md:text-[56px]">
               Crawlen gross, sichtbar passend zum Plan.
             </h2>
             <p className="mt-5 max-w-[720px] text-[13px] font-bold uppercase leading-relaxed tracking-[0.12em] text-[#7b8495]">
@@ -217,7 +216,7 @@ export default function PricingSection() {
             const isCurrent = userData?.plan === plan || (!userData?.plan && plan === 'free');
 
             return (
-              <article key={plan} className={`flex min-h-[520px] flex-col border bg-white p-6 shadow-sm dark:bg-zinc-900 ${meta.tone}`}>
+              <article key={plan} className={`flex min-h-[460px] flex-col border bg-white p-5 shadow-sm dark:bg-zinc-900 ${meta.tone}`}>
                 <div className="mb-7 flex items-start justify-between gap-4">
                   <div>
                     <span className="mb-2 block text-[10px] font-black uppercase tracking-[3px] text-[#888]">{meta.eyebrow}</span>
@@ -274,7 +273,7 @@ export default function PricingSection() {
           })}
         </div>
 
-        <section className="mt-16 border border-[#E5E5E5] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="mt-10 border border-[#E5E5E5] bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="border-b border-[#E5E5E5] p-6 dark:border-zinc-800">
             <h3 className="text-[18px] font-black uppercase tracking-widest">Limit-Vergleich</h3>
             <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-[#888]">
@@ -317,7 +316,7 @@ export default function PricingSection() {
           </div>
         </section>
 
-        <section className="mt-16">
+        <section className="mt-10">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h3 className="text-[24px] font-black uppercase tracking-widest">Add-ons</h3>
@@ -396,23 +395,6 @@ export default function PricingSection() {
             <span className="text-[10px] font-black uppercase tracking-widest text-[#888]">Business</span>
             <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#555] dark:text-zinc-400">Business ist ein eigener High-End-Plan mit Business-Checkout, Full API, 50 Seats und 5 Mio. Crawl-Seiten.</p>
           </div>
-        </div>
-
-        <div className="fixed bottom-6 left-1/2 z-[70] hidden -translate-x-1/2 gap-3 border border-[#E5E5E5] bg-white p-3 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 md:flex">
-          {PAID_PLANS.map((plan) => (
-            <button
-              key={plan}
-              onClick={() => handleCheckout(plan)}
-              disabled={loadingPlan === plan}
-              className="flex items-center gap-3 bg-[#1A1A1A] px-5 py-3 text-white transition-colors hover:bg-[#D4AF37] disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-950"
-            >
-              <span className="text-left text-[10px] font-black uppercase tracking-widest">
-                {PLAN_CONFIG[plan].name}<br />
-                <span className="text-[12px]">{priceLabel(plan, billingInterval)} EUR / Mo</span>
-              </span>
-              {loadingPlan === plan ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-            </button>
-          ))}
         </div>
       </div>
     </section>

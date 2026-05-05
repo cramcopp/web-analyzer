@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowRight, FolderKanban, Globe2 } from 'lucide-react';
+import { ArrowRight, FolderKanban } from 'lucide-react';
 import DataSourceBadge from './data-source-badge';
+import ProjectFavicon, { getProjectDomain } from './project-favicon';
 import type { Project } from '@/types/common';
 
 export default function ProjectsOverviewView({
@@ -68,27 +69,29 @@ export default function ProjectsOverviewView({
           <FolderKanban className="w-10 h-10 text-[#888]" />
           <h3 className="text-[18px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">Keine Projekte vorhanden</h3>
           <p className="text-[11px] text-[#888] font-bold uppercase tracking-widest max-w-md">
-            Lege ein Projekt in der Sidebar an oder starte zuerst eine Website-Analyse.
+            Lege ein Projekt auf der Projektseite an oder starte zuerst eine Website-Analyse.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {projects.map((project) => (
             <button
               key={project.id}
               onClick={() => onSelectProject(project)}
-              className="group p-6 bg-white dark:bg-zinc-900 border border-[#EEE] dark:border-zinc-800 hover:border-[#D4AF37]/60 text-left transition-all"
+              className="group border border-[#EEE] bg-white p-5 text-left transition-all hover:border-[#D4AF37]/60 dark:border-zinc-800 dark:bg-zinc-900"
             >
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
+                <div className="flex min-w-0 gap-3">
+                  <ProjectFavicon url={project.url} name={project.name} className="h-10 w-10" iconClassName="h-5 w-5" />
+                  <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-3 text-[#888]">
-                    <Globe2 className="w-4 h-4 text-[#D4AF37]" />
-                    <span className="text-[9px] font-black uppercase tracking-widest truncate">{project.url}</span>
+                    <span className="truncate text-[9px] font-black uppercase tracking-widest">{getProjectDomain(project.url) || 'Keine URL'}</span>
                   </div>
-                  <h3 className="text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100 truncate">{project.name}</h3>
-                  <p className="text-[10px] text-[#888] font-bold uppercase tracking-widest mt-2">
+                  <h3 className="truncate text-[20px] font-black uppercase tracking-tighter text-[#1A1A1A] dark:text-zinc-100">{project.name}</h3>
+                  <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-[#888]">
                     Letzter Scan: {project.lastScanAt ? new Date(project.lastScanAt).toLocaleDateString('de-DE') : 'Nicht verfügbar'}
                   </p>
+                  </div>
                 </div>
                 <ArrowRight className="w-5 h-5 text-[#888] group-hover:text-[#D4AF37] group-hover:translate-x-1 transition-all shrink-0" />
               </div>

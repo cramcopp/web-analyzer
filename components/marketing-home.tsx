@@ -23,6 +23,8 @@ interface MarketingHomeProps {
   onStartScan: (url: string) => void;
   onOpenAnalyzer: () => void;
   onOpenPricing: () => void;
+  onOpenDashboard: () => void;
+  onOpenProjects: () => void;
   onSignIn: () => void;
   user?: any | null;
 }
@@ -193,6 +195,8 @@ export default function MarketingHome({
   onStartScan,
   onOpenAnalyzer,
   onOpenPricing,
+  onOpenDashboard,
+  onOpenProjects,
   onSignIn,
   user,
 }: MarketingHomeProps) {
@@ -209,12 +213,12 @@ export default function MarketingHome({
     <div className="min-h-screen bg-[#f4f6fb] pt-14 text-[#172033] dark:bg-zinc-950 dark:text-zinc-100">
       <section className="relative overflow-hidden border-b border-[#dfe3ea] bg-[linear-gradient(115deg,#e9f7f5_0%,#f4f6fb_42%,#f7f0df_100%)] dark:border-zinc-800 dark:bg-[linear-gradient(115deg,#0f172a_0%,#09090b_55%,#1d1606_100%)]">
         <div className="absolute right-0 top-0 hidden h-full w-[38%] bg-[repeating-linear-gradient(0deg,rgba(11,125,227,0.28)_0px,rgba(11,125,227,0.28)_2px,transparent_2px,transparent_10px)] opacity-50 lg:block" />
-        <div className="relative mx-auto grid max-w-[1380px] grid-cols-1 items-center gap-12 px-6 py-20 md:px-10 md:py-28 lg:grid-cols-[0.88fr_1.12fr]">
+        <div className="relative mx-auto grid max-w-[1380px] grid-cols-1 items-center gap-10 px-6 py-16 md:px-10 md:py-20 lg:grid-cols-[0.88fr_1.12fr]">
           <div className="max-w-[640px]">
-            <h1 className="text-[48px] font-black leading-[0.95] tracking-tight text-[#141a28] dark:text-white sm:text-[64px] lg:text-[76px]">
+            <h1 className="text-[44px] font-black leading-[0.95] tracking-tight text-[#141a28] dark:text-white sm:text-[58px] lg:text-[68px]">
               Sichtbarkeit gewinnen, bevor Probleme Umsatz kosten.
             </h1>
-            <p className="mt-7 max-w-[560px] text-[19px] font-medium leading-[1.45] text-[#384152] dark:text-zinc-300">
+            <p className="mt-6 max-w-[560px] text-[17px] font-medium leading-[1.45] text-[#384152] dark:text-zinc-300">
               Website Analyzer Pro scannt SEO, Performance, Security, DSGVO, Content und AI Visibility und macht daraus einen priorisierten Maßnahmenplan.
             </p>
 
@@ -240,8 +244,30 @@ export default function MarketingHome({
               </button>
             </form>
 
+            {user && (
+              <div className="mt-5 flex flex-wrap items-center gap-3 border-l-4 border-[#0b7de3] pl-4">
+                <span className="text-[12px] font-black uppercase tracking-[0.14em] text-[#526071] dark:text-zinc-400">
+                  Direkt weiterarbeiten
+                </span>
+                <button
+                  type="button"
+                  onClick={onOpenDashboard}
+                  className="rounded-md bg-[#172033] px-4 py-2 text-[12px] font-black text-white transition-colors hover:bg-[#0b7de3]"
+                >
+                  Dashboard
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenProjects}
+                  className="rounded-md border border-[#cfd7e5] bg-white px-4 py-2 text-[12px] font-black text-[#172033] transition-colors hover:border-[#0b7de3] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                >
+                  Projekte
+                </button>
+              </div>
+            )}
+
             <div className="mt-6 flex flex-wrap gap-3">
-              {scanAreas.slice(0, 6).map((area) => (
+              {scanAreas.slice(0, 4).map((area) => (
                 <span
                   key={area}
                   className="rounded-full border border-[#d8dde8] bg-white/70 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-[#526071] dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-400"
@@ -272,7 +298,7 @@ export default function MarketingHome({
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1380px] px-6 py-16 md:px-10">
+      <section className="mx-auto max-w-[1380px] px-6 py-12 md:px-10">
         <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <h2 className="text-[34px] font-black tracking-tight text-[#141a28] dark:text-white md:text-[46px]">
@@ -292,7 +318,7 @@ export default function MarketingHome({
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {platformAreas.map((area) => {
+          {platformAreas.slice(0, 4).map((area) => {
             const Icon = area.icon;
             return (
               <a
@@ -365,7 +391,7 @@ export default function MarketingHome({
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1380px] grid-cols-1 gap-10 px-6 py-16 md:px-10 lg:grid-cols-[1fr_0.9fr]">
+      <section className="mx-auto grid max-w-[1380px] grid-cols-1 gap-8 px-6 py-12 md:px-10 lg:grid-cols-[1fr_0.9fr]">
         <div>
           <h2 className="text-[34px] font-black tracking-tight text-[#141a28] dark:text-white md:text-[46px]">
             Bereit für den ersten vermarktbaren Audit?

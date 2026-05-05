@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Globe, Loader2, AlertCircle, CheckCircle, X, Zap, Star } from 'lucide-react';
 import { Sidebar } from '../components/sidebar';
 import { FloatingNav } from '../components/floating-nav';
@@ -13,6 +13,7 @@ import TeamWorkspace from '../components/team-workspace';
 import LoadingDisplay from '../components/loading-display';
 import ReportResultsView from '../components/report-results-view';
 import ProjectDashboardView from '../components/project-dashboard-view';
+import DashboardHomeView from '../components/dashboard-home-view';
 import ProjectsOverviewView from '../components/projects-overview-view';
 import SettingsView from '../components/settings-view';
 import ProfileView from '../components/profile-view';
@@ -23,7 +24,7 @@ import { useTrial } from '../hooks/use-trial';
 import { getMonthlyCrawlPageLimit, getMonthlyScanLimit, normalizePlan } from '../lib/plans';
 import { normalizeStoredReport } from '../lib/report-normalizer';
 
-type ActiveView = 'home' | 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
+type ActiveView = 'home' | 'dashboard' | 'analyzer' | 'projects' | 'project' | 'settings' | 'profile' | 'pricing' | 'team';
 type ProjectNavTab =
   | 'overview'
   | 'audit'
@@ -35,10 +36,43 @@ type ProjectNavTab =
   | 'backlinks'
   | 'competition'
   | 'ai_visibility'
+  | 'ai_plan'
   | 'monitoring'
   | 'reports'
   | 'tasks'
+  | 'tools'
+  | 'history'
   | 'settings';
+
+const PROJECT_TABS: ProjectNavTab[] = [
+  'overview',
+  'audit',
+  'issues',
+  'evidence',
+  'keywords',
+  'rankings',
+  'linking',
+  'backlinks',
+  'competition',
+  'ai_visibility',
+  'ai_plan',
+  'monitoring',
+  'reports',
+  'tasks',
+  'tools',
+  'history',
+  'settings',
+];
+
+function normalizeProjectTab(value?: string | null): ProjectNavTab {
+  return PROJECT_TABS.includes(value as ProjectNavTab) ? value as ProjectNavTab : 'overview';
+}
+
+function normalizeAppView(value?: string | null): ActiveView {
+  if (value === 'dashboard') return 'dashboard';
+  if (value === 'analyzer' || value === 'projects' || value === 'settings' || value === 'profile' || value === 'pricing' || value === 'team') return value;
+  return 'home';
+}
 
 export default function WebsiteAnalyzer() {
   const { user, userData, loading: authLoading, signIn, logOut } = useAuth();
@@ -57,6 +91,7 @@ export default function WebsiteAnalyzer() {
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectInitialTab, setProjectInitialTab] = useState<ProjectNavTab>('overview');
+  const urlStateInitialized = useRef(false);
 
   const { trialDaysLeft, showTrialBadge } = useTrial();
   const accountPlan = normalizePlan(userData?.plan || 'free');
@@ -89,6 +124,71 @@ export default function WebsiteAnalyzer() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
+  const syncRootUrl = useCallback((query: string, replace = false) => {
+    if (typeof window === 'undefined') return;
+    const nextUrl = query ? `/?${query}` : '/';
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl === nextUrl) return;
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method]({}, '', nextUrl);
+  }, []);
+
+  const navigateToView = useCallback((view: string, replace = false) => {
+    const nextView = normalizeAppView(view);
+    setActiveView(nextView);
+    if (nextView !== 'project') {
+      setProjectInitialTab('overview');
+    }
+    syncRootUrl(nextView === 'home' ? '' : `view=${nextView}`, replace);
+  }, [syncRootUrl]);
+
+  const loadLatestReportForProject = useCallback(async (proj: Project) => {
+    if (!proj.url) {
+      setReport(null);
+      setRawScrapeData(null);
+      setLastAnalyzedUrl(null);
+      return;
+    }
+
+    setUrl(proj.url);
+    try {
+      const resp = await fetch(`/api/reports?url=${encodeURIComponent(proj.url)}`);
+      if (!resp.ok) return;
+      const reports = await resp.json();
+      if (reports && reports.length > 0) {
+        const latest = reports.sort((a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        const normalized = normalizeStoredReport(latest);
+        setReport(normalized.results);
+        setRawScrapeData(normalized.rawScrapeData);
+        setLastAnalyzedUrl(proj.url);
+      } else {
+        setReport(null);
+        setRawScrapeData(null);
+        setLastAnalyzedUrl(null);
+      }
+    } catch (e) {
+      console.error("Error loading latest report for project:", e);
+    }
+  }, []);
+
+  const selectProject = useCallback(async (
+    proj: Project,
+    tab: ProjectNavTab = 'overview',
+    updateUrl = true,
+    replace = false
+  ) => {
+    setSelectedProject(proj);
+    setProjectInitialTab(tab);
+    setActiveView('project');
+    if (updateUrl) {
+      syncRootUrl(`project=${encodeURIComponent(proj.id)}&tab=${encodeURIComponent(tab)}`, replace);
+    }
+    await loadLatestReportForProject(proj);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [loadLatestReportForProject, syncRootUrl]);
+
   const handleLoadReport = async (id: string) => {
     setIsLoading(true);
     setError(null);
@@ -102,6 +202,7 @@ export default function WebsiteAnalyzer() {
       setLastAnalyzedUrl(normalized.url || data.url);
       setUrl(normalized.url || data.url);
       setActiveView('analyzer');
+      syncRootUrl('view=analyzer');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Fehler beim Laden des Reports.';
@@ -111,39 +212,63 @@ export default function WebsiteAnalyzer() {
     }
   };
 
-  const handleSelectProject = async (proj: Project) => {
-    setSelectedProject(proj);
-    if (proj.url) {
-      setUrl(proj.url);
-      // Automatically load latest report for this URL
-      try {
-        const resp = await fetch(`/api/reports?url=${encodeURIComponent(proj.url)}`);
-        if (resp.ok) {
-          const reports = await resp.json();
-          if (reports && reports.length > 0) {
-             const latest = reports.sort((a: any, b: any) => 
-               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-             )[0];
-             const normalized = normalizeStoredReport(latest);
-             setReport(normalized.results);
-             setRawScrapeData(normalized.rawScrapeData);
-             setLastAnalyzedUrl(proj.url);
-          } else {
-             setReport(null);
-             setRawScrapeData(null);
-          }
-        }
-      } catch (e) {
-        console.error("Error loading latest report for project:", e);
-      }
-    }
-    setActiveView('project');
-  };
+  const handleSelectProject = useCallback((proj: Project) => {
+    void selectProject(proj, 'overview', true);
+  }, [selectProject]);
 
   const openProjectSection = useCallback((tab: ProjectNavTab) => {
     setProjectInitialTab(tab);
-    setActiveView(selectedProject ? 'project' : 'projects');
-  }, [selectedProject]);
+    if (selectedProject) {
+      setActiveView('project');
+      syncRootUrl(`project=${encodeURIComponent(selectedProject.id)}&tab=${encodeURIComponent(tab)}`);
+      return;
+    }
+    setActiveView('projects');
+    syncRootUrl(`view=projects&tab=${encodeURIComponent(tab)}`);
+  }, [selectedProject, syncRootUrl]);
+
+  const applyUrlState = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = normalizeProjectTab(params.get('tab'));
+    const projectId = params.get('project');
+
+    if (projectId) {
+      try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`);
+        if (!response.ok) throw new Error('Projekt konnte nicht geladen werden.');
+        const project = await response.json();
+        await selectProject(project, tab, false, true);
+        return;
+      } catch (projectError) {
+        console.error('Project route hydration failed:', projectError);
+        setProjectInitialTab(tab);
+        setActiveView('projects');
+        return;
+      }
+    }
+
+    const requestedView = params.get('view');
+    const nextView = normalizeAppView(requestedView);
+    setProjectInitialTab(tab);
+    setActiveView(nextView);
+  }, [selectProject]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!urlStateInitialized.current) {
+      urlStateInitialized.current = true;
+      queueMicrotask(() => {
+        void applyUrlState();
+      });
+    }
+
+    const onPopState = () => {
+      void applyUrlState();
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applyUrlState, authLoading]);
 
   const fetchGSCData = useCallback(async (targetUrl: string) => {
     setIsGscLoading(true);
@@ -191,7 +316,7 @@ export default function WebsiteAnalyzer() {
 
       if (user && userData && scanCount >= scanLimitMonthly) {
         if (accountPlan === 'free') {
-          setActiveView('pricing');
+          navigateToView('pricing');
           setIsLoading(false);
           return;
         } else {
@@ -203,7 +328,7 @@ export default function WebsiteAnalyzer() {
 
       if (user && userData && crawlPagesCount >= crawlPagesLimitMonthly) {
         if (accountPlan === 'free') {
-          setActiveView('pricing');
+          navigateToView('pricing');
           setIsLoading(false);
           return;
         }
@@ -348,8 +473,13 @@ export default function WebsiteAnalyzer() {
   const handleStartScanFromNav = (target: string) => {
     const value = target.trim();
     if (!value) return;
+    if (activeView === 'home') {
+      window.location.assign(`/scanner?url=${encodeURIComponent(value)}&start=1`);
+      return;
+    }
     setUrl(value);
     setActiveView('analyzer');
+    syncRootUrl('view=analyzer');
     void handleAnalyze(undefined, value);
   };
 
@@ -360,6 +490,7 @@ export default function WebsiteAnalyzer() {
     setRawScrapeData(null);
     setUrl('');
     setSelectedProject(null);
+    syncRootUrl('');
   };
 
   const handleConnectGSC = async () => {
@@ -415,7 +546,7 @@ export default function WebsiteAnalyzer() {
         activeView={activeView}
         user={user}
         userData={userData}
-        onNavigate={(view) => setActiveView(view as ActiveView)}
+        onNavigate={(view) => navigateToView(view)}
         onStartScan={handleStartScanFromNav}
         onSignIn={signIn}
         onLogout={handleLogout}
@@ -425,8 +556,10 @@ export default function WebsiteAnalyzer() {
         <MarketingHome
           user={user}
           onStartScan={handleStartScanFromNav}
-          onOpenAnalyzer={() => setActiveView('analyzer')}
-          onOpenPricing={() => setActiveView('pricing')}
+          onOpenAnalyzer={() => window.location.assign('/scanner')}
+          onOpenPricing={() => window.location.assign('/preise')}
+          onOpenDashboard={() => navigateToView('dashboard')}
+          onOpenProjects={() => navigateToView('projects')}
           onSignIn={signIn}
         />
       ) : (
@@ -434,14 +567,15 @@ export default function WebsiteAnalyzer() {
       <Sidebar 
         onLoadReport={handleLoadReport}
         onSelectProject={handleSelectProject}
-        onOpenDashboard={() => { setProjectInitialTab('overview'); setActiveView('analyzer'); }}
-        onOpenProjects={() => setActiveView('projects')}
+        onOpenDashboard={() => { setProjectInitialTab('overview'); navigateToView('dashboard'); }}
+        onOpenProjects={() => navigateToView('projects')}
+        onOpenScanner={() => navigateToView('analyzer')}
         onOpenProjectTab={(tab) => openProjectSection(tab as ProjectNavTab)}
-        onOpenSettings={() => setActiveView('settings')}
-        onOpenTeam={() => setActiveView('team')}
-        onOpenProfile={() => setActiveView('profile')}
-        onOpenPricing={() => setActiveView('pricing')}
-        onOpenHome={() => setActiveView('home')}
+        onOpenSettings={() => navigateToView('settings')}
+        onOpenTeam={() => navigateToView('team')}
+        onOpenProfile={() => navigateToView('profile')}
+        onOpenPricing={() => navigateToView('pricing')}
+        onOpenHome={() => navigateToView('home')}
         activeSection={activeView}
         isNotifOpen={isNotifOpen}
         setIsNotifOpen={setIsNotifOpen}
@@ -468,20 +602,22 @@ export default function WebsiteAnalyzer() {
             <div>
             <h1 
               className="max-w-[760px] cursor-pointer text-[34px] font-black uppercase leading-[0.95] tracking-tight text-[#172033] transition-all duration-500 hover:text-[#D4AF37] dark:text-zinc-100 sm:text-[44px] md:text-[56px]"
-              onClick={() => setActiveView('analyzer')}
+              onClick={() => navigateToView('dashboard')}
             >
-              {activeView === 'analyzer' ? 'SEO Audit & AI Scanner' : 'WAP Workspace'}
+              {activeView === 'analyzer' ? 'SEO Audit & AI Scanner' : activeView === 'dashboard' ? 'Dashboard' : 'WAP Workspace'}
             </h1>
             <p className="mt-3 max-w-[720px] text-[13px] font-bold uppercase tracking-[0.12em] text-[#7b8495]">
               {activeView === 'analyzer'
                 ? 'Domain eingeben, Deep-Scan starten und daraus einen vermarktbaren Maßnahmenplan machen.'
+                : activeView === 'dashboard'
+                ? 'Schneller Zugriff auf Projekte, Full Audit und letzte Arbeitsbereiche.'
                 : 'Projekte, Reports, Monitoring und Team-Workflows.'}
             </p>
             </div>
             <div className="md:text-right flex flex-col gap-3 items-end">
               {(!userData?.plan || userData.plan === 'free') && (
                 <button 
-                  onClick={() => setActiveView('pricing')}
+                  onClick={() => navigateToView('pricing')}
                   className="text-[10px] font-black uppercase tracking-[2px] text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 hover:bg-[#D4AF37] hover:text-white transition-all flex items-center gap-2 group"
                 >
                   <Star className="w-3 h-3 group-hover:rotate-12 transition-transform" />
@@ -509,12 +645,25 @@ export default function WebsiteAnalyzer() {
             </div>
           </header>
 
+          {activeView === 'dashboard' && (
+            <DashboardHomeView
+              selectedProject={selectedProject}
+              onSelectProject={handleSelectProject}
+              onOpenProjects={() => navigateToView('projects')}
+              onOpenScanner={() => navigateToView('analyzer')}
+              onOpenPricing={() => navigateToView('pricing')}
+              onSignIn={signIn}
+              user={user}
+              userData={userData}
+            />
+          )}
+
           {activeView === 'analyzer' && (
             <>
               {showTrialBadge && (
                 <div className="mb-8 p-4 bg-[#D4AF37]/10 border border-[#D4AF37]/20 flex items-center justify-between">
                   <span className="text-[11px] font-black uppercase tracking-widest text-[#D4AF37]">Testphase aktiv: Noch {trialDaysLeft} Tage verbleibend</span>
-                  <button onClick={() => setActiveView('pricing')} className="text-[10px] font-bold uppercase underline text-[#D4AF37]">Jetzt upgraden</button>
+                  <button onClick={() => navigateToView('pricing')} className="text-[10px] font-bold uppercase underline text-[#D4AF37]">Jetzt upgraden</button>
                 </div>
               )}
               <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -573,7 +722,7 @@ export default function WebsiteAnalyzer() {
                   gscError={gscError} 
                   onExportActionPlan={exportActionPlanToCSV} 
                   plan={currentReportPlan}
-                  setActiveView={setActiveView} 
+                  setActiveView={navigateToView}
                 />
               )}
             </>
@@ -586,6 +735,7 @@ export default function WebsiteAnalyzer() {
               key={`${selectedProject.id}-${projectInitialTab}`}
               project={selectedProject} 
               initialTab={projectInitialTab}
+              onSelectProject={handleSelectProject}
               onStartScan={(url) => handleAnalyze(undefined, url)} 
               isLoading={isLoading} 
               report={report && lastAnalyzedUrl === selectedProject.url ? report : null} 
@@ -596,7 +746,7 @@ export default function WebsiteAnalyzer() {
               gscError={gscError} 
               onExportActionPlan={exportActionPlanToCSV} 
               plan={currentReportPlan}
-              setActiveView={setActiveView} 
+              setActiveView={navigateToView}
             />
           )}
 

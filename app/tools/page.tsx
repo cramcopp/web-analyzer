@@ -21,20 +21,20 @@ export default function ToolsHubPage() {
 
       <main>
         <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mx-auto grid max-w-[1380px] grid-cols-1 gap-10 px-6 py-14 md:px-10 lg:grid-cols-[0.9fr_1.1fr] lg:py-20">
+          <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.95fr_1.05fr] lg:py-12">
             <div>
-              <h1 className="text-[44px] font-black leading-[0.98] tracking-tight text-[#141a28] dark:text-white md:text-[64px]">
+              <h1 className="text-[40px] font-black leading-[0.98] tracking-tight text-[#141a28] dark:text-white md:text-[56px]">
                 Kostenlose SEO Tools für einzelne Checks.
               </h1>
-              <p className="mt-6 max-w-[640px] text-[18px] font-medium leading-[1.55] text-[#526071] dark:text-zinc-300">
+              <p className="mt-5 max-w-[620px] text-[16px] font-medium leading-[1.55] text-[#526071] dark:text-zinc-300">
                 Jede Unterseite testet genau einen Bereich. So entstehen SEO-Landingpages, klare interne Verlinkung und weniger Crawl-Kosten pro Nutzeraktion.
               </p>
-              <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3">
                 {TOOL_CATEGORIES.map((category) => (
                   <Link
                     key={category.slug}
                     href={`/tools/${category.slug}`}
-                    className="rounded-md border border-[#d8dde8] bg-[#f8fafc] px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#526071] transition-colors hover:border-[#D4AF37] hover:bg-white dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+                    className="text-[11px] font-black uppercase tracking-[0.12em] text-[#526071] underline-offset-4 transition-colors hover:text-[#0b7de3] hover:underline dark:text-zinc-400"
                   >
                     {category.navTitle}
                   </Link>
@@ -42,8 +42,8 @@ export default function ToolsHubPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {liveTools.slice(0, 8).map((tool) => (
+            <div className="hidden">
+              {liveTools.slice(0, 4).map((tool) => (
                 <Link
                   key={tool.slug}
                   href={`/tools/${tool.slug}`}
@@ -62,7 +62,7 @@ export default function ToolsHubPage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1380px] px-6 py-14 md:px-10">
+        <section className="mx-auto max-w-[1380px] px-6 py-10 md:px-10">
           <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-[34px] font-black tracking-tight text-[#141a28] dark:text-white">

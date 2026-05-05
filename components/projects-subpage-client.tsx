@@ -1,9 +1,10 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, ArrowRight, CheckCircle2, FolderKanban, Globe2, Loader2, LockKeyhole, Plus } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, FolderKanban, Loader2, LockKeyhole, Plus } from 'lucide-react';
 import { useAuth } from './auth-provider';
+import ProjectFavicon, { getProjectDomain } from './project-favicon';
 import type { Project } from '@/types/common';
 
 function normalizeUrl(value: string) {
@@ -22,8 +23,9 @@ export default function ProjectsSubpageClient() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     if (!user) {
+      await Promise.resolve();
       setProjects([]);
       setLoading(false);
       return;
@@ -44,11 +46,13 @@ export default function ProjectsSubpageClient() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    void loadProjects();
-  }, [user]);
+    queueMicrotask(() => {
+      void loadProjects();
+    });
+  }, [loadProjects]);
 
   const createProject = async (event: FormEvent) => {
     event.preventDefault();
@@ -176,10 +180,10 @@ export default function ProjectsSubpageClient() {
             </p>
           </div>
           <Link
-            href="/"
+            href="/?view=dashboard"
             className="flex w-fit items-center gap-2 rounded-md border border-[#cfd7e5] bg-[#f8fafc] px-4 py-2 text-[12px] font-black text-[#172033] transition-colors hover:border-[#D4AF37] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
           >
-            Workspace
+            Dashboard
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -213,12 +217,12 @@ export default function ProjectsSubpageClient() {
             {projects.map((project) => (
               <Link
                 key={project.id}
-                href="/"
+                href={`/?project=${encodeURIComponent(project.id)}&tab=overview`}
                 className="group rounded-md border border-[#dfe3ea] bg-[#f8fafc] p-4 transition-colors hover:border-[#D4AF37] dark:border-zinc-800 dark:bg-zinc-900"
               >
-                <div className="mb-3 flex items-center gap-2 text-[#7b8495]">
-                  <Globe2 className="h-4 w-4 text-[#D4AF37]" />
-                  <span className="truncate text-[10px] font-black uppercase tracking-[0.12em]">{project.url || 'Keine URL'}</span>
+                <div className="mb-3 flex items-center gap-3 text-[#7b8495]">
+                  <ProjectFavicon url={project.url} name={project.name} className="h-8 w-8" iconClassName="h-4 w-4" />
+                  <span className="truncate text-[10px] font-black uppercase tracking-[0.12em]">{getProjectDomain(project.url) || 'Keine URL'}</span>
                 </div>
                 <h3 className="truncate text-[17px] font-black text-[#172033] dark:text-zinc-100">{project.name}</h3>
                 <p className="mt-2 text-[11px] font-bold text-[#64748b] dark:text-zinc-400">

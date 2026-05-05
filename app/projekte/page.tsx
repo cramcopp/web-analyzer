@@ -20,7 +20,7 @@ export default function ProjektePage() {
 
       <main>
         <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mx-auto grid max-w-[1380px] grid-cols-1 gap-10 px-6 py-12 md:px-10 lg:grid-cols-[0.88fr_1.12fr] lg:py-16">
+          <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-8 px-6 py-10 md:px-10 lg:grid-cols-[0.9fr_1.1fr] lg:py-12">
             <div>
               <div className="mb-6 flex items-center gap-3">
                 <span className="flex h-12 w-12 items-center justify-center rounded-md bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900">
@@ -36,22 +36,22 @@ export default function ProjektePage() {
                 </div>
               </div>
 
-              <h1 className="break-words text-[38px] font-black leading-[1.02] tracking-tight text-[#141a28] dark:text-white sm:text-[44px] md:text-[60px]">
+              <h1 className="break-words text-[36px] font-black leading-[1.02] tracking-tight text-[#141a28] dark:text-white sm:text-[42px] md:text-[54px]">
                 Projekte für Scans, Monitoring und Reports.
               </h1>
-              <p className="mt-6 max-w-[720px] text-[18px] font-medium leading-[1.55] text-[#526071] dark:text-zinc-300">
+              <p className="mt-5 max-w-[680px] text-[16px] font-medium leading-[1.55] text-[#526071] dark:text-zinc-300">
                 Ein Projekt bündelt eine Domain, wiederkehrende Audits, Keywords, Wettbewerber, Teamrechte und Kundenberichte. Das ist bewusst mehr als ein einzelner Kurzcheck.
               </p>
 
-              <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="hidden">
                 {[
                   ['Free', PLAN_CONFIG.free.projects, 'Projekt'],
                   ['Agency', PLAN_CONFIG.agency.projects, 'Projekte'],
                   ['Business', PLAN_CONFIG.business.projects, 'Projekte'],
                 ].map(([label, value, text]) => (
-                  <div key={String(label)} className="rounded-md border border-[#dfe3ea] bg-[#f8fafc] p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <div key={String(label)} className="rounded-md border border-[#dfe3ea] bg-[#f8fafc] p-3 dark:border-zinc-800 dark:bg-zinc-900">
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7b8495]">{String(label)}</p>
-                    <p className="mt-2 text-[24px] font-black text-[#172033] dark:text-zinc-100">
+                    <p className="mt-2 text-[20px] font-black text-[#172033] dark:text-zinc-100">
                       {Number(value).toLocaleString('de-DE')}
                     </p>
                     <p className="mt-1 text-[11px] font-bold text-[#64748b] dark:text-zinc-400">{String(text)}</p>
@@ -60,7 +60,7 @@ export default function ProjektePage() {
               </div>
             </div>
 
-            <div className="grid content-start gap-4">
+            <div className="hidden">
               {[
                 [BarChart3, 'Audits speichern', 'Jeder Scan kann später im Projektverlauf und in Reports weitergenutzt werden.'],
                 [LineChart, 'Monitoring vorbereiten', 'Projekte sind die Grundlage für wöchentliche, tägliche oder Business-Monitorings.'],
@@ -68,8 +68,8 @@ export default function ProjektePage() {
               ].map(([Icon, title, text]) => {
                 const TypedIcon = Icon as typeof BarChart3;
                 return (
-                  <article key={String(title)} className="rounded-lg border border-[#dfe3ea] bg-[#f8fafc] p-6 dark:border-zinc-800 dark:bg-zinc-900">
-                    <TypedIcon className="mb-5 h-6 w-6 text-[#D4AF37]" />
+                  <article key={String(title)} className="rounded-md border border-[#dfe3ea] bg-[#f8fafc] p-5 dark:border-zinc-800 dark:bg-zinc-900">
+                    <TypedIcon className="mb-4 h-5 w-5 text-[#D4AF37]" />
                     <h2 className="text-[18px] font-black text-[#172033] dark:text-zinc-100">{String(title)}</h2>
                     <p className="mt-2 text-[13px] font-medium leading-relaxed text-[#64748b] dark:text-zinc-400">
                       {String(text)}
@@ -81,7 +81,7 @@ export default function ProjektePage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1380px] px-6 py-12 md:px-10">
+        <section className="mx-auto max-w-[1380px] px-6 py-10 md:px-10">
           <ProjectsSubpageClient />
         </section>
 
