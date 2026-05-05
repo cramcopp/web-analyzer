@@ -5,17 +5,18 @@ import { useAuth } from "./auth-provider";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   BrainCircuit,
-  CheckCircle2,
   CreditCard,
-  FileSearch,
   FileText,
   FolderKanban,
   Globe2,
   Grid2X2,
-  History,
+  Home,
   LayoutDashboard,
-  Link as LinkIcon,
+  MapPin,
+  Megaphone,
+  MessageCircle,
   Network,
   Menu,
   Search,
@@ -24,13 +25,13 @@ import {
   Sparkles,
   Trophy,
   Users,
-  Wrench,
   Zap,
 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { Notification, Project, HistoryItem } from "../types/common";
 import { getMonthlyCrawlPageLimit, getMonthlyScanLimit } from "../lib/plans";
 import { normalizeStoredReports } from "../lib/report-normalizer";
+import { NAVIGATION_FLYOUTS } from "../lib/navigation-flyouts";
 
 // Sub-Components
 import { SidebarNotifications } from "./sidebar/notifications-popover";
@@ -44,7 +45,7 @@ export const Sidebar = memo(function Sidebar({
   onSelectProject,
   onOpenDashboard,
   onOpenProjects,
-  onOpenScanner,
+  onOpenScanner: _onOpenScanner,
   onOpenProjectTab,
   onOpenSettings,
   onOpenTeam,
@@ -94,6 +95,7 @@ export const Sidebar = memo(function Sidebar({
   const [projects, setProjects] = useState<Project[]>([]);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [hoveredRailId, setHoveredRailId] = useState<string | null>(null);
 
   const onItemClick = (callback?: () => void) => {
     if (callback) callback();
@@ -127,46 +129,47 @@ export const Sidebar = memo(function Sidebar({
     window.location.assign(href);
   };
 
-  type CollapsedNavItem = {
+  type RailNavItem = {
     id: string;
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     action?: () => void;
     href?: string;
+    flyoutKey?: keyof typeof NAVIGATION_FLYOUTS;
   };
 
-  const workspaceNavItems: CollapsedNavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, action: onOpenDashboard },
-    { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
-    { id: 'scanner', label: 'Scanner', icon: Search, action: onOpenScanner },
-    { id: 'reports', label: 'Reports', icon: FileText, action: () => { onOpenProjectTab?.('reports'); } },
-    { id: 'tools', label: 'Tools', icon: Grid2X2, href: '/tools' },
-    { id: 'billing', label: 'Preise', icon: CreditCard, action: onOpenPricing },
-    { id: 'settings', label: 'Setup', icon: Settings, action: onOpenSettings },
+  const railNavItems: RailNavItem[] = [
+    { id: 'home', label: 'Home', icon: Home, action: onOpenDashboard },
+    { id: 'seo', label: 'SEO', icon: Search, href: '/tools/seo', flyoutKey: 'seo' },
+    { id: 'ki', label: 'KI', icon: BrainCircuit, href: '/tools/ki', flyoutKey: 'ki' },
+    { id: 'traffic-markt', label: 'Traffic & Markt', icon: BarChart3, href: '/tools/traffic-markt', flyoutKey: 'traffic-markt' },
+    { id: 'local', label: 'Local', icon: MapPin, href: '/tools/local', flyoutKey: 'local' },
+    { id: 'content', label: 'Content', icon: FileText, href: '/tools/content', flyoutKey: 'content' },
+    { id: 'social', label: 'Social', icon: MessageCircle, href: '/tools/social', flyoutKey: 'social' },
+    { id: 'anzeigen', label: 'Anzeigen', icon: Megaphone, href: '/tools/anzeigen', flyoutKey: 'anzeigen' },
+    { id: 'ki-pr', label: 'KI-PR', icon: Sparkles, href: '/tools/ki-pr', flyoutKey: 'ki-pr' },
+    { id: 'berichte', label: 'Berichte', icon: FileText, href: '/tools/berichte', flyoutKey: 'berichte' },
+    { id: 'app-center', label: 'App Center', icon: Grid2X2, href: '/tools', flyoutKey: 'app-center' },
   ];
 
-  const projectNavItems: CollapsedNavItem[] = [
-    { id: 'overview', label: 'Übersicht', icon: LayoutDashboard, action: () => { onOpenProjectTab?.('overview'); } },
-    { id: 'audit', label: 'Audit', icon: ShieldCheck, action: () => { onOpenProjectTab?.('audit'); } },
-    { id: 'issues', label: 'Issues', icon: CheckCircle2, action: () => { onOpenProjectTab?.('issues'); } },
-    { id: 'evidence', label: 'Evidence', icon: FileSearch, action: () => { onOpenProjectTab?.('evidence'); } },
-    { id: 'keywords', label: 'Keywords', icon: Search, action: () => { onOpenProjectTab?.('keywords'); } },
-    { id: 'rankings', label: 'Rankings', icon: Activity, action: () => { onOpenProjectTab?.('rankings'); } },
-    { id: 'linking', label: 'Links', icon: Network, action: () => { onOpenProjectTab?.('linking'); } },
-    { id: 'backlinks', label: 'Backlinks', icon: LinkIcon, action: () => { onOpenProjectTab?.('backlinks'); } },
-    { id: 'competition', label: 'Markt', icon: Trophy, action: () => { onOpenProjectTab?.('competition'); } },
-    { id: 'ai_visibility', label: 'KI', icon: BrainCircuit, action: () => { onOpenProjectTab?.('ai_visibility'); } },
-    { id: 'ai_plan', label: 'AI Plan', icon: Sparkles, action: () => { onOpenProjectTab?.('ai_plan'); } },
-    { id: 'monitoring', label: 'Monitor', icon: Globe2, action: () => { onOpenProjectTab?.('monitoring'); } },
-    { id: 'reports', label: 'Reports', icon: FileText, action: () => { onOpenProjectTab?.('reports'); } },
-    { id: 'tasks', label: 'Tasks', icon: CheckCircle2, action: () => { onOpenProjectTab?.('tasks'); } },
-    { id: 'tools', label: 'Tools', icon: Wrench, action: () => { onOpenProjectTab?.('tools'); } },
-    { id: 'history', label: 'History', icon: History, action: () => { onOpenProjectTab?.('history'); } },
-    { id: 'settings', label: 'Setup', icon: Settings, action: () => { onOpenProjectTab?.('settings'); } },
-    { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
-  ];
+  const activeRailId = (() => {
+    if (activeSection === 'dashboard') return 'home';
+    if (activeSection === 'analyzer') return 'seo';
+    if (activeSection === 'projects' || activeSection === 'settings' || activeSection === 'team' || activeSection === 'pricing') return 'app-center';
+    if (activeSection === 'project') {
+      const tab = activeProjectTab || 'overview';
+      if (tab === 'ai_visibility' || tab === 'ai_plan') return 'ki';
+      if (tab === 'competition' || tab === 'rankings') return 'traffic-markt';
+      if (tab === 'reports' || tab === 'tasks' || tab === 'history') return 'berichte';
+      if (tab === 'tools' || tab === 'settings') return 'app-center';
+      return 'seo';
+    }
+    return 'home';
+  })();
 
-  const collapsedNavItems = activeSection === 'project' ? projectNavItems : workspaceNavItems;
+  const hoveredFlyoutKey = railNavItems.find((item) => item.id === hoveredRailId)?.flyoutKey;
+  const hoveredFlyout = hoveredFlyoutKey ? NAVIGATION_FLYOUTS[hoveredFlyoutKey] : null;
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user) {
@@ -234,21 +237,22 @@ export const Sidebar = memo(function Sidebar({
 
   if (isCollapsed) {
     return (
-      <>
-        <aside className="fixed left-0 top-14 z-50 hidden h-[calc(100vh-3.5rem)] w-[72px] flex-col items-center border-r border-[#dfe3ea] bg-[#f4f6fb] py-3 text-[#5f6b7a] shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 md:flex">
+      <div
+        className="fixed left-0 top-14 z-50 hidden h-[calc(100vh-3.5rem)] md:block"
+        onMouseLeave={() => setHoveredRailId(null)}
+      >
+        <aside className="flex h-full w-[72px] flex-col items-center border-r border-[#dfe3ea] bg-[#f4f6fb] py-3 text-[#5f6b7a] shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
           <nav className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto px-1 pb-3">
-            {collapsedNavItems.map((item) => {
+            {railNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive =
-                activeSection === item.id ||
-                pathname === item.href ||
-                Boolean(item.href && pathname?.startsWith(`${item.href}/`)) ||
-                (activeSection === 'analyzer' && item.id === 'scanner') ||
-                (activeSection === 'project' && item.id === (activeProjectTab || 'overview')) ||
-                (activeSection === 'projects' && item.id === 'projects');
+              const isActive = activeRailId === item.id || pathname === item.href || Boolean(item.href && pathname?.startsWith(`${item.href}/`));
+              const isHovered = hoveredRailId === item.id;
               return (
                 <button
                   key={item.id}
+                  type="button"
+                  onMouseEnter={() => setHoveredRailId(item.flyoutKey ? item.id : null)}
+                  onFocus={() => setHoveredRailId(item.flyoutKey ? item.id : null)}
                   onClick={() => {
                     if ('action' in item && item.action) {
                       onItemClick(item.action);
@@ -257,13 +261,13 @@ export const Sidebar = memo(function Sidebar({
                     if (item.href) openHref(item.href);
                   }}
                   title={item.label}
-                  className={`group flex min-h-[54px] w-full flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-bold transition-colors ${
-                    isActive
-                      ? 'bg-white text-[#0b7de3] shadow-sm dark:bg-zinc-900 dark:text-[#D4AF37]'
-                      : 'hover:bg-white hover:text-[#172033] dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
+                  className={`group flex min-h-[62px] w-full flex-col items-center justify-center gap-1 rounded-md px-1.5 py-2 text-center text-[11px] font-semibold leading-tight transition-colors ${
+                    isActive || isHovered
+                      ? 'bg-[#e4e8ef] text-[#172033] shadow-sm dark:bg-zinc-900 dark:text-[#D4AF37]'
+                      : 'hover:bg-[#e9edf4] hover:text-[#172033] dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-[#D4AF37]' : ''}`} />
+                  <Icon className={`h-5 w-5 shrink-0 ${isActive || isHovered ? 'text-[#0b7de3] dark:text-[#D4AF37]' : ''}`} />
                   <span className="max-w-full leading-[1.05]">{item.label}</span>
                 </button>
               );
@@ -294,7 +298,55 @@ export const Sidebar = memo(function Sidebar({
             <ThemeToggle />
           </div>
         </aside>
-      </>
+
+        {hoveredFlyout && (
+          <div
+            className="absolute left-[72px] top-0 h-full w-[324px] overflow-y-auto border-r border-[#dfe3ea] bg-white px-6 py-5 text-[#172033] shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+            onMouseEnter={() => setHoveredRailId(hoveredRailId)}
+          >
+            <a
+              href={hoveredFlyout.href}
+              className="mb-4 block text-[16px] font-black tracking-tight text-[#172033] hover:text-[#0b7de3] dark:text-zinc-100"
+            >
+              {hoveredFlyout.title}
+            </a>
+
+            <button
+              type="button"
+              onClick={() => onItemClick(onOpenDashboard)}
+              className="mb-5 block w-full rounded-sm px-0 py-1 text-left text-[14px] font-medium text-[#172033] transition-colors hover:text-[#0b7de3] dark:text-zinc-100"
+            >
+              Dashboard
+            </button>
+
+            <div className="space-y-5">
+              {hoveredFlyout.sections.map((section) => (
+                <div key={section.label}>
+                  <p className="mb-2 text-[12px] font-semibold text-[#6b7280] dark:text-zinc-400">
+                    {section.label}
+                  </p>
+                  <div className="space-y-1">
+                    {section.links.map((link) => (
+                      <a
+                        key={`${section.label}-${link.href}`}
+                        href={link.href}
+                        className="flex min-h-7 items-center justify-between rounded-sm text-[14px] font-medium text-[#172033] transition-colors hover:text-[#0b7de3] dark:text-zinc-100 dark:hover:text-[#D4AF37]"
+                      >
+                        <span className="truncate">{link.label}</span>
+                        {link.badge && (
+                          <span className="ml-3 rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-black uppercase text-[#0b7de3] dark:bg-zinc-900 dark:text-[#D4AF37]">
+                            {link.badge}
+                          </span>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
