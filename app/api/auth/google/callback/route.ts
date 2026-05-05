@@ -5,6 +5,53 @@ import { getRuntimeEnv } from '@/lib/cloudflare-env';
 
 export const runtime = 'nodejs';
 
+function getPublicAuthErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Authentication failed';
+
+  if (message.includes('API key expired')) {
+    return 'Firebase API-Key ist abgelaufen. Bitte FIREBASE_API_KEY in Cloudflare erneuern.';
+  }
+
+  if (message.includes('FIREBASE_API_KEY') || message.includes('Firebase exchange failed')) {
+    return 'Firebase Login konnte nicht abgeschlossen werden. Bitte prüfe FIREBASE_API_KEY und die Firebase Authentication Einstellungen.';
+  }
+
+  if (message.includes('Failed to exchange code for tokens')) {
+    return 'Google OAuth konnte den Login-Code nicht tauschen. Bitte prüfe GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET und GOOGLE_REDIRECT_URI.';
+  }
+
+  return message;
+}
+
+function renderAuthErrorPage(message: string, appUrl: string) {
+  const safeMessage = JSON.stringify(message);
+  const safeAppUrl = JSON.stringify(appUrl);
+  const htmlMessage = message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  return `
+    <html lang="de">
+      <body style="margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;">
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'AUTH_ERROR', message: ${safeMessage} }, ${safeAppUrl});
+          }
+        </script>
+        <main style="width:min(520px,100%);border:1px solid rgba(255,255,255,.14);background:#111827;padding:28px;border-radius:10px;box-shadow:0 24px 80px rgba(0,0,0,.35);">
+          <p style="margin:0 0 10px;color:#D4AF37;font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;">Website Analyzer Pro</p>
+          <h1 style="margin:0 0 12px;font-size:26px;line-height:1.1;">Login konnte nicht abgeschlossen werden</h1>
+          <p style="margin:0;color:#d1d5db;line-height:1.55;font-size:14px;">${htmlMessage}</p>
+          <button onclick="window.close()" style="margin-top:22px;border:0;border-radius:6px;background:#009b72;color:white;font-weight:900;padding:12px 16px;cursor:pointer;">Fenster schließen</button>
+        </main>
+      </body>
+    </html>
+  `;
+}
+
 export async function GET(req: Request) {
   const env = getRuntimeEnv();
   const origin = new URL(req.url).origin;
@@ -130,7 +177,11 @@ export async function GET(req: Request) {
     });
 
   } catch (error: any) {
+    const publicMessage = getPublicAuthErrorMessage(error);
     console.error('Google OAuth Callback Error:', error instanceof Error ? error.message : 'Unknown error');
-    return NextResponse.json({ error: error.message || 'Authentication failed' }, { status: 500 });
+    return new Response(renderAuthErrorPage(publicMessage, env.APP_URL || origin), {
+      status: 500,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
   }
 }

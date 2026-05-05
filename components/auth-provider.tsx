@@ -45,8 +45,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/user/me');
       if (res.ok) {
         const data = await res.json();
+        if (!data.authenticated || !data.user) {
+          setUser(null);
+          setUserData(null);
+          return;
+        }
+
         setUser(data.user);
-        
+
         if (data.userData && data.userData.plan) {
           setUserData(data.userData);
         } else {
@@ -86,26 +92,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { url } = data;
       
       const popup = window.open(url, 'GoogleAuth', 'width=500,height=600');
+      if (!popup) {
+        throw new Error('Popup wurde blockiert. Bitte Popups für diese Seite erlauben.');
+      }
       
       const handleMessage = async (event: MessageEvent) => {
         // We accept messages from our own origin
         if (event.origin !== window.location.origin) return;
         if (event.data.type === 'GSC_AUTH_SUCCESS') {
           window.location.reload();
-          if (popup) popup.close();
+          try {
+            popup.close();
+          } catch {
+            // Some browser COOP policies block opener operations after Google OAuth.
+          }
+        } else if (event.data.type === 'AUTH_ERROR') {
+          setError(event.data.message || 'Anmeldung fehlgeschlagen.');
         }
       };
       
       window.addEventListener('message', handleMessage);
 
-      // Fallback: Check if popup was closed manually
-      const checkPopup = setInterval(async () => {
-        if (!popup || popup.closed) {
-          clearInterval(checkPopup);
-          window.removeEventListener('message', handleMessage);
-          await checkSession();
-        }
-      }, 1000);
+      const handleFocus = () => {
+        window.setTimeout(() => {
+          void checkSession();
+        }, 500);
+      };
+
+      window.addEventListener('focus', handleFocus);
+
+      window.setTimeout(() => {
+        window.removeEventListener('message', handleMessage);
+        window.removeEventListener('focus', handleFocus);
+        void checkSession();
+      }, 120000);
 
     } catch (e: any) {
       console.error("Sign in failed", e);

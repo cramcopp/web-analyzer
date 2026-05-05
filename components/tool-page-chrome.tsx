@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ToolPage } from '@/lib/tool-pages';
+import PublicSiteNav from './public-site-nav';
 
 const iconMap = {
   search: Search,
@@ -49,52 +50,33 @@ export function ToolIcon({
   return <Icon className={className} />;
 }
 
-export function PublicToolsHeader() {
+export function PublicToolsHeader({ activeView = 'tools' }: { activeView?: string }) {
   return (
-    <header className="sticky top-0 z-50 border-b border-[#dfe3ea] bg-white/95 text-[#172033] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 dark:text-zinc-100">
-      <div className="mx-auto flex h-14 max-w-[1380px] items-center gap-4 px-6 md:px-10">
-        <Link href="/" className="flex min-w-fit items-center gap-2" aria-label="Website Analyzer Startseite">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#111827] text-[13px] font-black text-[#D4AF37] dark:bg-white dark:text-[#111827]">
-            W
-          </span>
-          <span className="hidden leading-none sm:block">
-            <span className="block text-[15px] font-black tracking-tight">Website Analyzer</span>
-            <span className="block text-[8px] font-black uppercase tracking-[0.22em] text-[#7b8495]">Pro</span>
-          </span>
-        </Link>
-
-        <nav className="ml-auto hidden items-center gap-1 md:flex">
-          <Link href="/tools" className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900">
-            Tools
-          </Link>
-          <Link href="/preise" className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900">
-            Preise
-          </Link>
-          <Link href="/" className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900">
-            Full Audit
-          </Link>
-        </nav>
-
-        <Link
-          href="/"
-          className="ml-auto flex items-center justify-center rounded-md bg-[#009b72] px-4 py-2 text-[12px] font-black text-white transition-colors hover:bg-[#087f61] md:ml-2"
-        >
-          Audit starten
-        </Link>
-      </div>
-    </header>
+    <>
+      <PublicSiteNav activeView={activeView} />
+      <div className="h-14" aria-hidden="true" />
+    </>
   );
 }
 
 export function PublicToolsFooter() {
   return (
-    <footer className="border-t border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mx-auto flex max-w-[1380px] flex-col gap-4 px-6 py-8 text-[12px] font-bold text-[#64748b] dark:text-zinc-400 md:flex-row md:items-center md:justify-between md:px-10">
-        <p>Website Analyzer Pro trennt Kurzchecks, Crawls, Reports und Add-ons sauber voneinander.</p>
-        <div className="flex flex-wrap gap-4">
-          <Link href="/impressum" className="hover:text-[#0b7de3]">Impressum</Link>
-          <Link href="/datenschutz" className="hover:text-[#0b7de3]">Datenschutz</Link>
-          <Link href="/agb" className="hover:text-[#0b7de3]">AGB</Link>
+    <footer className="bg-[#F5F5F3] px-6 py-8 text-[#1A1A1A] dark:bg-zinc-950 dark:text-zinc-100 md:px-10">
+      <div className="mx-auto flex max-w-[1380px] flex-col gap-6 border-t border-[#1A1A1A] pt-6 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748b] dark:border-zinc-700 dark:text-zinc-400 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p>Website Analyzer Pro</p>
+          <p className="mt-2 max-w-[680px] normal-case tracking-normal">
+            Kurzchecks, Full Crawls, Projekte, Reports und Add-ons bleiben sauber getrennt.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-4 md:justify-end">
+          <Link href="/scanner" className="hover:text-[#D4AF37]">Scanner</Link>
+          <Link href="/projekte" className="hover:text-[#D4AF37]">Projekte</Link>
+          <Link href="/tools" className="hover:text-[#D4AF37]">Tools</Link>
+          <Link href="/preise" className="hover:text-[#D4AF37]">Preise</Link>
+          <Link href="/impressum" className="hover:text-[#D4AF37]">Impressum</Link>
+          <Link href="/datenschutz" className="hover:text-[#D4AF37]">Datenschutz</Link>
+          <Link href="/agb" className="hover:text-[#D4AF37]">AGB</Link>
         </div>
       </div>
     </footer>

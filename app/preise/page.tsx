@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function PreisePage() {
   return (
     <div className="min-h-screen bg-[#F5F5F3] text-[#1A1A1A] dark:bg-zinc-950 dark:text-zinc-100">
-      <PublicToolsHeader />
+      <PublicToolsHeader activeView="pricing" />
       <main id="pricing">
         <PricingSection />
       </main>
