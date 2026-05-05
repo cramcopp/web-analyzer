@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
+import { MORE_NAV_SECTIONS } from '@/lib/navigation-flyouts';
 
 type NavView =
   | 'home'
@@ -44,6 +45,7 @@ export default function TopNav({
 }: TopNavProps) {
   const [query, setQuery] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -100,38 +102,108 @@ export default function TopNav({
         </form>
 
         <nav className="hidden items-center gap-1 lg:flex">
-          <button
-            onClick={() => onNavigate('analyzer')}
+          {mode === 'marketing' ? (
+            <Link
+              href="/scanner"
+              className={`rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
+                activeView === 'scanner' || activeView === 'analyzer'
+                  ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
+                  : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
+              }`}
+            >
+              Scanner
+            </Link>
+          ) : (
+            <button
+              onClick={() => onNavigate('analyzer')}
+              className={`rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
+                activeView === 'analyzer'
+                  ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
+                  : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
+              }`}
+            >
+              Scanner
+            </button>
+          )}
+          {mode === 'marketing' ? (
+            <Link
+              href="/projekte"
+              className={`rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
+                activeView === 'projects'
+                  ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
+                  : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
+              }`}
+            >
+              Projekte
+            </Link>
+          ) : (
+            <button
+              onClick={() => onNavigate('projects')}
+              className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              Projekte
+            </button>
+          )}
+          <Link
+            href="/tools"
             className={`rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
-              activeView === 'analyzer'
+              activeView === 'tools'
                 ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
                 : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
             }`}
-          >
-            Scanner
-          </button>
-          <button
-            onClick={() => onNavigate('projects')}
-            className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
-          >
-            Projekte
-          </button>
-          <Link
-            href="/tools"
-            className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
           >
             Tools
           </Link>
           <Link
             href="/preise"
-            className="rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
+            className={`rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
+              activeView === 'pricing'
+                ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
+                : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
+            }`}
           >
             Preise
           </Link>
-          <button className="flex items-center gap-1 rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900">
-            Mehr
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
+          <div
+            className="relative"
+            onMouseEnter={() => setMoreOpen(true)}
+            onMouseLeave={() => setMoreOpen(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              aria-expanded={moreOpen}
+              className="flex items-center gap-1 rounded-md px-3 py-2 text-[12px] font-bold text-[#334155] transition-colors hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              Mehr
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {moreOpen && (
+              <div className="absolute right-0 top-10 w-[520px] rounded-md border border-[#d8dde8] bg-white p-4 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="grid grid-cols-2 gap-5">
+                  {MORE_NAV_SECTIONS.map((section) => (
+                    <div key={section.label}>
+                      <p className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-[#7b8495]">
+                        {section.label}
+                      </p>
+                      <div className="grid gap-1">
+                        {section.links.map((link) => (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={() => setMoreOpen(false)}
+                            className="rounded-sm px-3 py-2 text-[12px] font-bold text-[#172033] transition-colors hover:bg-[#f4f6fb] hover:text-[#0b7de3] dark:text-zinc-100 dark:hover:bg-zinc-900"
+                          >
+                            {link.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="ml-auto flex items-center gap-2 md:ml-0">

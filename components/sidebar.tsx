@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, memo } from "react";
+import Link from "next/link";
 import { useAuth } from "./auth-provider";
 import { usePathname } from "next/navigation";
 import {
@@ -10,9 +11,13 @@ import {
   FileText,
   FolderKanban,
   Globe2,
+  Grid2X2,
   LayoutDashboard,
+  MapPin,
+  Megaphone,
   Network,
   Menu,
+  MessageCircle,
   Search,
   Settings,
   ShieldCheck,
@@ -24,6 +29,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { Notification, Project, HistoryItem } from "../types/common";
 import { getMonthlyCrawlPageLimit, getMonthlyScanLimit } from "../lib/plans";
 import { normalizeStoredReports } from "../lib/report-normalizer";
+import { NAVIGATION_FLYOUTS, type NavigationFlyout } from "../lib/navigation-flyouts";
 
 // Sub-Components
 import { SidebarNotifications } from "./sidebar/notifications-popover";
@@ -31,6 +37,57 @@ import { SidebarAuthView } from "./sidebar/auth-view";
 import { SidebarProjects } from "./sidebar/projects-view";
 import { SidebarHistory } from "./sidebar/history-view";
 import { SidebarAccountMenu } from "./sidebar/account-menu";
+
+function CollapsedNavigationFlyout({
+  flyout,
+  onKeepOpen,
+  onClose,
+}: {
+  flyout: NavigationFlyout;
+  onKeepOpen: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      onMouseEnter={onKeepOpen}
+      onMouseLeave={onClose}
+      className="fixed left-[72px] top-14 z-[70] hidden h-[calc(100vh-3.5rem)] w-[320px] overflow-y-auto border-r border-[#dfe3ea] bg-white px-5 py-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 md:block"
+    >
+      <Link
+        href={flyout.href}
+        className="mb-5 block text-[18px] font-black text-[#172033] transition-colors hover:text-[#0b7de3] dark:text-zinc-100"
+      >
+        {flyout.title}
+      </Link>
+
+      <div className="space-y-6">
+        {flyout.sections.map((section) => (
+          <section key={section.label}>
+            <p className="mb-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#7b8495]">
+              {section.label}
+            </p>
+            <div className="grid gap-1">
+              {section.links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center justify-between gap-3 rounded-sm px-3 py-2 text-[14px] font-semibold leading-tight text-[#172033] transition-colors hover:bg-[#f4f6fb] hover:text-[#0b7de3] dark:text-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  <span>{link.label}</span>
+                  {link.badge && (
+                    <span className="rounded-sm bg-[#ff5c35] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                      {link.badge}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export const Sidebar = memo(function Sidebar({
   onLoadReport,
@@ -76,6 +133,7 @@ export const Sidebar = memo(function Sidebar({
   const crawlUsageRatio = crawlPagesLimitMonthly > 0 ? crawlPagesCount / crawlPagesLimitMonthly : 0;
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [hoveredFlyoutId, setHoveredFlyoutId] = useState<string | null>(null);
 
   // Real DB States
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -109,6 +167,33 @@ export const Sidebar = memo(function Sidebar({
     { id: 'billing', label: 'Preise', icon: CreditCard, action: onOpenPricing },
     { id: 'settings', label: 'Setup', icon: Settings, action: onOpenSettings },
   ];
+
+  const openHref = (href: string) => {
+    window.location.assign(href);
+  };
+
+  const collapsedNavItems: Array<{
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    action?: () => void;
+    href?: string;
+    flyoutId?: string;
+  }> = [
+    { id: 'home', label: 'Home', icon: LayoutDashboard, action: onOpenHome },
+    { id: 'seo', label: 'SEO', icon: Search, href: '/tools/seo', flyoutId: 'seo' },
+    { id: 'ki', label: 'KI', icon: BrainCircuit, href: '/tools/ki', flyoutId: 'ki' },
+    { id: 'traffic-markt', label: 'Traffic & Markt', icon: Activity, href: '/tools/traffic-markt', flyoutId: 'traffic-markt' },
+    { id: 'local', label: 'Local', icon: MapPin, href: '/tools/local', flyoutId: 'local' },
+    { id: 'content', label: 'Content', icon: FileText, href: '/tools/content', flyoutId: 'content' },
+    { id: 'social', label: 'Social', icon: MessageCircle, href: '/tools/social', flyoutId: 'social' },
+    { id: 'anzeigen', label: 'Anzeigen', icon: Megaphone, href: '/tools/anzeigen', flyoutId: 'anzeigen' },
+    { id: 'ki-pr', label: 'KI-PR', icon: Zap, href: '/tools/ki-pr', flyoutId: 'ki-pr' },
+    { id: 'berichte', label: 'Berichte', icon: FileText, href: '/tools/berichte', flyoutId: 'berichte' },
+    { id: 'app-center', label: 'App Center', icon: Grid2X2, href: '/projekte', flyoutId: 'app-center' },
+  ];
+
+  const activeFlyout = hoveredFlyoutId ? NAVIGATION_FLYOUTS[hoveredFlyoutId] : null;
 
 
   useEffect(() => {
@@ -177,64 +262,85 @@ export const Sidebar = memo(function Sidebar({
 
   if (isCollapsed) {
     return (
-      <aside className="fixed left-0 top-14 z-50 hidden h-[calc(100vh-3.5rem)] w-[72px] flex-col items-center border-r border-[#dfe3ea] bg-[#f4f6fb] py-3 text-[#5f6b7a] shadow-sm transition-colors dark:border-zinc-800 dark:bg-[#0b1020] dark:text-zinc-400 md:flex">
-        <nav className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto px-1 pb-3">
-          {mainNavItems.slice(0, 11).map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              activeSection === item.id ||
-              (activeSection === 'analyzer' && item.id === 'seo') ||
-              (activeSection === 'project' && item.id === 'projects');
-            return (
-              <button
-                key={item.id}
-                onClick={() => onItemClick(item.action)}
-                title={item.label}
-                className={`group flex w-full flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[10px] font-bold transition-colors ${
-                  isActive
-                    ? 'bg-white text-[#0b7de3] shadow-sm dark:bg-zinc-900 dark:text-[#D4AF37]'
-                    : 'hover:bg-white hover:text-[#172033] dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
-                }`}
-              >
-                <Icon className={`h-5 w-5 ${isActive ? 'text-[#D4AF37]' : ''}`} />
-                <span className="max-w-full truncate leading-none">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+      <>
+        <aside className="fixed left-0 top-14 z-50 hidden h-[calc(100vh-3.5rem)] w-[72px] flex-col items-center border-r border-[#dfe3ea] bg-[#f4f6fb] py-3 text-[#5f6b7a] shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 md:flex">
+          <nav className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto px-1 pb-3">
+            {collapsedNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                activeSection === item.id ||
+                pathname === item.href ||
+                Boolean(item.href && pathname?.startsWith(`${item.href}/`)) ||
+                (activeSection === 'analyzer' && item.id === 'seo') ||
+                (activeSection === 'project' && item.id === 'app-center') ||
+                (activeSection === 'projects' && item.id === 'app-center');
+              return (
+                <button
+                  key={item.id}
+                  onMouseEnter={() => setHoveredFlyoutId(item.flyoutId || null)}
+                  onFocus={() => setHoveredFlyoutId(item.flyoutId || null)}
+                  onClick={() => {
+                    if ('action' in item && item.action) {
+                      onItemClick(item.action);
+                      return;
+                    }
+                    if (item.href) openHref(item.href);
+                  }}
+                  title={item.label}
+                  className={`group flex min-h-[54px] w-full flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-center text-[10px] font-bold transition-colors ${
+                    isActive
+                      ? 'bg-white text-[#0b7de3] shadow-sm dark:bg-zinc-900 dark:text-[#D4AF37]'
+                      : 'hover:bg-white hover:text-[#172033] dark:hover:bg-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-[#D4AF37]' : ''}`} />
+                  <span className="max-w-full leading-[1.05]">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
 
-        <div className="flex w-full flex-col items-center gap-3 border-t border-[#dfe3ea] px-2 pt-3 dark:border-zinc-800">
-          <button
-            onClick={() => setIsCollapsed(false)}
-            className="flex h-10 w-10 items-center justify-center rounded-md bg-white text-[#172033] shadow-sm transition-colors hover:text-[#D4AF37] dark:bg-zinc-900 dark:text-zinc-100"
-            title="Workspace ausklappen"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          <div className="flex w-full flex-col items-center gap-3 border-t border-[#dfe3ea] px-2 pt-3 dark:border-zinc-800">
+            <button
+              onClick={() => setIsCollapsed(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-md bg-white text-[#172033] shadow-sm transition-colors hover:text-[#D4AF37] dark:bg-zinc-900 dark:text-zinc-100"
+              title="Workspace ausklappen"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-          {!loading && user && (
-            <SidebarAccountMenu 
-              onOpenProfile={onOpenProfile}
-              onOpenSettings={onOpenSettings}
-              onOpenTeam={onOpenTeam}
-              onOpenPricing={onOpenPricing}
-              onLogout={onLogout}
-              onItemClick={onItemClick}
-              isCollapsed={true}
+            {!loading && user && (
+              <SidebarAccountMenu
+                onOpenProfile={onOpenProfile}
+                onOpenSettings={onOpenSettings}
+                onOpenTeam={onOpenTeam}
+                onOpenPricing={onOpenPricing}
+                onLogout={onLogout}
+                onItemClick={onItemClick}
+                isCollapsed={true}
+              />
+            )}
+
+            <SidebarNotifications
+              notifications={notifications}
+              setNotifications={setNotifications}
+              isOpen={isNotifOpen}
+              setIsOpen={setIsNotifOpen}
+              align="left"
             />
-          )}
 
-          <SidebarNotifications 
-            notifications={notifications}
-            setNotifications={setNotifications}
-            isOpen={isNotifOpen}
-            setIsOpen={setIsNotifOpen}
-            align="left"
+            <ThemeToggle />
+          </div>
+        </aside>
+
+        {activeFlyout && (
+          <CollapsedNavigationFlyout
+            flyout={activeFlyout}
+            onKeepOpen={() => setHoveredFlyoutId(hoveredFlyoutId)}
+            onClose={() => setHoveredFlyoutId(null)}
           />
-
-          <ThemeToggle />
-        </div>
-      </aside>
+        )}
+      </>
     );
   }
 

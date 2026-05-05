@@ -10,7 +10,7 @@ export async function GET() {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
   if (!user) {
-    return NextResponse.json({ authenticated: false }, { status: 401 });
+    return NextResponse.json({ authenticated: false, user: null, userData: null });
   }
 
   if (!hasCloudflareD1(env)) {

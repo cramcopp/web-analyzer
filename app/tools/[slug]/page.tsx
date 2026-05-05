@@ -84,7 +84,7 @@ export default async function ToolDetailPage({ params }: ToolPageProps) {
 
   return (
     <div className="min-h-screen bg-[#f4f6fb] text-[#172033] dark:bg-zinc-950 dark:text-zinc-100">
-      <PublicToolsHeader />
+      <PublicToolsHeader activeView="tools" />
 
       <main>
         <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -184,7 +184,7 @@ function ToolCategoryDetailPage({ category }: { category: ToolCategory }) {
 
   return (
     <div className="min-h-screen bg-[#f4f6fb] text-[#172033] dark:bg-zinc-950 dark:text-zinc-100">
-      <PublicToolsHeader />
+      <PublicToolsHeader activeView="tools" />
 
       <main>
         <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">

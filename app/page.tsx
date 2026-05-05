@@ -182,6 +182,13 @@ export default function WebsiteAnalyzer() {
     setRawScrapeData(null);
 
     try {
+      if (!user) {
+        setError('Bitte logge dich ein, damit der Full Audit deinem Account und deinen Planlimits zugeordnet werden kann.');
+        setIsLoading(false);
+        void signIn();
+        return;
+      }
+
       if (user && userData && scanCount >= scanLimitMonthly) {
         if (accountPlan === 'free') {
           setActiveView('pricing');

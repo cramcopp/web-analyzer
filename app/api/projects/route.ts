@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 export async function GET() {
   const env = getRuntimeEnv();
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json([]);
 
   if (!hasCloudflareD1(env)) {
     return NextResponse.json({ error: 'Cloudflare D1 ist nicht verfügbar' }, { status: 503 });

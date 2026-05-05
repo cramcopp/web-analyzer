@@ -12,7 +12,7 @@ export async function GET() {
     const token = cookieStore.get('wap_session')?.value;
 
     if (!token) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
+      return NextResponse.json({ authenticated: false, user: null });
     }
 
     // Verify token with Firebase REST API (Edge compatible)
@@ -26,14 +26,14 @@ export async function GET() {
     if (!response.ok) {
       // Token might be expired
       cookieStore.delete('wap_session');
-      return NextResponse.json({ authenticated: false }, { status: 401 });
+      return NextResponse.json({ authenticated: false, user: null });
     }
 
     const data = await response.json();
     const firebaseUser = data.users?.[0];
 
     if (!firebaseUser) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
+      return NextResponse.json({ authenticated: false, user: null });
     }
 
     return NextResponse.json({
