@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TOOL_CATEGORIES, TOOL_PAGES } from '@/lib/tool-pages';
 import ToolHubExplorer from '@/components/tool-hub-explorer';
-import { PublicToolsFooter, PublicToolsHeader, ToolIcon } from '@/components/tool-page-chrome';
+import { PublicToolsFooter, PublicToolsHeader } from '@/components/tool-page-chrome';
 
 export const metadata: Metadata = {
   title: 'Kostenlose SEO Tools',
@@ -13,23 +13,24 @@ export const metadata: Metadata = {
 };
 
 export default function ToolsHubPage() {
-  const liveTools = TOOL_PAGES.filter((tool) => tool.status === 'live');
-
   return (
     <div className="min-h-screen bg-[#f4f6fb] text-[#172033] dark:bg-zinc-950 dark:text-zinc-100">
       <PublicToolsHeader activeView="tools" />
 
       <main>
         <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.95fr_1.05fr] lg:py-12">
-            <div>
-              <h1 className="text-[40px] font-black leading-[0.98] tracking-tight text-[#141a28] dark:text-white md:text-[56px]">
+          <div className="mx-auto max-w-[1380px] px-6 py-9 md:px-10 md:py-11">
+            <div className="max-w-[820px]">
+              <h1 className="text-[34px] font-black leading-[1.02] tracking-tight text-[#141a28] dark:text-white md:text-[48px]">
                 Kostenlose SEO Tools für einzelne Checks.
               </h1>
-              <p className="mt-5 max-w-[620px] text-[16px] font-medium leading-[1.55] text-[#526071] dark:text-zinc-300">
+              <p className="mt-4 max-w-[650px] text-[15px] font-medium leading-[1.6] text-[#526071] dark:text-zinc-300">
                 Jede Unterseite testet genau einen Bereich. So entstehen SEO-Landingpages, klare interne Verlinkung und weniger Crawl-Kosten pro Nutzeraktion.
               </p>
-              <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3">
+            </div>
+
+            <div className="mt-7 border-t border-[#e5ebf3] pt-5 dark:border-zinc-800">
+              <div className="flex flex-wrap gap-x-5 gap-y-3">
                 {TOOL_CATEGORIES.map((category) => (
                   <Link
                     key={category.slug}
@@ -41,31 +42,13 @@ export default function ToolsHubPage() {
                 ))}
               </div>
             </div>
-
-            <div className="hidden">
-              {liveTools.slice(0, 4).map((tool) => (
-                <Link
-                  key={tool.slug}
-                  href={`/tools/${tool.slug}`}
-                  className="group rounded-lg border border-[#dfe3ea] bg-[#f8fafc] p-5 transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:bg-white hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-900/80"
-                >
-                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-white text-[#0b7de3] shadow-sm dark:bg-zinc-950">
-                    <ToolIcon icon={tool.icon} />
-                  </div>
-                  <h2 className="text-[16px] font-black text-[#172033] dark:text-zinc-100">{tool.title}</h2>
-                  <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#64748b] dark:text-zinc-400">
-                    {tool.description}
-                  </p>
-                </Link>
-              ))}
-            </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1380px] px-6 py-10 md:px-10">
-          <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <section className="mx-auto max-w-[1380px] px-6 py-8 md:px-10">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-[34px] font-black tracking-tight text-[#141a28] dark:text-white">
+              <h2 className="text-[28px] font-black tracking-tight text-[#141a28] dark:text-white md:text-[32px]">
                 Alle Tool-Unterseiten
               </h2>
               <p className="mt-2 max-w-[720px] text-[15px] font-medium leading-relaxed text-[#64748b] dark:text-zinc-400">

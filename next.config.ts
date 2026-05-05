@@ -79,4 +79,6 @@ const nextConfig: any = {
 
 export default nextConfig;
 
-initOpenNextCloudflareForDev();
+if (process.env.NODE_ENV !== 'production') {
+  initOpenNextCloudflareForDev({ remoteBindings: false });
+}

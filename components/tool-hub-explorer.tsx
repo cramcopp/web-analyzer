@@ -93,39 +93,42 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
   const liveCount = tools.filter((tool) => tool.status === 'live').length;
   const providerCount = tools.filter((tool) => tool.status === 'provider').length;
   const auditCount = tools.filter((tool) => tool.status === 'audit' || tool.status === 'planned').length;
+  const statSummary = [
+    { label: 'Unterseiten', value: tools.length, text: 'eigene URLs' },
+    { label: 'Live Checks', value: liveCount, text: 'sofort testbar' },
+    { label: 'Daten & Audits', value: providerCount + auditCount, text: 'für Deep Scans' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {[
-          ['Unterseiten', tools.length, 'Eigene URLs für einzelne Suchintents'],
-          ['Live Checks', liveCount, 'Ohne Full Audit sofort testbar'],
-          ['Daten & Audits', providerCount + auditCount, 'Für Add-ons, APIs und Deep Scans vorbereitet'],
-        ].map(([label, value, text]) => (
-          <div
-            key={String(label)}
-            className="rounded-md border border-[#dfe3ea] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <p className="text-[28px] font-black text-[#172033] dark:text-zinc-100">{String(value)}</p>
-            <p className="mt-2 text-[12px] font-black uppercase tracking-[0.12em] text-[#526071] dark:text-zinc-400">
-              {String(label)}
-            </p>
-            <p className="mt-3 text-[12px] font-semibold leading-relaxed text-[#64748b] dark:text-zinc-400">
-              {String(text)}
-            </p>
-          </div>
-        ))}
+    <div className="space-y-5">
+      <div className="rounded-md border border-[#dfe3ea] bg-white/80 px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-zinc-800 dark:bg-zinc-900/80">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {statSummary.map((stat) => (
+            <div
+              key={stat.label}
+              className="flex min-w-0 items-baseline gap-2 border-[#eef2f7] sm:border-r sm:pr-4 sm:last:border-r-0 dark:border-zinc-800"
+            >
+              <p className="text-[22px] font-black leading-none text-[#172033] dark:text-zinc-100">{stat.value}</p>
+              <p className="min-w-0 truncate text-[12px] font-black uppercase tracking-[0.1em] text-[#526071] dark:text-zinc-400">
+                {stat.label}
+              </p>
+              <p className="hidden text-[12px] font-semibold text-[#8a94a6] md:block">
+                {stat.text}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="rounded-lg border border-[#dfe3ea] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+      <div className="rounded-md border border-[#dfe3ea] bg-white/90 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-zinc-800 dark:bg-zinc-900/90 sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7b8495]" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Tool, Thema oder Problem suchen"
-              className="h-12 w-full rounded-md border border-[#cfd7e5] bg-[#f8fafc] pl-11 pr-11 text-[14px] font-bold text-[#172033] outline-none transition-colors placeholder:text-[#8a94a6] focus:border-[#0b7de3] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+              className="h-11 w-full rounded-md border border-[#cfd7e5] bg-[#f8fafc] pl-11 pr-11 text-[14px] font-bold text-[#172033] outline-none transition-colors placeholder:text-[#8a94a6] focus:border-[#0b7de3] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             />
             {query && (
               <button
@@ -146,9 +149,9 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                 type="button"
                 onClick={() => setStatusFilter(filter.value)}
                 aria-pressed={statusFilter === filter.value}
-                className={`min-h-10 rounded-md border px-4 text-[12px] font-black transition-colors ${
+                className={`min-h-9 rounded-md border px-3 text-[12px] font-black transition-colors ${
                   statusFilter === filter.value
-                    ? 'border-[#172033] bg-[#172033] text-white dark:border-white dark:bg-white dark:text-[#172033]'
+                    ? 'border-[#0b7de3] bg-[#0b7de3] text-white dark:border-blue-400 dark:bg-blue-400 dark:text-[#172033]'
                     : 'border-[#d8dde8] bg-[#f8fafc] text-[#526071] hover:border-[#D4AF37] hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900'
                 }`}
               >
@@ -158,16 +161,16 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
           </div>
         </div>
 
-        <div className="mt-5 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-[#7b8495]">
+        <div className="mt-4 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-[#7b8495]">
           <SlidersHorizontal className="h-4 w-4" />
           Kategorien
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={() => setCategoryFilter('all')}
             aria-pressed={categoryFilter === 'all'}
-            className={`min-h-10 shrink-0 rounded-md border px-4 text-[12px] font-black transition-colors ${
+            className={`min-h-9 shrink-0 rounded-md border px-3 text-[12px] font-black transition-colors ${
               categoryFilter === 'all'
                 ? 'border-[#0b7de3] bg-[#eef4ff] text-[#0b7de3] dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300'
                 : 'border-[#d8dde8] bg-[#f8fafc] text-[#526071] hover:border-[#D4AF37] hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900'
@@ -181,7 +184,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
               type="button"
               onClick={() => setCategoryFilter(category.slug)}
               aria-pressed={categoryFilter === category.slug}
-              className={`min-h-10 shrink-0 rounded-md border px-4 text-[12px] font-black transition-colors ${
+              className={`min-h-9 shrink-0 rounded-md border px-3 text-[12px] font-black transition-colors ${
                 categoryFilter === category.slug
                   ? 'border-[#0b7de3] bg-[#eef4ff] text-[#0b7de3] dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300'
                   : 'border-[#d8dde8] bg-[#f8fafc] text-[#526071] hover:border-[#D4AF37] hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900'
@@ -195,16 +198,16 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-[26px] font-black tracking-tight text-[#141a28] dark:text-white">
+          <h2 className="text-[22px] font-black tracking-tight text-[#141a28] dark:text-white md:text-[24px]">
             {filteredTools.length} passende Tools
           </h2>
-          <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#64748b] dark:text-zinc-400">
+          <p className="mt-1 text-[13px] font-semibold leading-relaxed text-[#64748b] dark:text-zinc-400">
             Direkte Checks sparen Crawl-Budget. Der Full Audit bleibt für komplette Webseiten und große Reports.
           </p>
         </div>
         <Link
           href="/scanner"
-          className="flex w-fit items-center gap-2 rounded-md bg-[#172033] px-5 py-3 text-[12px] font-black text-white transition-colors hover:bg-[#0b7de3]"
+          className="flex w-fit items-center gap-2 rounded-md bg-[#009b72] px-4 py-2.5 text-[12px] font-black text-white transition-colors hover:bg-[#087f5f]"
         >
           Full Audit starten
           <ArrowRight className="h-4 w-4" />
@@ -212,7 +215,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
       </div>
 
       {filteredTools.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredTools.map((tool) => {
             const meta = statusMeta[tool.status];
 
@@ -220,29 +223,37 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
               <Link
                 key={tool.slug}
                 href={`/tools/${tool.slug}`}
-              className="group flex min-h-[218px] flex-col rounded-lg border border-[#dfe3ea] bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+                className="group flex min-h-[184px] flex-col rounded-md border border-[#dfe3ea] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#D4AF37] hover:bg-[#fbfcfe] hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-900/80"
               >
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-950">
-                    <ToolIcon icon={tool.icon} />
-                  </span>
-                  <span className={`rounded-sm border px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${meta.className}`}>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-950">
+                      <ToolIcon icon={tool.icon} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-[10px] font-black uppercase tracking-[0.14em] text-[#7b8495]">
+                        {tool.category}
+                      </p>
+                      <h3 className="mt-1 text-[17px] font-black leading-tight text-[#172033] dark:text-zinc-100">
+                        {tool.title}
+                      </h3>
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-sm border px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${meta.className}`}
+                  >
                     {meta.label}
                   </span>
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7b8495]">
-                  {tool.category}
-                </p>
-                <h3 className="mt-2 text-[18px] font-black text-[#172033] dark:text-zinc-100">{tool.title}</h3>
-                <p className="mt-2 text-[13px] font-medium leading-relaxed text-[#64748b] dark:text-zinc-400">
+                <p className="text-[13px] font-medium leading-relaxed text-[#64748b] dark:text-zinc-400">
                   {tool.description}
                 </p>
-                <div className="mt-auto pt-5">
-                  <div className="mb-3 flex flex-wrap gap-2">
+                <div className="mt-auto pt-4">
+                  <div className="mb-3 flex flex-wrap gap-1.5">
                     {tool.checks.slice(0, 3).map((check) => (
                       <span
                         key={check}
-                        className="rounded-sm bg-[#f0f3f8] px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-[#526071] dark:bg-zinc-950 dark:text-zinc-400"
+                        className="rounded-sm bg-[#f0f3f8] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#526071] dark:bg-zinc-950 dark:text-zinc-400"
                       >
                         {check}
                       </span>
