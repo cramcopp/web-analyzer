@@ -577,6 +577,7 @@ export default function WebsiteAnalyzer() {
         onOpenPricing={() => navigateToView('pricing')}
         onOpenHome={() => navigateToView('home')}
         activeSection={activeView}
+        activeProjectTab={projectInitialTab}
         isNotifOpen={isNotifOpen}
         setIsNotifOpen={setIsNotifOpen}
         notifications={notifications}

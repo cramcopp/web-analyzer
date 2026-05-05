@@ -101,31 +101,17 @@ export default function TopNav({
         </form>
 
         <nav className="hidden items-center gap-1 lg:flex">
-          {mode === 'marketing' ? (
-            <Link
-              href="/?view=dashboard"
-              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
-                activeView === 'dashboard' || activeView === 'analyzer'
-                  ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
-                  : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
-              }`}
-            >
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              Dashboard
-            </Link>
-          ) : (
-            <button
-              onClick={() => onNavigate('dashboard')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
-                activeView === 'analyzer' || activeView === 'dashboard'
-                  ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
-                  : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
-              }`}
-            >
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              Dashboard
-            </button>
-          )}
+          <button
+            onClick={() => onNavigate('dashboard')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-[12px] font-bold transition-colors ${
+              activeView === 'analyzer' || activeView === 'dashboard'
+                ? 'bg-[#eef4ff] text-[#0b7de3] dark:bg-zinc-900'
+                : 'text-[#334155] hover:bg-[#f0f3f8] dark:text-zinc-300 dark:hover:bg-zinc-900'
+            }`}
+          >
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Dashboard
+          </button>
           {mode === 'marketing' ? (
             <Link
               href="/scanner"

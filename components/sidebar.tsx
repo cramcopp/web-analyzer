@@ -6,19 +6,25 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BrainCircuit,
+  CheckCircle2,
   CreditCard,
+  FileSearch,
   FileText,
   FolderKanban,
   Globe2,
   Grid2X2,
+  History,
   LayoutDashboard,
+  Link as LinkIcon,
   Network,
   Menu,
   Search,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trophy,
   Users,
+  Wrench,
   Zap,
 } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
@@ -47,6 +53,7 @@ export const Sidebar = memo(function Sidebar({
   onOpenHome,
   onLogout,
   activeSection,
+  activeProjectTab,
   notifications,
   setNotifications,
   isNotifOpen,
@@ -65,6 +72,7 @@ export const Sidebar = memo(function Sidebar({
   onOpenHome?: () => void;
   onLogout?: () => void;
   activeSection?: string;
+  activeProjectTab?: string;
   notifications: Notification[];
   setNotifications: (notifs: Notification[]) => void;
   isNotifOpen: boolean;
@@ -119,13 +127,15 @@ export const Sidebar = memo(function Sidebar({
     window.location.assign(href);
   };
 
-  const collapsedNavItems: Array<{
+  type CollapsedNavItem = {
     id: string;
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     action?: () => void;
     href?: string;
-  }> = [
+  };
+
+  const workspaceNavItems: CollapsedNavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, action: onOpenDashboard },
     { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
     { id: 'scanner', label: 'Scanner', icon: Search, action: onOpenScanner },
@@ -134,6 +144,29 @@ export const Sidebar = memo(function Sidebar({
     { id: 'billing', label: 'Preise', icon: CreditCard, action: onOpenPricing },
     { id: 'settings', label: 'Setup', icon: Settings, action: onOpenSettings },
   ];
+
+  const projectNavItems: CollapsedNavItem[] = [
+    { id: 'overview', label: 'Übersicht', icon: LayoutDashboard, action: () => { onOpenProjectTab?.('overview'); } },
+    { id: 'audit', label: 'Audit', icon: ShieldCheck, action: () => { onOpenProjectTab?.('audit'); } },
+    { id: 'issues', label: 'Issues', icon: CheckCircle2, action: () => { onOpenProjectTab?.('issues'); } },
+    { id: 'evidence', label: 'Evidence', icon: FileSearch, action: () => { onOpenProjectTab?.('evidence'); } },
+    { id: 'keywords', label: 'Keywords', icon: Search, action: () => { onOpenProjectTab?.('keywords'); } },
+    { id: 'rankings', label: 'Rankings', icon: Activity, action: () => { onOpenProjectTab?.('rankings'); } },
+    { id: 'linking', label: 'Links', icon: Network, action: () => { onOpenProjectTab?.('linking'); } },
+    { id: 'backlinks', label: 'Backlinks', icon: LinkIcon, action: () => { onOpenProjectTab?.('backlinks'); } },
+    { id: 'competition', label: 'Markt', icon: Trophy, action: () => { onOpenProjectTab?.('competition'); } },
+    { id: 'ai_visibility', label: 'KI', icon: BrainCircuit, action: () => { onOpenProjectTab?.('ai_visibility'); } },
+    { id: 'ai_plan', label: 'AI Plan', icon: Sparkles, action: () => { onOpenProjectTab?.('ai_plan'); } },
+    { id: 'monitoring', label: 'Monitor', icon: Globe2, action: () => { onOpenProjectTab?.('monitoring'); } },
+    { id: 'reports', label: 'Reports', icon: FileText, action: () => { onOpenProjectTab?.('reports'); } },
+    { id: 'tasks', label: 'Tasks', icon: CheckCircle2, action: () => { onOpenProjectTab?.('tasks'); } },
+    { id: 'tools', label: 'Tools', icon: Wrench, action: () => { onOpenProjectTab?.('tools'); } },
+    { id: 'history', label: 'History', icon: History, action: () => { onOpenProjectTab?.('history'); } },
+    { id: 'settings', label: 'Setup', icon: Settings, action: () => { onOpenProjectTab?.('settings'); } },
+    { id: 'projects', label: 'Projekte', icon: FolderKanban, action: onOpenProjects },
+  ];
+
+  const collapsedNavItems = activeSection === 'project' ? projectNavItems : workspaceNavItems;
   useEffect(() => {
     const fetchData = async () => {
       if (!user) {
@@ -211,7 +244,7 @@ export const Sidebar = memo(function Sidebar({
                 pathname === item.href ||
                 Boolean(item.href && pathname?.startsWith(`${item.href}/`)) ||
                 (activeSection === 'analyzer' && item.id === 'scanner') ||
-                (activeSection === 'project' && item.id === 'projects') ||
+                (activeSection === 'project' && item.id === (activeProjectTab || 'overview')) ||
                 (activeSection === 'projects' && item.id === 'projects');
               return (
                 <button
