@@ -6,9 +6,10 @@ import TopNav from './top-nav';
 
 type PublicSiteNavProps = {
   activeView?: string;
+  compact?: boolean;
 };
 
-export default function PublicSiteNav({ activeView = 'tools' }: PublicSiteNavProps) {
+export default function PublicSiteNav({ activeView = 'tools', compact = false }: PublicSiteNavProps) {
   const router = useRouter();
   const { user, userData, signIn, logOut } = useAuth();
 
@@ -40,6 +41,7 @@ export default function PublicSiteNav({ activeView = 'tools' }: PublicSiteNavPro
     <TopNav
       mode="marketing"
       activeView={activeView}
+      compact={compact}
       user={user}
       userData={userData}
       onNavigate={navigate}

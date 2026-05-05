@@ -53,8 +53,8 @@ export function ToolIcon({
 export function PublicToolsHeader({ activeView = 'tools' }: { activeView?: string }) {
   return (
     <>
-      <PublicSiteNav activeView={activeView} />
-      <div className="h-14" aria-hidden="true" />
+      <PublicSiteNav activeView={activeView} compact />
+      <div className="h-11" aria-hidden="true" />
     </>
   );
 }
