@@ -19,7 +19,6 @@ const statusFilters: Array<{ value: StatusFilter; label: string }> = [
   { value: 'live', label: 'Live' },
   { value: 'provider', label: 'Provider' },
   { value: 'audit', label: 'Audit' },
-  { value: 'planned', label: 'Geplant' },
 ];
 
 const statusLabel: Record<ToolStatus, string> = {
@@ -112,7 +111,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
 
   return (
     <div>
-      <div className="border-b border-[#d6deeb] bg-white pt-4">
+      <div className="border-b border-[#d6deeb] bg-white pt-4 dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex gap-8 overflow-x-auto">
           {categories.map((category) => (
             <button
@@ -123,7 +122,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
               className={`relative shrink-0 pb-4 text-[14px] font-semibold transition-colors ${
                 categoryFilter === category.slug
                   ? 'text-[#0b63ff] after:absolute after:bottom-[-1px] after:left-0 after:h-0.5 after:w-full after:bg-[#0b63ff]'
-                  : 'text-[#0f172a] hover:text-[#0b63ff]'
+                  : 'text-[#0f172a] hover:text-[#0b63ff] dark:text-zinc-300'
               }`}
             >
               {category.navTitle}
@@ -133,11 +132,11 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
       </div>
 
       <div className="py-5">
-        <h2 className="text-[24px] font-black tracking-tight text-[#111827]">
+        <h2 className="text-[24px] font-black tracking-tight text-[#111827] dark:text-white">
           Alle Tool-Unterseiten
         </h2>
 
-        <div className="mt-5 rounded-lg border border-[#d9e1ec] bg-white p-3 shadow-[0_10px_32px_rgba(15,23,42,0.06)]">
+        <div className="mt-5 rounded-lg border border-[#d9e1ec] bg-white p-3 shadow-[0_10px_32px_rgba(15,23,42,0.06)] dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative min-w-0 flex-1 lg:max-w-[540px]">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#64748b]" />
@@ -145,7 +144,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Tool suchen..."
-                className="h-11 w-full rounded-md border border-[#d9e1ec] bg-white pl-11 pr-4 text-[14px] font-medium text-[#0f172a] outline-none transition-colors placeholder:text-[#64748b] focus:border-[#0b63ff]"
+                className="h-11 w-full rounded-md border border-[#d9e1ec] bg-white pl-11 pr-4 text-[14px] font-medium text-[#0f172a] outline-none transition-colors placeholder:text-[#64748b] focus:border-[#0b63ff] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               />
             </div>
 
@@ -158,8 +157,8 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                   aria-pressed={statusFilter === filter.value}
                   className={`h-11 min-w-[70px] rounded-md border px-4 text-[14px] font-semibold transition-colors ${
                     statusFilter === filter.value
-                      ? 'border-[#0b63ff] bg-white text-[#0b63ff] shadow-sm'
-                      : 'border-[#d9e1ec] bg-white text-[#0f172a] hover:border-[#0b63ff]'
+                      ? 'border-[#0b63ff] bg-white text-[#0b63ff] shadow-sm dark:bg-zinc-950'
+                      : 'border-[#d9e1ec] bg-white text-[#0f172a] hover:border-[#0b63ff] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200'
                   }`}
                 >
                   {filter.label}
@@ -173,8 +172,8 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
               aria-pressed={categoryFilter === 'all'}
               className={`flex h-11 items-center gap-2 rounded-md border px-4 text-[14px] font-semibold transition-colors ${
                 categoryFilter === 'all'
-                  ? 'border-[#0b63ff] bg-white text-[#0b63ff] shadow-sm'
-                  : 'border-[#d9e1ec] bg-white text-[#0b63ff] hover:border-[#0b63ff]'
+                  ? 'border-[#0b63ff] bg-white text-[#0b63ff] shadow-sm dark:bg-zinc-950'
+                  : 'border-[#d9e1ec] bg-white text-[#0b63ff] hover:border-[#0b63ff] dark:border-zinc-700 dark:bg-zinc-950'
               }`}
             >
               <Grid2X2 className="h-4 w-4" />
@@ -195,7 +194,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                   <Link
                     key={tool.slug}
                     href={`/tools/${tool.slug}`}
-                    className="group flex min-h-[140px] rounded-lg border border-[#d9e1ec] bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#0b63ff] hover:shadow-[0_16px_34px_rgba(15,23,42,0.10)]"
+                    className="group flex min-h-[140px] rounded-lg border border-[#d9e1ec] bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-0.5 hover:border-[#0b63ff] hover:shadow-[0_16px_34px_rgba(15,23,42,0.10)] dark:border-zinc-800 dark:bg-zinc-900"
                   >
                     <div className="flex min-w-0 flex-1 gap-5">
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#0b63ff] text-white shadow-[0_12px_24px_rgba(11,99,255,0.24)]">
@@ -203,14 +202,14 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                       </span>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-[13px] font-medium text-[#475569]">
+                        <div className="flex items-center gap-2 text-[13px] font-medium text-[#475569] dark:text-zinc-400">
                           <span className="h-2 w-2 rounded-full bg-[#15a36b]" />
                           {statusLabel[tool.status]}
                         </div>
-                        <h3 className="mt-1 text-[18px] font-black leading-tight text-[#111827]">
+                        <h3 className="mt-1 text-[18px] font-black leading-tight text-[#111827] dark:text-white">
                           {tool.title}
                         </h3>
-                        <p className="mt-2 line-clamp-2 text-[13px] font-medium leading-relaxed text-[#334155]">
+                        <p className="mt-2 line-clamp-2 text-[13px] font-medium leading-relaxed text-[#334155] dark:text-zinc-300">
                           {tool.description}
                         </p>
 
@@ -218,13 +217,13 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                           {tool.checks.slice(0, 3).map((check) => (
                             <span
                               key={check}
-                              className="rounded-md border border-[#d9e1ec] bg-[#f4f7fb] px-3 py-1 text-[11px] font-medium text-[#334155]"
+                              className="rounded-md border border-[#d9e1ec] bg-[#f4f7fb] px-3 py-1 text-[11px] font-medium text-[#334155] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"
                             >
                               {formatChip(check)}
                             </span>
                           ))}
                           {extraChecks > 0 && (
-                            <span className="rounded-md border border-[#d9e1ec] bg-[#f4f7fb] px-3 py-1 text-[11px] font-medium text-[#334155]">
+                            <span className="rounded-md border border-[#d9e1ec] bg-[#f4f7fb] px-3 py-1 text-[11px] font-medium text-[#334155] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                               +{extraChecks}
                             </span>
                           )}
@@ -233,10 +232,10 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                     </div>
 
                     <div className="ml-4 flex shrink-0 flex-col items-end justify-between">
-                      <span className="rounded-full border border-[#d9e1ec] bg-[#f8fafc] px-3 py-1 text-[12px] font-medium text-[#334155]">
+                      <span className="rounded-full border border-[#d9e1ec] bg-[#f8fafc] px-3 py-1 text-[12px] font-medium text-[#334155] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
                         {category?.navTitle ?? tool.category}
                       </span>
-                      <span className="flex items-center gap-2 text-[13px] font-semibold text-[#0f172a] transition-colors group-hover:text-[#0b63ff]">
+                      <span className="flex items-center gap-2 text-[13px] font-semibold text-[#0f172a] transition-colors group-hover:text-[#0b63ff] dark:text-zinc-100">
                         {actionLabel[tool.status]}
                         <ArrowRight className="h-4 w-4" />
                       </span>
@@ -251,7 +250,7 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
                 <button
                   type="button"
                   onClick={() => setVisibleState({ count: visibleCount + 12, key: filterKey })}
-                  className="flex items-center gap-2 rounded-md px-4 py-2 text-[14px] font-medium text-[#334155] transition-colors hover:bg-white hover:text-[#0b63ff]"
+                  className="flex items-center gap-2 rounded-md px-4 py-2 text-[14px] font-medium text-[#334155] transition-colors hover:bg-white hover:text-[#0b63ff] dark:text-zinc-300 dark:hover:bg-zinc-900"
                 >
                   Weitere Tools laden
                   <ChevronDown className="h-4 w-4" />
@@ -260,9 +259,9 @@ export default function ToolHubExplorer({ categories, tools }: ToolHubExplorerPr
             )}
           </>
         ) : (
-          <div className="mt-4 rounded-lg border border-dashed border-[#cfd7e5] bg-white p-8 text-center">
-            <p className="text-[18px] font-black text-[#172033]">Keine Tools gefunden</p>
-            <p className="mx-auto mt-2 max-w-[520px] text-[13px] font-semibold leading-relaxed text-[#64748b]">
+          <div className="mt-4 rounded-lg border border-dashed border-[#cfd7e5] bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-[18px] font-black text-[#172033] dark:text-zinc-100">Keine Tools gefunden</p>
+            <p className="mx-auto mt-2 max-w-[520px] text-[13px] font-semibold leading-relaxed text-[#64748b] dark:text-zinc-400">
               Passe Suche, Kategorie oder Status an.
             </p>
           </div>

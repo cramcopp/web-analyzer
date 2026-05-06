@@ -13,6 +13,7 @@ import {
   TOOL_CATEGORIES,
   TOOL_PAGES,
   type ToolCategory,
+  type ToolPage,
 } from '@/lib/tool-pages';
 
 type ToolPageProps = {
@@ -33,6 +34,7 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     return {
       title: tool.title,
       description: tool.seoDescription,
+      keywords: [tool.title, tool.shortTitle, tool.category, ...tool.checks],
       alternates: {
         canonical: `/tools/${tool.slug}`,
       },
@@ -41,6 +43,11 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
         description: tool.seoDescription,
         url: `/tools/${tool.slug}`,
         type: 'website',
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: tool.title,
+        description: tool.seoDescription,
       },
     };
   }
@@ -52,6 +59,7 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     return {
       title: landing?.metadataTitle || category.title,
       description: landing?.metadataDescription || category.seoDescription,
+      keywords: [category.title, category.navTitle, category.headline],
       alternates: {
         canonical: `/tools/${category.slug}`,
       },
@@ -61,10 +69,69 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
         url: `/tools/${category.slug}`,
         type: 'website',
       },
+      twitter: {
+        card: 'summary_large_image',
+        title: landing?.metadataTitle || category.title,
+        description: landing?.metadataDescription || category.seoDescription,
+      },
     };
   }
 
   return {};
+}
+
+function ToolDetailJsonLd({ tool }: { tool: ToolPage }) {
+  const toolUrl = `https://website-analyzer.pro/tools/${tool.slug}`;
+  const jsonLd = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Tools',
+          item: 'https://website-analyzer.pro/tools',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: tool.category,
+          item: `https://website-analyzer.pro/tools/${tool.categorySlug}`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: tool.title,
+          item: toolUrl,
+        },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: tool.title,
+      description: tool.seoDescription,
+      url: toolUrl,
+      applicationCategory: tool.category,
+      operatingSystem: 'Web',
+      isAccessibleForFree: true,
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'EUR',
+      },
+    },
+  ];
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
+      }}
+    />
+  );
 }
 
 export default async function ToolDetailPage({ params }: ToolPageProps) {
@@ -87,6 +154,8 @@ export default async function ToolDetailPage({ params }: ToolPageProps) {
       <PublicToolsHeader activeView="tools" />
 
       <main>
+        <ToolDetailJsonLd tool={tool} />
+
         <section className="border-b border-[#dfe3ea] bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <div className="mx-auto grid max-w-[1380px] grid-cols-1 gap-10 px-6 py-12 md:px-10 lg:grid-cols-[0.84fr_1.16fr] lg:py-16">
             <div>

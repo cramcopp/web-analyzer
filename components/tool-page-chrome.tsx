@@ -54,7 +54,7 @@ export function PublicToolsHeader({ activeView = 'tools' }: { activeView?: strin
   return (
     <>
       <PublicSiteNav activeView={activeView} compact />
-      <div className="h-[70px]" aria-hidden="true" />
+      <div className="h-11" aria-hidden="true" />
     </>
   );
 }
